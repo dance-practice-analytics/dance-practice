@@ -9,6 +9,7 @@ import { MIN_PASSWORD } from '../../api/authErrors'
 import { ApiError } from '../../api/errors'
 import { signIn, signUp } from '../auth'
 import { Icon, Logo, Spinner, type IconName } from '../components'
+import { playEntrance } from '../Entrance'
 import { useIsNarrow } from '../useIsNarrow'
 
 type Mode = 'signin' | 'signup'
@@ -85,7 +86,8 @@ export function SignIn() {
     setError(null)
     try {
       await (signup ? signUp(email, password) : signIn(email, password))
-      // The auth store now shows the consent screen or the app.
+      // The auth store now shows the consent screen or the app; the dancer turns over it.
+      playEntrance()
     } catch (err) {
       setError(err as ApiError)
       setBusy(false)

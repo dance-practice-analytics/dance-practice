@@ -45,3 +45,17 @@ html.v2-dark,html.v2-dark body{background:#121211;color-scheme:dark}
 .app a.btn-ghost:hover{color:var(--text)}
 .app a.btn-destructive{color:var(--bg)}
 .app a.attempt,.app a.chip,.app a.choice{color:var(--text)}
+
+/* Entrance (Entrance.tsx): the brand figure does a double pirouette over the page after
+   a sign-in, then the overlay fades. The turn is around the supporting leg (x = 31 of 64). */
+.v2-entrance{position:fixed;inset:0;z-index:1000;display:flex;align-items:center;justify-content:center;background:var(--bg);color:var(--accent);animation:v2-entrance-out .4s ease 1.7s forwards}
+.v2-entrance-stage{position:relative;width:min(176px,44vw);aspect-ratio:1}
+.v2-entrance-stage svg{position:absolute;inset:0;width:100%;height:100%;overflow:visible}
+.v2-entrance-dancer{transform-origin:48.4% 94%;animation:v2-pirouette 1.6s cubic-bezier(.5,0,.25,1) both}
+@keyframes v2-pirouette{
+  0%{transform:perspective(700px) rotateY(0) scaleY(1)}
+  14%{transform:perspective(700px) rotateY(-24deg) scaleY(.97)}
+  86%{transform:perspective(700px) rotateY(720deg) scaleY(1.02)}
+  100%{transform:perspective(700px) rotateY(720deg) scaleY(1)}
+}
+@keyframes v2-entrance-out{to{opacity:0;visibility:hidden}}

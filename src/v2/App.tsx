@@ -6,6 +6,7 @@ import { startAuth, useAuth } from './auth'
 import { releaseAllClips } from './clips'
 import { ErrorAlert, Spinner } from './components'
 import { useConsents } from './consents'
+import { Entrance } from './Entrance'
 import { Chat } from './pages/Chat'
 import { Compare } from './pages/Compare'
 import { Consent } from './pages/Consent'
@@ -115,6 +116,7 @@ export function App() {
   return (
     <div className={theme === 'dark' ? 'app v2-root dark' : 'app v2-root'}>
       <Gate />
+      <Entrance />
     </div>
   )
 }

@@ -87,14 +87,39 @@ export function Icon({ name, size, label, style, className }: IconProps) {
   )
 }
 
+// The brand mark: "Logo B1 · Arabesque, refined line" on a 64-unit grid. The same two
+// paths are in scripts/make-icons.mjs (favicon and app icons) and in the old prototype's
+// BrandMark; change all three together.
+/** The skirt, filled. */
+export const MARK_FILL = 'M21.8 33.2C25.6 28.6 34.8 27.4 39.2 30.2C36.6 34.8 27.6 37.4 21.8 33.2Z'
+/** Head, arms and legs, stroked with round caps and joins. */
+export const MARK_FIGURE =
+  'M12.6 16.5a3.4 3.4 0 1 0 6.8 0a3.4 3.4 0 1 0 -6.8 0M19.6 20.6C23 24.5 26.2 28.2 29.6 31.2M21 22C15.5 21.8 10 20.3 5 17M22.4 22.6C29 22.5 34.5 19.5 38.5 14.5M29.8 32.2C30.6 40 30.9 48 31 56.4L31.3 60M30.8 31.6C39 31.2 48 28.2 59.5 21.8'
+/** The floor line under the supporting foot. */
+export const MARK_FLOOR = 'M24 60.6H37'
+/** The whole stroked part of the mark. */
+export const MARK_LINE = MARK_FIGURE + MARK_FLOOR
+
+/**
+ * Stroke (in grid units) and size of the figure inside its tile. The line gets heavier
+ * and the figure fills more of the tile as the mark gets smaller, as in the logo sheet.
+ */
+export function markWeight(px: number): { stroke: number; scale: number } {
+  if (px < 52) return { stroke: 4.6, scale: 0.92 }
+  if (px < 96) return { stroke: 3.3, scale: 0.84 }
+  return { stroke: 2.7, scale: 0.78 }
+}
+
 /** The app mark (accent tile with the figure), 28px in the designs. */
 export function Logo({ size = 28 }: { size?: number }) {
+  const { stroke, scale } = markWeight(size)
   return (
-    <svg width={size} height={size} viewBox="0 0 28 28" fill="none" aria-hidden="true" style={{ flex: 'none' }}>
-      <rect width="28" height="28" rx="8" fill="var(--accent)" />
-      <path d="M14 6v14" stroke="var(--accent-ink)" strokeWidth="2" strokeLinecap="round" />
-      <circle cx="14" cy="7.5" r="2.5" fill="var(--accent-ink)" />
-      <path d="M9 21h10" stroke="var(--accent-ink)" strokeWidth="2" strokeLinecap="round" />
+    <svg width={size} height={size} viewBox="0 0 64 64" fill="none" aria-hidden="true" style={{ flex: 'none' }}>
+      <rect width="64" height="64" rx="16" fill="var(--accent)" />
+      <g transform={`translate(32 32) scale(${scale}) translate(-32 -32)`}>
+        <path d={MARK_FILL} fill="var(--accent-ink)" />
+        <path d={MARK_LINE} stroke="var(--accent-ink)" strokeWidth={stroke} strokeLinecap="round" strokeLinejoin="round" />
+      </g>
     </svg>
   )
 }

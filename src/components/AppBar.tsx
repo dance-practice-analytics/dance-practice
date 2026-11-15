@@ -8,11 +8,19 @@ import { usingMockApi } from '../api/client'
 
 export function BrandMark({ size = 28 }: { size?: number }) {
   return (
-    <svg viewBox="0 0 32 32" width={size} height={size} aria-hidden="true">
-      <rect width="32" height="32" rx="8" fill="currentColor" />
-      <g fill="none" stroke="var(--surface)" strokeWidth="2.4" strokeLinecap="round">
-        <circle cx="16" cy="7.5" r="2.6" fill="var(--surface)" stroke="none" />
-        <path d="M16 11v9M10 8.5l6 3 6-3M16 20l-3.5 7M16 20l3.5 7" />
+    // Logo B1 (arabesque); the same paths as Logo in src/v2/components/Icon.tsx and scripts/make-icons.mjs.
+    <svg viewBox="0 0 64 64" width={size} height={size} aria-hidden="true">
+      <rect width="64" height="64" rx="16" fill="currentColor" />
+      <g transform="translate(32 32) scale(0.92) translate(-32 -32)">
+        <path d="M21.8 33.2C25.6 28.6 34.8 27.4 39.2 30.2C36.6 34.8 27.6 37.4 21.8 33.2Z" fill="var(--surface)" />
+        <path
+          d="M12.6 16.5a3.4 3.4 0 1 0 6.8 0a3.4 3.4 0 1 0 -6.8 0M19.6 20.6C23 24.5 26.2 28.2 29.6 31.2M21 22C15.5 21.8 10 20.3 5 17M22.4 22.6C29 22.5 34.5 19.5 38.5 14.5M29.8 32.2C30.6 40 30.9 48 31 56.4L31.3 60M30.8 31.6C39 31.2 48 28.2 59.5 21.8M24 60.6H37"
+          fill="none"
+          stroke="var(--surface)"
+          strokeWidth="4.6"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+        />
       </g>
     </svg>
   )
