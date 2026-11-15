@@ -1,0 +1,25 @@
+node_modules
+dist
+*.local
+.env
+.env.*
+!.env.example
+# Never commit real study data (NDA/IRB): footage, MovAI exports, participant files
+data/
+*.mp4
+*.mov
+
+# Playwright output
+test-results/
+playwright-report/
+
+# Study data and derived files never go in git
+*.avi
+*.webm
+*.mkv
+*.json.gz
+keypoints/
+study-data/
+supabase/.temp/
+supabase/.branches/
+android/app/build/
