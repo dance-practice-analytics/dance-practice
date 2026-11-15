@@ -15,10 +15,27 @@ export async function restoreAuth() {
   } catch {
     auth.set({ status: 'signedOut' })
   }
+  if (watching) return
+  watching = true
+  // Token expiry and sign-in or sign-out from another tab (FR-3.1.7).
+  api.onAuthChange?.((account) => {
+    const now = auth.get()
+    const current = now.status === 'signedIn' ? now.account.participant : null
+    if (now.status !== 'loading' && (account?.participant ?? null) === current) return
+    auth.set(account ? { status: 'signedIn', account } : { status: 'signedOut' })
+  })
 }
 
-export async function signIn(participant: string, passcode: string) {
-  const account = await api.signIn(participant, passcode)
+let watching = false
+
+export async function signIn(identifier: string, secret: string) {
+  const account = await api.signIn(identifier, secret)
+  auth.set({ status: 'signedIn', account })
+}
+
+export async function signUp(email: string, password: string) {
+  if (!api.signUp) throw new Error('Accounts are not available on the mock API.')
+  const account = await api.signUp(email, password)
   auth.set({ status: 'signedIn', account })
 }
 

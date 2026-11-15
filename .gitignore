@@ -6,6 +6,8 @@ dist
 !.env.example
 # Never commit real study data (NDA/IRB): footage, MovAI exports, participant files
 data/
+# ...but the typed Supabase data layer is source code, not study data
+!/src/data/
 *.mp4
 *.mov
 

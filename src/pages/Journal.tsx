@@ -231,7 +231,7 @@ function headline(sessions: SessionSummary[], results: Record<string, SessionRes
 export function Journal() {
   const { sessions, results, error } = useSessionsWithResults()
   const a = useStore(auth)
-  const name = a.status === 'signedIn' ? a.account.participant : ''
+  const name = a.status === 'signedIn' ? (a.account.name ?? a.account.participant) : ''
   const nextFrom = useMemo(() => sessions?.find((s) => s.nextGoal), [sessions])
   const todo = sessions?.filter((s) => s.status !== 'ready') ?? []
   const h = sessions ? headline(sessions, results) : null

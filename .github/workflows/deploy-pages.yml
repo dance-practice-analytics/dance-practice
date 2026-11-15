@@ -1,0 +1,81 @@
+name: Deploy to GitHub Pages
+
+# Builds the web app / PWA and publishes it at https://<org>.github.io/<repo>/.
+# One-time setup in the repository settings (see docs/pwa.md):
+#   Pages → Source: GitHub Actions
+#   Secrets and variables → Actions → Variables:
+#     VITE_SUPABASE_URL, VITE_SUPABASE_PUBLISHABLE_KEY
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - run: npm ci
+
+      - name: Pose model (self-hosted copy for offline use)
+        run: |
+          model=public/mediapipe/pose_landmarker_full.task
+          if [ ! -s "$model" ]; then
+            mkdir -p public/mediapipe
+            curl --fail --location --silent --show-error --output "$model" \
+              https://storage.googleapis.com/mediapipe-models/pose_landmarker/pose_landmarker_full/float16/latest/pose_landmarker_full.task
+          fi
+
+      - name: Check Supabase settings
+        env:
+          VITE_SUPABASE_URL: ${{ vars.VITE_SUPABASE_URL || secrets.VITE_SUPABASE_URL }}
+          VITE_SUPABASE_PUBLISHABLE_KEY: ${{ vars.VITE_SUPABASE_PUBLISHABLE_KEY || secrets.VITE_SUPABASE_PUBLISHABLE_KEY }}
+        run: |
+          if [ -z "$VITE_SUPABASE_URL" ] || [ -z "$VITE_SUPABASE_PUBLISHABLE_KEY" ]; then
+            echo "::error::Set the repository variables VITE_SUPABASE_URL and VITE_SUPABASE_PUBLISHABLE_KEY (Settings → Secrets and variables → Actions → Variables)."
+            exit 1
+          fi
+
+      - name: Type check and build
+        env:
+          BASE_PATH: /${{ github.event.repository.name }}/
+          VITE_SUPABASE_URL: ${{ vars.VITE_SUPABASE_URL || secrets.VITE_SUPABASE_URL }}
+          VITE_SUPABASE_PUBLISHABLE_KEY: ${{ vars.VITE_SUPABASE_PUBLISHABLE_KEY || secrets.VITE_SUPABASE_PUBLISHABLE_KEY }}
+        run: npm run build
+
+      - name: Stamp the service worker version with the commit
+        run: |
+          sed -i "s/^const VERSION = '\([^']*\)'/const VERSION = '\1-${GITHUB_SHA::7}'/" dist/sw.js
+          grep -n "^const VERSION = '.*-${GITHUB_SHA::7}'" dist/sw.js
+
+      - uses: actions/configure-pages@v5
+
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: dist
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v4

@@ -1,0 +1,37 @@
+/* Review + Compare: only what the design stylesheet doesn't have. Tokens come from .app. */
+
+/* Review: stage/timelines column and the metrics column */
+.v2-rev-cols{display:flex;flex-wrap:wrap;gap:20px;align-items:flex-start}
+.v2-rev-main{flex:999 1 600px;min-width:0;display:flex;flex-direction:column;gap:12px}
+.v2-rev-side{flex:1 1 320px;min-width:0;display:flex;flex-direction:column;gap:12px}
+
+/* Phases are buttons on the ribbon */
+.v2-rev-phase{border:0;font:inherit;font-size:12px;font-weight:500;cursor:pointer}
+.ribbon-sm .v2-rev-phase{font-size:11px}
+.v2-rev-phase:focus-visible{outline-offset:-2px}
+
+/* Tracks that seek: horizontal drags scrub, vertical drags still scroll the page */
+.v2-rev-scrub,.v2-rev-chart{cursor:pointer;touch-action:pan-y;user-select:none;-webkit-user-select:none}
+.v2-rev-scrub:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+.v2-rev-scrub .playhead,.v2-rev-chart .playhead{pointer-events:none}
+
+/* A one-frame band is still visible; a gap is tinted as well as hatched */
+.v2-rev-band{min-width:3px;pointer-events:none}
+.v2-rev-gap{background-color:var(--surface-3)}
+.v2-rev-key{display:inline-block;width:14px;height:10px;border-radius:2px;vertical-align:-1px;margin-right:5px;border:1px dashed var(--line-strong);background-image:repeating-linear-gradient(135deg,var(--hatch) 0 1.5px,transparent 1.5px 6px)}
+.v2-rev-key.v2-rev-gap{background-color:var(--surface-3)}
+
+/* Attempt strip */
+.v2-rev-strip{display:flex;gap:10px;overflow-x:auto;padding:2px 2px 6px}
+.v2-rev-strip .attempt{flex:none}
+
+/* Compare */
+.v2-cmp-stages{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(380px,100%),1fr));gap:12px}
+.v2-cmp-rows{position:relative;display:flex;flex-direction:column;gap:6px;padding-left:28px}
+.v2-cmp-rowlabel{position:absolute;left:0;font-weight:600}
+.v2-cmp-row{display:flex;align-items:center;min-height:22px}
+.v2-cmp-nc{background-image:repeating-linear-gradient(135deg,var(--hatch) 0 1.5px,transparent 1.5px 6px)}
+.v2-cmp-tbl th[scope=row]{text-align:left;font-weight:500;font-size:13px;color:var(--text);padding:12px;border-bottom:1px solid var(--line);white-space:normal}
+.v2-cmp-tbl tr:last-child td,.v2-cmp-tbl tr:last-child th{border-bottom:0}
+.v2-cmp-pick{padding:10px 12px;display:flex;flex-direction:column;gap:4px;min-width:0}
+.v2-cmp-pick select{width:100%;min-width:0}

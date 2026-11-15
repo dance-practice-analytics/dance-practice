@@ -1,0 +1,35 @@
+/* Library and the cards it shares with the Dashboard. Only what the design classes
+   don't cover; tokens only. */
+
+/* Filter chip that holds a native select: "Subject: All ▾" */
+.v2-lib-pick{position:relative;padding-right:8px;cursor:pointer}
+.v2-lib-pick select{appearance:none;-webkit-appearance:none;border:0;background:transparent;color:var(--text);font:inherit;font-weight:500;padding:0 18px 0 0;margin:0;height:30px;cursor:pointer;outline:0;max-width:150px}
+.v2-lib-pick select option{color:var(--text);background:var(--surface)}
+.v2-lib-pick svg{position:absolute;right:10px;top:50%;margin-top:-7px;pointer-events:none}
+.v2-lib-pick:focus-within{outline:2px solid var(--accent);outline-offset:2px}
+
+/* Subject group header button */
+.v2-lib-head{width:100%;display:flex;align-items:center;gap:12px;padding:14px 16px;background:transparent;border:0;font:inherit;color:var(--text);cursor:pointer;text-align:left;border-radius:12px;min-width:0}
+.v2-lib-head:hover{background:var(--surface-2)}
+.v2-lib-head:focus-visible{outline:2px solid var(--accent);outline-offset:-2px}
+
+/* Low confidence / no tracking on the dark thumbnail: the design's hatch token is made
+   for light surfaces, so the stripes are drawn in the stage's own light tone. */
+.thumb.v2-lib-hatch{background-image:repeating-linear-gradient(135deg,color-mix(in srgb,var(--bone-2) 38%,transparent) 0 1.5px,transparent 1.5px 6px)}
+
+/* Attempt number on the dark thumbnail */
+.v2-lib-n{position:absolute;left:5px;top:3px;font-size:10px;line-height:14px;color:var(--bone-2)}
+
+.v2-lib-session.is-target{background:var(--accent-soft)}
+.v2-lib-session:last-child{border-bottom:0!important}
+
+/* Phone rows */
+.v2-lib-row{display:flex;gap:12px;align-items:center;padding:12px 14px;min-height:64px;border-bottom:1px solid var(--line);text-decoration:none}
+.app a.v2-lib-row{color:var(--text)}
+.v2-lib-row:last-child{border-bottom:0}
+.v2-lib-chips{display:flex;gap:8px;overflow-x:auto;margin:0 -16px;padding:2px 16px}
+.v2-lib-chips .chip{height:40px;flex:none}
+
+/* A quiet link that reads as text (list rows inside cards) */
+.app a.v2-lib-plain{color:var(--text);text-decoration:none}
+.app a.v2-lib-plain:hover .v2-lib-plain-t{text-decoration:underline}

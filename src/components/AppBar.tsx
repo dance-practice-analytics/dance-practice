@@ -83,7 +83,9 @@ export function SideNav() {
         </button>
         {a.status === 'signedIn' && (
           <div className="sidenav-account">
-            <span className="avatar" title="Signed in by participant code">{a.account.participant}</span>
+            <span className="avatar" title={a.account.email ? `Signed in as ${a.account.email}` : 'Signed in by participant code'}>
+              {a.account.name ? a.account.name.slice(0, 2).toUpperCase() : a.account.participant}
+            </span>
             <button className="sidenav-signout" onClick={signOut}>Sign out</button>
           </div>
         )}

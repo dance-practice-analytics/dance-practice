@@ -67,6 +67,23 @@ function account(): Account | null {
   }
 }
 
+/**
+ * Use this account for the synthetic sessions without the mock's own sign-in
+ * (accounts come from Supabase Auth). A new account starts from the seeded history.
+ */
+export function adoptAccount(participant: string | null) {
+  try {
+    if (participant) sessionStorage.setItem(AUTH_KEY, participant)
+    else sessionStorage.removeItem(AUTH_KEY)
+  } catch {
+    // storage blocked: the synthetic sessions are unavailable in this tab
+  }
+  if (participant && !db[participant]) {
+    db[participant] = seedHistory(participant)
+    saveDb()
+  }
+}
+
 function requireAccount(): Account {
   const me = account()
   if (!me) throw new ApiError(401, 'not_signed_in', 'Your session ended. Sign in again to continue.')

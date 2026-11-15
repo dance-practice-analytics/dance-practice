@@ -1,0 +1,12 @@
+# Supabase project config. `supabase config push` only writes the properties declared
+# here; everything else stays as set in the dashboard. Preview with `supabase config diff`.
+project_id = "fcdgjzlbjrzkonaained"
+
+[auth]
+# Matches the sign-up form (FR-3.1.1).
+minimum_password_length = 10
+
+[auth.email]
+# Prototype: the built-in SMTP is rate-limited, so sign-up does not wait for a confirmation
+# email. Turn this back on with a custom SMTP before real participants use it.
+enable_confirmations = false

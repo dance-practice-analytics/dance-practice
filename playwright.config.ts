@@ -24,6 +24,8 @@ export default defineConfig({
   webServer: {
     command: `npm run dev -- --port ${PORT} --strictPort`,
     url: `http://localhost:${PORT}`,
+    // Empty values win over .env.local, so the tests never touch the real Supabase project.
+    env: { VITE_SUPABASE_URL: '', VITE_SUPABASE_PUBLISHABLE_KEY: '', VITE_DAD_API_URL: '' },
     reuseExistingServer: !process.env.CI,
   },
 })

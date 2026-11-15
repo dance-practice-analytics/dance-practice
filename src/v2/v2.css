@@ -1,0 +1,47 @@
+/* v2.css — only what the screens need beyond the design stylesheet (studio.css):
+   the page behind the .app root, the shell grid and a few helpers.
+   Rule for new global classes: prefix them with v2-. Tokens come from .app. */
+
+html,body{margin:0;background:#F6F5F2}
+html.v2-dark,html.v2-dark body{background:#121211;color-scheme:dark}
+#root{min-height:100vh}
+.app button,.app input,.app select,.app textarea{font-family:inherit}
+.app select.input{appearance:auto}
+.app textarea.input{height:auto;padding:10px 12px;line-height:22px;resize:vertical}
+
+/* Root of every v2 screen: <div class="app v2-root [dark]"> */
+.v2-root{min-height:100vh;min-height:100dvh}
+
+/* Shell: sidebar (240px) + page on wide screens */
+.v2-shell{display:grid;grid-template-columns:240px minmax(0,1fr);min-height:100vh;min-height:100dvh}
+.v2-side{position:sticky;top:0;align-self:start;height:100vh;height:100dvh;overflow-y:auto;border-right:1px solid var(--line);display:flex;flex-direction:column;gap:20px;padding:20px 12px;background:var(--bg)}
+.v2-main{min-width:0;padding:28px 32px 48px;display:flex;flex-direction:column;gap:24px}
+.v2-bnav{display:none}
+
+/* Phone: .mhead on top (rendered by PageHeader), .bnav fixed at the bottom */
+@media (max-width:899.98px){
+  .v2-shell{display:block}
+  .v2-side{display:none}
+  .v2-main{padding:16px 16px calc(96px + env(safe-area-inset-bottom));gap:16px;min-height:100vh;min-height:100dvh}
+  .v2-main>.v2-mhead{margin:-16px -16px 0;position:sticky;top:0;z-index:20}
+  .v2-bnav{display:block;position:fixed;left:0;right:0;bottom:0;z-index:30}
+  .v2-bnav .bnav{padding-bottom:calc(10px + env(safe-area-inset-bottom))}
+}
+
+/* Helpers */
+.v2-clip{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.v2-sr{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}
+.v2-metric-btn{font:inherit;text-align:left;cursor:pointer;color:inherit;width:100%}
+.v2-metric-btn:hover{border-color:var(--line-strong)}
+.v2-only-narrow{display:none}
+@media (max-width:899.98px){.v2-only-wide{display:none!important}.v2-only-narrow{display:revert}}
+.v2-center{min-height:100vh;min-height:100dvh;display:flex;align-items:center;justify-content:center;padding:24px}
+
+/* studio.css sets `.app a{color:var(--accent)}`, which outranks the single-class
+   button colours when a link is styled as a button or a card. Restore them. */
+.app a.btn-primary{color:var(--accent-ink)}
+.app a.btn-secondary{color:var(--text)}
+.app a.btn-ghost{color:var(--text-2)}
+.app a.btn-ghost:hover{color:var(--text)}
+.app a.btn-destructive{color:var(--bg)}
+.app a.attempt,.app a.chip,.app a.choice{color:var(--text)}

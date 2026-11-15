@@ -119,6 +119,11 @@ begin
   end loop;
 end $$;
 
+-- FR-3.1.4: a user must not change their own role. The profile row is created by the
+-- trigger below and removed with the auth user; the owner may only edit display_name.
+revoke insert, update, delete on public.profiles from anon, authenticated;
+grant update (display_name) on public.profiles to authenticated;
+
 -- ---------- profile row on sign-up ----------
 create function public.handle_new_user() returns trigger
 language plpgsql security definer set search_path = '' as $$

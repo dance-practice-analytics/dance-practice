@@ -43,7 +43,7 @@ test('progress has one chart per measurement and reacts to the phase', async ({ 
 test('sign out returns to sign-in and the session is gone', async ({ page }) => {
   await signIn(page)
   await page.getByRole('button', { name: 'Sign out' }).click()
-  await expect(page.getByRole('heading', { name: 'Sign in' })).toBeVisible()
+  await expect(page.getByRole('button', { name: 'Sign in', exact: true })).toBeVisible()
   await page.goto('/#/')
   await expect(page).toHaveURL(/#\/signin/)
 })

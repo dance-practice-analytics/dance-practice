@@ -1,0 +1,3 @@
+/* Geist + Geist Mono, the same request the old tree makes from styles.css. Kept in
+   its own file so the @import stays first in the bundle. */
+@import url('https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600;700&family=Geist+Mono:wght@400;500;600&display=swap');

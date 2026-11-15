@@ -1,0 +1,39 @@
+/* Settings & data (Settings.dc.html, SettingsMobile.dc.html). Tokens only. */
+
+/* Wide: rows inside a card, split by a hairline (the design's .hr). */
+.v2-set-rows{display:flex;flex-direction:column;gap:14px}
+.v2-set-rows>*+*{border-top:1px solid var(--line);padding-top:14px}
+
+/* Phone: the list card of the mobile design. */
+.v2-set-list{display:flex;flex-direction:column;overflow:hidden}
+.v2-set-list>*{padding:12px 14px;min-height:56px}
+.v2-set-list>*+*{border-top:1px solid var(--line)}
+
+.v2-set-row{display:flex;gap:12px;align-items:center;justify-content:space-between}
+.v2-set-text{flex:1;display:flex;flex-direction:column;min-width:0}
+.v2-set-row .switch:disabled{opacity:.55;cursor:default}
+
+.v2-set-rowbtn{width:100%;display:flex;align-items:center;gap:12px;background:none;border:0;font:inherit;color:var(--text);cursor:pointer;text-align:left}
+.v2-set-rowbtn:disabled{cursor:default;color:var(--text-3)}
+.v2-set-rowbtn svg{flex:none}
+
+.v2-set-facts{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:8px 16px;margin:0}
+.v2-set-facts dd{margin:0;text-align:right}
+
+.v2-set-files{display:flex;flex-direction:column;gap:6px;margin:0;padding:0;list-style:none;max-height:220px;overflow-y:auto}
+.v2-set-files li{display:flex;gap:12px;align-items:baseline;justify-content:space-between;min-width:0}
+.v2-set-files a{overflow-wrap:anywhere}
+
+/* Two classes: studio.css resets `.app ul`. */
+.app .v2-set-ul{display:flex;flex-direction:column;gap:4px;padding-left:18px;margin:0;list-style:disc}
+
+/* Dialog and bottom sheet */
+.v2-set-scrim{position:fixed;inset:0;z-index:60;background:var(--scrim);display:flex;align-items:flex-start;justify-content:center;padding:min(160px,12vh) 16px 16px;overflow-y:auto}
+.v2-set-scrim.is-sheet{flex-direction:column;justify-content:flex-end;align-items:stretch;padding:0}
+.v2-set-dialog{width:100%;max-width:480px;padding:24px;display:flex;flex-direction:column;gap:16px}
+.v2-set-dialog:focus{outline:none}
+.is-sheet .v2-set-dialog{max-width:none;border-radius:20px 20px 0 0;border-bottom:0;padding:12px 16px calc(28px + env(safe-area-inset-bottom));gap:14px;max-height:92dvh;overflow-y:auto}
+
+/* Reduce motion (settings/motion.ts): same elements as the prefers-reduced-motion rule in studio.css. */
+html.v2-set-calm .skel,html.v2-set-calm .spinner,html.v2-set-calm .st-processing .dot{animation:none}
+html.v2-set-calm .switch,html.v2-set-calm .switch::after{transition:none}
