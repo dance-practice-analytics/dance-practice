@@ -229,6 +229,16 @@ export function failureCopy(e: unknown): { reason: string; recovery: string | nu
   return { reason: 'Processing stopped unexpectedly. Your clip is untouched.', recovery: 'Try again.' }
 }
 
+/** FR-3.3.8: the attempt fails when no person is detected in more than half of the frames. */
+export function mostlyUntracked(frames: number, tracked: number): boolean {
+  return frames === 0 || tracked < frames / 2
+}
+
+const NO_PERSON = {
+  reason: 'No person was found in most of this clip, so nothing was measured.',
+  recovery: 'Check that the whole body is in the frame and well lit, then import the clip again.',
+}
+
 async function processOne(job: PipelineItem): Promise<void> {
   const id = job.attemptId
   const controller = new AbortController()
@@ -272,6 +282,14 @@ async function processOne(job: PipelineItem): Promise<void> {
     const tracked = series.frames.reduce((n, f) => n + (f.image ? 1 : 0), 0)
     patch(id, { step: 'saving_keypoints', fraction: 1, frames: series.frames.length, trackedFrames: tracked })
     set({ delegate: currentDelegate() })
+
+    if (mostlyUntracked(series.frames.length, tracked)) {
+      // FR-3.3.8: nothing is stored for a clip without a person in most of its frames.
+      const { reason, recovery } = NO_PERSON
+      await setAttemptStatus(db, id, 'failed', reason)
+      finish('failed', { reason, recovery })
+      return
+    }
 
     const blob = await encodeSeries(series)
     await uploadKeypoints(db, id, blob, series.frames.length, series.model)
