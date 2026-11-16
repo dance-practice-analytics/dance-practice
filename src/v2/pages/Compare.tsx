@@ -17,6 +17,7 @@ import { useAttempt, useAttempts, type AttemptView } from '../data'
 import { formatTimecode, MOVEMENT_LABELS, PHASE_LABELS, readMetric, VIEW_LABELS } from '../format'
 import { href, navigate, useRoute } from '../router'
 import { useIsNarrow } from '../useIsNarrow'
+import { useViewMode, ViewModeSwitch } from '../viewMode'
 import { alignmentText, buildTimeMap, type AlignMode, type TimeMap } from './compare/align'
 import { choosePair } from './compare/pick'
 import { createClock, type Clock } from './review/clock'
@@ -271,6 +272,7 @@ type StageMode = 'a' | 'overlay' | 'b'
 function Workspace({ a, b, seriesA, seriesB, attempts, pickers, eyebrow, backHref }: WorkspaceProps) {
   countRender('Compare')
   const narrow = useIsNarrow()
+  const simple = useViewMode() === 'simple'
   const clipA = useClip(a.id)
   const clipB = useClip(b.id)
   const [failed, setFailed] = useState<{ a: boolean; b: boolean }>({ a: false, b: false })
@@ -419,9 +421,9 @@ function Workspace({ a, b, seriesA, seriesB, attempts, pickers, eyebrow, backHre
       )}
       <RelinkNote missing={missing} attempts={attempts} describe={describeAttempt} />
 
-      <Timelines clock={clock} a={a} b={b} sA={sA} sB={sB} durA={durA} phasesA={phasesA} phasesB={phasesB} map={map} asked={asked} narrow={narrow} alignControl={narrow ? alignControl : null} />
+      <Timelines clock={clock} a={a} b={b} sA={sA} sB={sB} durA={durA} phasesA={phasesA} phasesB={phasesB} map={map} asked={asked} narrow={narrow} alignControl={narrow ? alignControl : null} detail={!simple} />
 
-      <Differences comparison={comparison} a={a} b={b} narrow={narrow} />
+      <Differences comparison={comparison} a={a} b={b} narrow={narrow} simple={simple} />
     </>
   )
 }
@@ -451,9 +453,11 @@ interface TimelinesProps {
   asked: AlignMode
   narrow: boolean
   alignControl: ReactNode
+  /** Detail view: the torso-lean traces of both attempts. */
+  detail: boolean
 }
 
-function Timelines({ clock, a, b, sA, sB, durA, phasesA, phasesB, map, asked, narrow, alignControl }: TimelinesProps) {
+function Timelines({ clock, a, b, sA, sB, durA, phasesA, phasesB, map, asked, narrow, alignControl, detail }: TimelinesProps) {
   const bandsA = useMemo(() => (sA ? trackingBands(sA) : []), [sA])
   const bandsB = useMemo(() => (sB ? trackingBands(sB) : []), [sB])
   const trunkA = useMemo(() => (sA ? buildTrace(sA, trunkAt) : []), [sA])
@@ -518,11 +522,11 @@ function Timelines({ clock, a, b, sA, sB, durA, phasesA, phasesB, map, asked, na
         )}
       </p>
 
-      {(sA || sB) && (
+      {detail && (sA || sB) && (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 4, marginTop: 6 }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', flexWrap: 'wrap', gap: 8, alignItems: 'baseline' }}>
             <span className="t-small" style={{ fontWeight: 500 }}>
-              Trunk inclination{' '}
+              Torso lean{' '}
               <span className="subtle" style={{ fontWeight: 400 }}>
                 0–{top}° · each frame
               </span>
@@ -540,7 +544,7 @@ function Timelines({ clock, a, b, sA, sB, durA, phasesA, phasesB, map, asked, na
             clock={clock}
             duration={durA}
             height={narrow ? 80 : 96}
-            ariaLabel={`Trunk inclination of A (dashed line) and B (solid line) in each frame, from 0 to ${top} degrees, on A’s time; B is placed ${map.mode === 'phases' ? 'phase by phase' : 'by share of clip length'}.`}
+            ariaLabel={`Torso lean of A (dashed line) and B (solid line) in each frame, from 0 to ${top} degrees, on A’s time; B is placed ${map.mode === 'phases' ? 'phase by phase' : 'by share of clip length'}.`}
           >
             <TraceLayer segments={trunkA} duration={durA} max={top} height={96} dash="5 4" lowDash="1 4" />
             <TraceLayer segments={trunkB} duration={durA} max={top} height={96} stroke="var(--accent)" strokeWidth={2.25} lowDash="1 4" mapT={map.toA} />
@@ -586,12 +590,12 @@ function phasesOf(row: MetricComparison, a: AttemptView, b: AttemptView): string
   return (pa.length ? pa : pb).map((p) => PHASE_LABELS[p]).join(' + ')
 }
 
-function Differences({ comparison, a, b, narrow }: { comparison: AttemptComparison; a: AttemptView; b: AttemptView; narrow: boolean }) {
+function Differences({ comparison, a, b, narrow, simple }: { comparison: AttemptComparison; a: AttemptView; b: AttemptView; narrow: boolean; simple: boolean }) {
   const explanation = pairExplanation(comparison)
   const sentence = (row: MetricComparison) => (
     <>
       {row.sentence}
-      {row.comparable && row.difference !== 0 && (
+      {!simple && row.comparable && row.difference !== 0 && (
         <span className="t-caption num" style={{ marginLeft: 8, whiteSpace: 'nowrap' }}>
           B − A = {row.differenceText}
         </span>
@@ -612,8 +616,9 @@ function Differences({ comparison, a, b, narrow }: { comparison: AttemptComparis
       <>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', gap: 8 }}>
           <h2 className="t-h3">Differences</h2>
-          <span className="t-caption">B compared with A</span>
+          <ViewModeSwitch />
         </div>
+        <p className="t-caption">B compared with A.</p>
         {explanation}
         <ul style={{ display: 'flex', flexDirection: 'column', gap: 10, listStyle: 'none', margin: 0, padding: 0 }}>
           {comparison.rows.map((row) => {
@@ -626,7 +631,7 @@ function Differences({ comparison, a, b, narrow }: { comparison: AttemptComparis
               >
                 <div style={{ display: 'flex', justifyContent: 'space-between', gap: 8 }}>
                   <span style={{ fontWeight: 600 }}>{row.info.label}</span>
-                  {phase && <span className="tag">{phase}</span>}
+                  {!simple && phase && <span className="tag">{phase}</span>}
                 </div>
                 <p style={{ color: row.comparable ? 'var(--text)' : 'var(--text-2)' }}>{sentence(row)}</p>
                 <div style={{ display: 'flex', gap: '8px 16px', flexWrap: 'wrap', alignItems: 'center' }} className="t-small num muted">
@@ -654,15 +659,18 @@ function Differences({ comparison, a, b, narrow }: { comparison: AttemptComparis
         <h2 className="t-h3" id="cmp-diff">
           Differences
         </h2>
-        <span className="t-caption">Descriptive only — a difference is not better or worse.</span>
+        <span style={{ display: 'inline-flex', gap: 12, alignItems: 'center', flexWrap: 'wrap' }}>
+          <span className="t-caption">Descriptive only — a difference is not better or worse.</span>
+          <ViewModeSwitch />
+        </span>
       </div>
       {explanation && <div style={{ padding: '12px 16px 0' }}>{explanation}</div>}
       <div className="tbl-wrap">
         <table className="tbl v2-cmp-tbl">
           <thead>
             <tr>
-              <th scope="col">Metric</th>
-              <th scope="col">Phase</th>
+              <th scope="col">Measurement</th>
+              {!simple && <th scope="col">Phase</th>}
               <th scope="col" className="r">
                 <span className="sw-a" /> A
               </th>
@@ -670,7 +678,7 @@ function Differences({ comparison, a, b, narrow }: { comparison: AttemptComparis
                 <span className="sw-b" /> B
               </th>
               <th scope="col">B compared with A</th>
-              <th scope="col">Confidence A / B</th>
+              <th scope="col">How well seen, A / B</th>
             </tr>
           </thead>
           <tbody>
@@ -679,7 +687,7 @@ function Differences({ comparison, a, b, narrow }: { comparison: AttemptComparis
               return (
                 <tr key={row.metric} className={row.comparable ? undefined : 'v2-cmp-nc'}>
                   <th scope="row">{row.info.label}</th>
-                  <td>{phase ? <span className="tag">{phase}</span> : <span className="subtle">—</span>}</td>
+                  {!simple && <td>{phase ? <span className="tag">{phase}</span> : <span className="subtle">—</span>}</td>}
                   <td className="r num" style={{ whiteSpace: 'nowrap' }}>
                     {row.a.text}
                   </td>

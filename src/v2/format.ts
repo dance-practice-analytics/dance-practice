@@ -11,6 +11,7 @@ import {
   metricsForMovement,
   NO_VALUE,
   roundValue,
+  displayValue,
   type MetricInfo,
 } from '../insights/catalog'
 
@@ -20,7 +21,7 @@ export type { ConfidenceLevel, MetricKey, NullReason, Phase, PhaseSpan }
 // One source: src/insights/catalog.ts (labels, units, decimals, rounding). This file
 // only adds the short aliases the screens use.
 
-export { NO_VALUE }
+export { NO_VALUE, displayValue }
 
 export interface MetricDef extends MetricInfo {
   /** Words for a smaller / larger value in difference text (`lessWord` / `moreWord`). */
@@ -67,11 +68,12 @@ export const STATUS_LABELS: Record<AttemptStatus | 'cancelled', string> = {
   cancelled: 'Cancelled',
 }
 
+/** How well the body was seen in the clip (tracking), never how well the dancer danced. */
 export const CONFIDENCE_LABELS: Record<ConfidenceLevel | 'none', string> = {
-  high: 'High',
-  medium: 'Medium',
-  low: 'Low',
-  none: 'No tracking',
+  high: 'Clear view',
+  medium: 'Partly hidden',
+  low: 'Hard to see',
+  none: 'Not seen',
 }
 
 /** Why a value is missing, in words for the dancer. Always about the recording, never the dancer. */
@@ -106,7 +108,7 @@ export function formatNumber(value: number | null | undefined, decimals = 1): st
 
 /** Value text for a metric, without the unit (for a MetricCard); null → '—'. */
 export function formatMetric(key: MetricKey, value: number | null | undefined): string {
-  return isNum(value) ? roundValue(key, value).toFixed(METRICS[key].decimals) : NO_VALUE
+  return isNum(value) ? displayValue(key, value).toFixed(METRICS[key].displayDecimals) : NO_VALUE
 }
 
 /** Value with its compact unit, e.g. '4.2°', '3.4 s', '0.06'; null → '—'. Same as insights `formatValue`. */

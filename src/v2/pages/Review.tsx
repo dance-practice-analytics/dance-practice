@@ -28,6 +28,7 @@ import {
 } from '../format'
 import { href, useRoute } from '../router'
 import { useIsNarrow } from '../useIsNarrow'
+import { useViewMode, ViewModeSwitch } from '../viewMode'
 import { createClock, type Clock } from './review/clock'
 import { attemptName, comparisonInput, describeAttempt, neighbourInSession, sessionName } from './review/labels'
 import { RelinkNote } from './review/Relink'
@@ -41,7 +42,7 @@ import { countRender, useClockValue, useTransportKeys } from './review/useClock'
 const NO_PHASES: readonly PhaseSpan[] = []
 const NARROW_UNIT: Record<MetricKey, string> = {
   trunk_inclination_deg: '°',
-  pelvis_ankle_offset_norm: '× leg',
+  pelvis_ankle_offset_norm: '% of leg',
   balance_duration_s: 's',
   knee_tracking_dev_deg: '°',
   turn_count: 'turns',
@@ -124,6 +125,7 @@ interface WorkspaceProps {
 function Workspace({ attempt, series, attempts }: WorkspaceProps) {
   countRender('Review')
   const narrow = useIsNarrow()
+  const simple = useViewMode() === 'simple'
   const clip = useClip(attempt.id)
   const [videoFailed, setVideoFailed] = useState(false)
   const [skeletonOn, setSkeletonOn] = useState(true)
@@ -258,19 +260,22 @@ function Workspace({ attempt, series, attempts }: WorkspaceProps) {
     const delta: ReactNode =
       !row || r.value === null ? undefined : !row.comparable ? row.sentence : narrow ? difference?.replace(` than ${otherName}`, '') : difference
     // The phone cards are half as wide: short units, and "vs attempt n" is said once above them.
-    return <MetricCard key={r.key} {...metricCardProps(r)} unit={narrow ? NARROW_UNIT[r.key] : r.def.unit} delta={delta ?? undefined} />
+    const props = metricCardProps(r)
+    // The simple view leaves out which phases a value comes from.
+    return <MetricCard key={r.key} {...props} phase={simple ? undefined : props.phase} unit={narrow ? NARROW_UNIT[r.key] : r.def.unit} delta={delta ?? undefined} />
   })
 
   const metrics = (
     <>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', gap: 8 }}>
         <h2 className="t-h3" id="rev-metrics">
-          Metrics
+          Measurements
         </h2>
-        {other && <span className="t-caption">vs attempt {other.number}</span>}
+        <ViewModeSwitch />
       </div>
+      {other && <p className="t-caption">Each one next to attempt {other.number}.</p>}
       {narrow ? <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, minmax(0, 1fr))', gap: 10 }}>{cards}</div> : cards}
-      {session.movement_type !== 'pirouette' && <p className="t-caption">Turn count is measured for pirouettes only.</p>}
+      {session.movement_type !== 'pirouette' && <p className="t-caption">Turns are counted for pirouettes only.</p>}
     </>
   )
 
@@ -360,7 +365,7 @@ function Workspace({ attempt, series, attempts }: WorkspaceProps) {
     </Transport>
   )
 
-  const timelines = <Timelines clock={clock} series={series} phases={phases} duration={duration} narrow={narrow} noPhaseReason={noPhaseReason(readings)} />
+  const timelines = <Timelines clock={clock} series={series} phases={phases} duration={duration} narrow={narrow} noPhaseReason={noPhaseReason(readings)} detail={!simple} />
 
   return (
     <>
@@ -424,9 +429,11 @@ interface TimelinesProps {
   duration: number
   narrow: boolean
   noPhaseReason: string | null
+  /** Detail view: the tracking and torso-lean traces under the phases. */
+  detail: boolean
 }
 
-function Timelines({ clock, series, phases, duration, narrow, noPhaseReason }: TimelinesProps) {
+function Timelines({ clock, series, phases, duration, narrow, noPhaseReason, detail }: TimelinesProps) {
   const bands = useMemo(() => trackingBands(series), [series])
   const count = useMemo(() => countBands(series, bands), [series, bands])
   const visibility = useMemo(() => buildTrace(series, visibilityAt), [series])
@@ -462,7 +469,7 @@ function Timelines({ clock, series, phases, duration, narrow, noPhaseReason }: T
     </>
   )
 
-  const tracks = (
+  const tracks = !detail ? null : (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
       <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', gap: 8, alignItems: 'baseline', flexWrap: 'wrap' }}>
@@ -499,7 +506,7 @@ function Timelines({ clock, series, phases, duration, narrow, noPhaseReason }: T
       <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', gap: 8, alignItems: 'baseline', flexWrap: 'wrap' }}>
           <span className="t-small" style={{ fontWeight: 500 }}>
-            Trunk inclination{' '}
+            Torso lean{' '}
             <span className="subtle" style={{ fontWeight: 400 }}>
               0–{trunkTop}° · each frame
             </span>
@@ -510,7 +517,7 @@ function Timelines({ clock, series, phases, duration, narrow, noPhaseReason }: T
           clock={clock}
           duration={duration}
           height={narrow ? 56 : 52}
-          ariaLabel={`Trunk inclination in each frame of the clip, from 0 to ${trunkTop} degrees; ${bandWords}.`}
+          ariaLabel={`Torso lean in each frame of the clip, from 0 to ${trunkTop} degrees; ${bandWords}.`}
         >
           <BandLayer bands={bands} duration={duration} />
           <TraceLayer segments={trunk} duration={duration} max={trunkTop} />
@@ -524,9 +531,11 @@ function Timelines({ clock, series, phases, duration, narrow, noPhaseReason }: T
     return (
       <>
         {ribbon}
-        <div className="card" style={{ padding: 12 }}>
-          {tracks}
-        </div>
+        {tracks && (
+          <div className="card" style={{ padding: 12 }}>
+            {tracks}
+          </div>
+        )}
       </>
     )
   }

@@ -59,3 +59,11 @@ html.v2-dark,html.v2-dark body{background:#121211;color-scheme:dark}
   100%{transform:perspective(700px) rotateY(720deg) scaleY(1)}
 }
 @keyframes v2-entrance-out{to{opacity:0;visibility:hidden}}
+
+/* "What is this?" on a metric card (MetricCard info) */
+.v2-metric-info{margin-top:2px}
+.v2-metric-info summary{cursor:pointer;font-size:13px;color:var(--accent);width:max-content;list-style:none}
+.v2-metric-info summary::-webkit-details-marker{display:none}
+.v2-metric-info summary::before{content:'?';display:inline-grid;place-items:center;width:16px;height:16px;margin-right:6px;border-radius:50%;border:1px solid currentColor;font-size:11px;font-weight:600}
+.v2-metric-info-body{display:flex;gap:12px;align-items:center;margin-top:8px;padding:10px;border-radius:10px;background:var(--surface-2)}
+.v2-metric-info-body p{color:var(--text-2);margin:0}

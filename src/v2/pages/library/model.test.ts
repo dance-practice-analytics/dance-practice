@@ -143,7 +143,7 @@ describe('pickFocus and buildTrend', () => {
     expect(t.points.map((p) => p.text)).toEqual(['6.8°', '5.6°', '4.9°'])
     expect(t.points.map((p) => p.label)).toEqual(['Session 1', 'Session 2', 'Session 3 · partial'])
     expect(t.max).toBe(8)
-    expect(t.sentence).toBe('Median on Nov 11 is 1.9° lower than on Oct 28.')
+    expect(t.sentence).toBe('Median on Nov 11 is 1.9° less lean than on Oct 28.')
     expect(t.notes).toEqual(['Session 3 has 1 of 2 attempts processed.'])
     expect(t.reason).toBeNull()
     expect(t.aria).toContain('session 3 4.9° (1 of 2 attempts processed)')
@@ -189,7 +189,7 @@ describe('notes', () => {
   it('takes the next focus from the newest note of an attempt that still exists', () => {
     const f = nextFocus(notes, [a1, a2], undefined, NOW)!
     expect(f.attemptId).toBe('a2')
-    expect(f.title).toBe('Hold phase — trunk inclination')
+    expect(f.title).toBe('Hold phase — torso lean')
     expect(f.observation).toBe('Synthetic observation.')
     expect(f.from).toBe('From notes, Nov 5')
     expect(f.ribbon?.filter((p) => p.current).map((p) => p.label)).toEqual(['Hold'])
@@ -220,6 +220,6 @@ describe('notes', () => {
 
 describe('prettyDates', () => {
   it('rewrites ISO days only', () => {
-    expect(prettyDates('Median on 2026-11-11 is 1.9° lower than on 2026-10-28', NOW)).toBe('Median on Nov 11 is 1.9° lower than on Oct 28')
+    expect(prettyDates('Median on 2026-11-11 is 1.9° less lean than on 2026-10-28', NOW)).toBe('Median on Nov 11 is 1.9° less lean than on Oct 28')
   })
 })

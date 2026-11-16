@@ -161,7 +161,7 @@ export function metricTiles(focus: Focus, now: Date = new Date()): MetricTiles {
       none,
       low: !none && lowCount > 0,
       confidence,
-      confidenceLabel: { high: 'High', medium: 'Medium', low: 'Mixed', none: 'No tracking' }[confidence],
+      confidenceLabel: { high: 'Clear view', medium: 'Partly hidden', low: 'Mixed view', none: 'Not seen' }[confidence],
       delta: none ? null : trend.series.state === 'ready' ? prettyDates(trend.series.change.text, now) : NEEDS_TWO_SESSIONS_TEXT,
       note,
       trend,

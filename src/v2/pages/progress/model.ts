@@ -264,7 +264,7 @@ const plural = (n: number, one: string, many = `${one}s`) => `${n} ${n === 1 ? o
 
 function axisLabel(key: MetricKey, v: number): string {
   // A round scale end reads as '10°' or '0.2', not '10.0°' or '0.20'.
-  return `${Number(v.toPrecision(6))}${METRICS[key].unitShort}`
+  return `${Number((v * METRICS[key].scale).toPrecision(6))}${METRICS[key].unitShort}`
 }
 
 function phasesOf(rows: readonly AttemptMetricsRow[], movement: MovementType, key: MetricKey): string | null {

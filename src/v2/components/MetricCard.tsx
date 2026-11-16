@@ -4,7 +4,8 @@
 // for something that wasn't measured.
 
 import type { ReactNode } from 'react'
-import { formatNumber, NO_VALUE, PHASE_LABELS, type MetricReading } from '../format'
+import { displayValue, formatNumber, NO_VALUE, PHASE_LABELS, type MetricKey, type MetricReading } from '../format'
+import { MetricFigure } from './MetricFigure'
 import { ConfBadge, type Confidence } from './primitives'
 
 export interface MetricCardProps {
@@ -27,13 +28,15 @@ export interface MetricCardProps {
    * confidence is low. Rendered as the hatched `.reason`.
    */
   reason?: ReactNode
+  /** "What is this?": a drawing of what is measured and one plain sentence. Not on a button card. */
+  info?: { metric: MetricKey; text: string }
   selected?: boolean
   /** Makes the card a button (e.g. to focus this metric on the timeline). */
   onSelect?(): void
 }
 
 export function MetricCard(props: MetricCardProps) {
-  const { name, value, unit, decimals = 1, phase, meta, delta, reason, selected, onSelect } = props
+  const { name, value, unit, decimals = 1, phase, meta, delta, reason, info, selected, onSelect } = props
   const none = value === null || !Number.isFinite(value)
   const confidence: Confidence | undefined = none ? 'none' : props.confidence
   const cls = ['metric', none ? 'is-none' : confidence === 'low' ? 'is-low' : '', selected ? 'is-selected' : '']
@@ -58,6 +61,15 @@ export function MetricCard(props: MetricCardProps) {
       )}
       {!none && delta && <p className="metric-delta">{delta}</p>}
       {(reason || none) && <p className="reason hatch">{reason ?? 'Not available for this attempt. Not shown as 0.'}</p>}
+      {info && !onSelect && (
+        <details className="v2-metric-info">
+          <summary>What is this?</summary>
+          <div className="v2-metric-info-body">
+            <MetricFigure metric={info.metric} />
+            <p className="t-small">{info.text}</p>
+          </div>
+        </details>
+      )}
     </>
   )
 
@@ -78,11 +90,13 @@ export function MetricCard(props: MetricCardProps) {
 export function metricCardProps(reading: MetricReading): MetricCardProps {
   return {
     name: reading.def.label,
-    value: reading.value,
+    // Display units: a ratio of leg length shows as a percent.
+    value: reading.value === null ? null : displayValue(reading.key, reading.value),
     unit: reading.def.unit,
-    decimals: reading.def.decimals,
+    decimals: reading.def.displayDecimals,
     confidence: reading.confidence,
     phase: reading.phases.map((p) => PHASE_LABELS[p]).join(' + ') || undefined,
     reason: reading.reason ?? (reading.notes.length > 0 ? reading.notes.join(' ') : undefined),
+    info: { metric: reading.key, text: reading.def.description },
   }
 }

@@ -92,7 +92,7 @@ describe('trackingBands', () => {
   })
 })
 
-describe('per-frame trunk inclination', () => {
+describe('per-frame torso lean', () => {
   it('is the angle of the hip-to-shoulder line from vertical', () => {
     expect(trunkAt({ t: 0, image: null, world: pose(0) })?.v).toBeCloseTo(0, 6)
     expect(trunkAt({ t: 0, image: null, world: pose(12) })?.v).toBeCloseTo(12, 6)
@@ -260,7 +260,7 @@ describe('measurements with values (synthetic rows)', () => {
     const row = (k: string) => cmp.rows.find((r) => r.metric === k)!
     const trunk = row('trunk_inclination_deg')
     expect(trunk.comparable).toBe(true)
-    expect(differenceText('trunk_inclination_deg', trunk.b.value, trunk.a.value, 'attempt 2')).toBe('2.1° lower than attempt 2')
+    expect(differenceText('trunk_inclination_deg', trunk.b.value, trunk.a.value, 'attempt 2')).toBe('2.1° less lean than attempt 2')
     expect(differenceText('balance_duration_s', 3.4, 2.6, 'attempt 2')).toBe('0.8 s longer than attempt 2')
     // Low confidence and a missing value are not compared, and say so in words.
     expect(row('knee_tracking_dev_deg')).toMatchObject({ comparable: false, sentence: 'Not compared: tracking was low in this attempt' })

@@ -63,8 +63,8 @@ export function tileKind(attempt: AttemptView, live?: LiveStatus): TileKind {
 
 export const TILE_LABEL: Record<TileKind, string> = {
   done: 'Done',
-  low: 'Low conf.',
-  none: 'No tracking',
+  low: 'Hard to see',
+  none: 'Not seen',
   processing: 'Processing',
   queued: 'Queued',
   failed: 'Failed',

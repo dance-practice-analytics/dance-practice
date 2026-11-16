@@ -175,7 +175,7 @@ function TrendChart({ trend, metric }: { trend: Trend; metric: MetricKey }) {
       <line x1="0" y1="90" x2="300" y2="90" stroke="var(--line)" />
       <line x1="0" y1="20" x2="300" y2="20" stroke="var(--line)" strokeDasharray="2 4" />
       <text x="0" y="14" fontSize="10" fill="var(--text-3)" fontFamily={MONO}>
-        {max === null ? '—' : `${max}${unit}`}
+        {max === null ? '—' : `${Number((max * METRICS[metric].scale).toPrecision(6))}${unit}`}
       </text>
       <text x="0" y="104" fontSize="10" fill="var(--text-3)" fontFamily={MONO}>
         0{unit}

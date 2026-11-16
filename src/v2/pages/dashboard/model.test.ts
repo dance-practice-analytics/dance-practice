@@ -63,8 +63,8 @@ describe('metricTiles', () => {
     const t = metricTiles(pickFocus(sessions, attempts)!, NOW)
     expect(t.heading).toBe('Relevé balance · by session')
     const trunk = t.tiles.find((x) => x.metric === 'trunk_inclination_deg')!
-    expect([trunk.value, trunk.unit, trunk.confidenceLabel]).toEqual(['4.9', '°', 'High'])
-    expect(trunk.delta).toBe('Median on Nov 11 is 1.9° lower than on Oct 28')
+    expect([trunk.value, trunk.unit, trunk.confidenceLabel]).toEqual(['4.9', '°', 'Clear view'])
+    expect(trunk.delta).toBe('Median on Nov 11 is 1.9° less lean than on Oct 28')
     expect(trunk.note).toBeNull()
     expect(t.caption).toBe('Session medians: Oct 28 → Nov 4 → Nov 11 (1 of 2 attempts processed so far). Compared with your own first session only.')
     expect(JSON.stringify(t)).not.toMatch(/better|worse|improv|good|bad|score/i)
@@ -74,7 +74,7 @@ describe('metricTiles', () => {
     const knee = metricTiles(pickFocus(sessions, attempts)!, NOW).tiles.find((x) => x.metric === 'knee_tracking_dev_deg')!
     expect(knee.none).toBe(true)
     expect(knee.value).toBe('—')
-    expect(knee.confidenceLabel).toBe('No tracking')
+    expect(knee.confidenceLabel).toBe('Not seen')
     expect(knee.delta).toBeNull()
     expect(knee.note).toBe('The landmarks this needs weren’t tracked during the phase.')
   })
@@ -93,7 +93,7 @@ describe('metricTiles', () => {
       attempt('l2', s, 2, {}, metrics('l2', { trunk_inclination_deg: 9 }, { trunk_inclination_deg: 'low' })),
     ]
     const tile = metricTiles(pickFocus([s], a)!, NOW).tiles[0]
-    expect([tile.value, tile.low, tile.confidenceLabel]).toEqual(['5.0', true, 'Mixed'])
+    expect([tile.value, tile.low, tile.confidenceLabel]).toEqual(['5.0', true, 'Mixed view'])
     expect(tile.note).toBe('1 attempt on Nov 4 had low confidence and is not in the median.')
     expect(tile.delta).toBe('Needs two sessions with a value to show change')
   })
@@ -112,7 +112,7 @@ describe('otherMovement', () => {
     const pa = [1, 1.25].map((v, i) => attempt(`pir-${i}`, p, i + 1, {}, { ...metrics(`pir-${i}`, { turn_count: v }), movement: 'pirouette' }))
     const c = otherMovement(pickFocus([p, ...sessions], [...pa, ...attempts], { subject: 'all', movement: 'releve_balance' })!, NOW)
     expect([c.sessions, c.value, c.unit]).toEqual([1, '1.13', 'turns · median'])
-    expect(c.sentence).toBe('Turn count: needs two sessions with a value to show change.')
+    expect(c.sentence).toBe('Turns: needs two sessions with a value to show change.')
   })
 })
 
@@ -160,12 +160,12 @@ describe('researcher view', () => {
     const items = attentionItems(rows)
     expect(items.map((i) => [i.code, i.status, i.action])).toEqual([
       ['S02', 'Failed', 'Retry'],
-      ['S01', 'No tracking', 'Review'],
-      ['S02', 'Low conf.', 'Review'],
+      ['S01', 'Not seen', 'Review'],
+      ['S02', 'Hard to see', 'Review'],
     ])
     expect(items[0].reason).toBe('Clip shorter than 2 s.')
     expect(items[1].reason).toBe('The landmarks this needs weren’t tracked during the phase.')
-    expect(items[2].reason).toBe('Low tracking confidence: Trunk inclination.')
+    expect(items[2].reason).toBe('Low tracking confidence: Torso lean.')
   })
 
   it('orders subjects by code and reports counts, not measurements', () => {

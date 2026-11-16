@@ -25,7 +25,7 @@ describe('v2 format', () => {
 
   it('formats metrics with their units', () => {
     expect(formatMetricWithUnit('trunk_inclination_deg', 4.21)).toBe('4.2°')
-    expect(formatMetricWithUnit('pelvis_ankle_offset_norm', 0.062)).toBe('0.06')
+    expect(formatMetricWithUnit('pelvis_ankle_offset_norm', 0.062)).toBe('6%')
     expect(formatMetricWithUnit('balance_duration_s', 3.44)).toBe('3.4 s')
   })
 
@@ -36,7 +36,7 @@ describe('v2 format', () => {
   })
 
   it('words differences neutrally and has none across a gap', () => {
-    expect(differenceText('trunk_inclination_deg', 4.2, 6.3, 'attempt 2')).toBe('2.1° lower than attempt 2')
+    expect(differenceText('trunk_inclination_deg', 4.2, 6.3, 'attempt 2')).toBe('2.1° less lean than attempt 2')
     expect(differenceText('balance_duration_s', 3.4, 2.9, 'attempt 2')).toBe('0.5 s longer than attempt 2')
     expect(differenceText('pelvis_ankle_offset_norm', 0.06, 0.061, 'A')).toBe('Same as A')
     expect(differenceText('turn_count', null, 1, 'A')).toBeNull()

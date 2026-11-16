@@ -215,6 +215,13 @@ No component fetches data. All copy is passed in.
   Inside `.btn`, `.privacy`, `.chip`, `.tag`, `.alert`, `.note-box`, `.sidenav` the CSS
   sizes it; elsewhere pass `size`. `label` makes it non-decorative.
 - **`Logo`** `{ size?: number }` — the app mark.
+- **`MetricFigure`** `{ metric; size? }` — the small drawing of what a metric measures;
+  `MetricCard` shows it under "What is this?" when given `info` (`metricCardProps` sets it).
+- **Simple / Detail** (`viewMode.tsx`: `useViewMode()`, `<ViewModeSwitch />`) — Simple is
+  the default for dancers; Detail adds frame-by-frame traces, phase tags and B − A arithmetic
+  on Review and Compare. Metric names and units for dancers live in `src/insights/catalog.ts`
+  (`label`, `unit`, `description`; `scale`/`displayDecimals` turn the leg-length ratio into a
+  percent on screen). Exports keep the stored values and technical units.
 - **`PageHeader`** `{ title; mobileTitle?; eyebrow?: ReactNode; subtitle?: ReactNode;
   actions?: ReactNode; mobileActions?: ReactNode; backHref?: string }` — desktop header
   row (string `eyebrow` → `.t-label`; a node → small subtle line, e.g. a breadcrumb) or

@@ -19,10 +19,10 @@ describe('chatContext', () => {
     const c = chatContext(a2, all, 'attempt')
     expect(previousAttempt(a2, all)?.id).toBe('a1')
     expect(c.rows.map((r) => [r.name, r.value, r.confidence])).toEqual([
-      ['Trunk inclination · Hold', '4.2° · attempt 1: 6.3°', 'high'],
-      ['Pelvis–ankle offset · Hold', '0.06 · attempt 1: 0.10', 'medium'],
-      ['Balance duration · Hold', '3.4 s · attempt 1: 2.6 s', 'high'],
-      ['Knee tracking deviation · Hold', '8.7° · attempt 1: 8.1° · flagged low', 'low'],
+      ['Torso lean · Hold', '4.2° · attempt 1: 6.3°', 'high'],
+      ['Hips over your foot · Hold', '6% · attempt 1: 10%', 'medium'],
+      ['Time on relevé · Hold', '3.4 s · attempt 1: 2.6 s', 'high'],
+      ['Knee over toes · Hold', '8.7° · attempt 1: 8.1° · flagged low', 'low'],
     ])
     expect(c.rows[3].subdued).toBe(true)
     expect(c.valueCount).toBe(4)
@@ -40,7 +40,7 @@ describe('chatContext', () => {
     const c = chatContext(a2, all, 'session')
     expect(c.rows.map((r) => [r.value, r.confidence])).toEqual([
       ['3 attempts · median 5.3° · 1 not measured', 'high'],
-      ['3 attempts · median 0.08 · 1 not measured', 'medium'],
+      ['3 attempts · median 8% · 1 not measured', 'medium'],
       ['3 attempts · median 3.0 s · 1 not measured', 'high'],
       ['3 attempts · median 8.4° · 1 flagged low · 1 not measured', 'low'],
     ])
@@ -54,9 +54,9 @@ describe('suggestedQuestions', () => {
       'What changed since attempt 1?',
       'Which phase varied most?',
       'What could I practise next?',
-      'Why is knee tracking deviation low confidence?',
+      'Why is knee over toes low confidence?',
     ])
     expect(suggestedQuestions(a1, all)).toEqual(['Which phase varied most?', 'What could I practise next?'])
-    expect(suggestedQuestions(gaps, all)[3]).toBe('Why is trunk inclination not measured?')
+    expect(suggestedQuestions(gaps, all)[3]).toBe('Why is torso lean not measured?')
   })
 })

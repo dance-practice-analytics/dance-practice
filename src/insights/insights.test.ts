@@ -92,7 +92,7 @@ describe('catalog', () => {
   it('formats values and signed differences, never -0 and never 0 for a gap', () => {
     expect(formatValue('trunk_inclination_deg', 4.24)).toBe('4.2°')
     expect(formatValue('balance_duration_s', 3.44)).toBe('3.4 s')
-    expect(formatValue('pelvis_ankle_offset_norm', 0.056)).toBe('0.06')
+    expect(formatValue('pelvis_ankle_offset_norm', 0.056)).toBe('6%')
     expect(formatValue('trunk_inclination_deg', -0.01)).toBe('0.0°')
     expect(formatValue('trunk_inclination_deg', null)).toBe('—')
     expect(formatDifference('trunk_inclination_deg', -2.1)).toBe('−2.1°')
@@ -115,9 +115,9 @@ describe('compareAttempts', () => {
     expect(c.rows.map((r) => r.metric)).toEqual(metricsForMovement('releve_balance'))
 
     const trunk = row(c, 'trunk_inclination_deg')
-    expect(trunk).toMatchObject({ comparable: true, reason: null, difference: -2.1, differenceText: '−2.1°', direction: 'less', sentence: 'B is 2.1° lower' })
+    expect(trunk).toMatchObject({ comparable: true, reason: null, difference: -2.1, differenceText: '−2.1°', direction: 'less', sentence: 'B is 2.1° less lean' })
     expect(trunk.a).toMatchObject({ value: 6.3, text: '6.3°', confidence: 'high' })
-    expect(row(c, 'pelvis_ankle_offset_norm')).toMatchObject({ difference: 0.04, sentence: 'B is 0.04 larger' })
+    expect(row(c, 'pelvis_ankle_offset_norm')).toMatchObject({ difference: 0.04, differenceText: '+4%', sentence: 'B is 4% further to the side' })
     expect(row(c, 'balance_duration_s')).toMatchObject({ difference: 0.4, differenceText: '+0.4 s', sentence: 'B is 0.4 s longer' })
     expect(row(c, 'knee_tracking_dev_deg')).toMatchObject({ difference: 0, direction: 'same', sentence: NO_DIFFERENCE_TEXT })
   })
@@ -125,7 +125,7 @@ describe('compareAttempts', () => {
   it('takes the difference of the rounded values, so the table adds up', () => {
     // Shown as 4.3° and 2.1°: the difference is 2.2°, not the 2.1° of the raw values.
     const c = compareAttempts(input('a', { trunk_inclination_deg: 4.26 }), input('b', { trunk_inclination_deg: 2.14 }))
-    expect(row(c, 'trunk_inclination_deg')).toMatchObject({ difference: -2.2, sentence: 'B is 2.2° lower' })
+    expect(row(c, 'trunk_inclination_deg')).toMatchObject({ difference: -2.2, sentence: 'B is 2.2° less lean' })
     // Both shown as 4.2°.
     const same = compareAttempts(input('a', { trunk_inclination_deg: 4.21 }), input('b', { trunk_inclination_deg: 4.24 }))
     expect(row(same, 'trunk_inclination_deg')).toMatchObject({ comparable: true, difference: 0, sentence: 'No difference at this precision' })
@@ -367,7 +367,7 @@ describe('changeBetweenSessions', () => {
       latest: { sessionId: 's3' },
       difference: -1.7,
       direction: 'less',
-      text: 'Median on 2026-11-12 is 1.7° lower than on 2026-11-03',
+      text: 'Median on 2026-11-12 is 1.7° less lean than on 2026-11-03',
     })
   })
 

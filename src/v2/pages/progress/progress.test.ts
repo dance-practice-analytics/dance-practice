@@ -65,9 +65,9 @@ describe('buildProgress', () => {
 
   it('words the change with the insights sentence and readable dates', () => {
     expect(panel.series.state).toBe('ready')
-    expect(panel.summary).toBe('Medians 6.8° → 5.8° → 4.9°. Median on Nov 11 is 1.9° lower than on Oct 28.')
+    expect(panel.summary).toBe('Medians 6.8° → 5.8° → 4.9°. Median on Nov 11 is 1.9° less lean than on Oct 28.')
     expect(panel.phaseLabel).toBe('Hold')
-    expect(panel.aria).toContain('Trunk inclination, Hold.')
+    expect(panel.aria).toContain('Torso lean, Hold.')
     expect(panel.aria).toContain('Oct 28: 6.8°')
     expect(panel.aria).toContain('1 low-confidence value not counted in the medians')
     expect(panel.aria).toContain('2 attempts without a value')
@@ -172,7 +172,7 @@ describe('ProgressChart', () => {
 
   it('renders an image with a text alternative', () => {
     expect(html).toContain('role="img"')
-    expect(html).toContain('aria-label="Trunk inclination, Hold. Session medians')
+    expect(html).toContain('aria-label="Torso lean, Hold. Session medians')
   })
 
   it('draws 7 solid dots, 1 hollow dashed dot, 2 gap marks and 3 median ticks', () => {

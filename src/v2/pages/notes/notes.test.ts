@@ -181,7 +181,7 @@ describe('a note as text', () => {
     expect(historyMeta(note, 1)).toBe('Earlier version · 1 observation')
     const text = noteText(a3, note, NOW)
     expect(text).toContain('Practice notes — Attempt 3 · Relevé balance · Nov 4')
-    expect(text).toContain('1. Balance duration (confidence: high)')
+    expect(text).toContain('1. Time on relevé (confidence: high)')
     expect(text).toContain('- Caution.')
     expect(text.trim().endsWith('Disclaimer.')).toBe(true)
   })
