@@ -26,6 +26,14 @@ html.v2-dark,html.v2-dark body{background:#121211;color-scheme:dark}
   .v2-main>.v2-mhead{margin:-16px -16px 0;position:sticky;top:0;z-index:20}
   .v2-bnav{display:block;position:fixed;left:0;right:0;bottom:0;z-index:30}
   .v2-bnav .bnav{padding-bottom:calc(10px + env(safe-area-inset-bottom))}
+  /* Touch targets of at least 40px: the design's small controls are sized for a mouse. */
+  .app .btn-sm,.app .input-sm{height:40px}
+  .app .btn-icon.btn-sm{width:40px}
+  .app .seg button,.app .seg a{height:38px}
+  .app button.chip,.app a.chip{height:40px}
+  .app .switch{overflow:visible}
+  .app .switch::before{content:"";position:absolute;inset:-8px -4px}
+  .v2-main a.t-small:not(.btn){display:inline-block;padding:10px 0;margin:-10px 0}
 }
 
 /* Helpers */
@@ -62,8 +70,9 @@ html.v2-dark,html.v2-dark body{background:#121211;color-scheme:dark}
 
 /* "What is this?" on a metric card (MetricCard info) */
 .v2-metric-info{margin-top:2px}
-.v2-metric-info summary{cursor:pointer;font-size:13px;color:var(--accent);width:max-content;list-style:none}
+.v2-metric-info summary{cursor:pointer;font-size:13px;color:var(--accent);width:max-content;max-width:100%;list-style:none;display:flex;align-items:center;min-height:40px;margin:-8px 0}
 .v2-metric-info summary::-webkit-details-marker{display:none}
-.v2-metric-info summary::before{content:'?';display:inline-grid;place-items:center;width:16px;height:16px;margin-right:6px;border-radius:50%;border:1px solid currentColor;font-size:11px;font-weight:600}
+.v2-metric-info summary::before{content:'?';display:inline-grid;place-items:center;flex:none;width:16px;height:16px;margin-right:6px;border-radius:50%;border:1px solid currentColor;font-size:11px;font-weight:600}
 .v2-metric-info-body{display:flex;gap:12px;align-items:center;margin-top:8px;padding:10px;border-radius:10px;background:var(--surface-2)}
-.v2-metric-info-body p{color:var(--text-2);margin:0}
+.v2-metric-info-body p{color:var(--text-2);margin:0;flex:1;min-width:0}
+.v2-metric-info-body svg{flex:none}

@@ -19,6 +19,12 @@
 
 .v2-set-facts{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:8px 16px;margin:0}
 .v2-set-facts dd{margin:0;text-align:right}
+/* Phone: the value goes under its label, so neither column is squeezed to a few words. */
+@media (max-width:899.98px){
+  .v2-set-facts{grid-template-columns:minmax(0,1fr);gap:2px}
+  .v2-set-facts dd{text-align:left;color:var(--text-2);margin-bottom:8px}
+  .v2-set-facts dd:last-of-type{margin-bottom:0}
+}
 
 .v2-set-files{display:flex;flex-direction:column;gap:6px;margin:0;padding:0;list-style:none;max-height:220px;overflow-y:auto}
 .v2-set-files li{display:flex;gap:12px;align-items:baseline;justify-content:space-between;min-width:0}

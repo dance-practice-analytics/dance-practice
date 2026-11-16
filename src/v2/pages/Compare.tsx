@@ -383,6 +383,12 @@ function Workspace({ a, b, seriesA, seriesB, attempts, pickers, eyebrow, backHre
           <>
             {pickers}
             {alignControl}
+            {!narrow && (
+              <div className="field">
+                <span className="field-label">View</span>
+                <ViewModeSwitch />
+              </div>
+            )}
           </>
         }
       />
@@ -635,14 +641,19 @@ function Differences({ comparison, a, b, narrow, simple }: { comparison: Attempt
                 </div>
                 <p style={{ color: row.comparable ? 'var(--text)' : 'var(--text-2)' }}>{sentence(row)}</p>
                 <div style={{ display: 'flex', gap: '8px 16px', flexWrap: 'wrap', alignItems: 'center' }} className="t-small num muted">
-                  <span>
-                    <span className="sw-a" /> {row.a.text}
+                  {/* Each value keeps its badge on the same line when the row wraps. */}
+                  <span style={{ display: 'inline-flex', gap: 8, alignItems: 'center' }}>
+                    <span>
+                      <span className="sw-a" /> {row.a.text}
+                    </span>
+                    <ConfBadge level={row.a.confidence ?? 'none'} />
                   </span>
-                  <ConfBadge level={row.a.confidence ?? 'none'} />
-                  <span>
-                    <span className="sw-b" /> {row.b.text}
+                  <span style={{ display: 'inline-flex', gap: 8, alignItems: 'center' }}>
+                    <span>
+                      <span className="sw-b" /> {row.b.text}
+                    </span>
+                    <ConfBadge level={row.b.confidence ?? 'none'} />
                   </span>
-                  <ConfBadge level={row.b.confidence ?? 'none'} />
                 </div>
               </li>
             )
@@ -661,7 +672,6 @@ function Differences({ comparison, a, b, narrow, simple }: { comparison: Attempt
         </h2>
         <span style={{ display: 'inline-flex', gap: 12, alignItems: 'center', flexWrap: 'wrap' }}>
           <span className="t-caption">Descriptive only — a difference is not better or worse.</span>
-          <ViewModeSwitch />
         </span>
       </div>
       {explanation && <div style={{ padding: '12px 16px 0' }}>{explanation}</div>}

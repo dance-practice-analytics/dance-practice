@@ -12,3 +12,5 @@
 /* Phone: Generate stays reachable above the bottom navigation, as in NotesMobile. */
 .v2-notes-bar{position:sticky;bottom:calc(72px + env(safe-area-inset-bottom));z-index:10;margin:0 -16px;padding:12px 16px;border-top:1px solid var(--line);background:var(--surface);display:flex;flex-direction:column;gap:6px}
 .v2-notes-bar .t-caption{text-align:center}
+/* Last on the page: sit on the bottom nav instead of leaving main's bottom padding under it. */
+.v2-notes-bar:last-child{margin-bottom:calc(73px - 96px)}

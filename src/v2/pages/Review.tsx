@@ -274,7 +274,7 @@ function Workspace({ attempt, series, attempts }: WorkspaceProps) {
         <ViewModeSwitch />
       </div>
       {other && <p className="t-caption">Each one next to attempt {other.number}.</p>}
-      {narrow ? <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, minmax(0, 1fr))', gap: 10 }}>{cards}</div> : cards}
+      {narrow ? <div className="v2-rev-mgrid">{cards}</div> : cards}
       {session.movement_type !== 'pirouette' && <p className="t-caption">Turns are counted for pirouettes only.</p>}
     </>
   )

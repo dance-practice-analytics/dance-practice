@@ -21,6 +21,13 @@
 .v2-rev-key{display:inline-block;width:14px;height:10px;border-radius:2px;vertical-align:-1px;margin-right:5px;border:1px dashed var(--line-strong);background-image:repeating-linear-gradient(135deg,var(--hatch) 0 1.5px,transparent 1.5px 6px)}
 .v2-rev-key.v2-rev-gap{background-color:var(--surface-3)}
 
+/* Phone: two metric cards per row. The badge drops under a long name instead of
+   squeezing it to one word per line, and an open "What is this?" takes the full row. */
+.v2-rev-mgrid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}
+.v2-rev-mgrid .metric{padding:14px}
+.v2-rev-mgrid .metric-top{flex-wrap:wrap;gap:6px}
+.v2-rev-mgrid .metric:has(details[open]){grid-column:1/-1}
+
 /* Attempt strip */
 .v2-rev-strip{display:flex;gap:10px;overflow-x:auto;padding:2px 2px 6px}
 .v2-rev-strip .attempt{flex:none}
