@@ -1086,12 +1086,11 @@ describe('errors', () => {
     expect(mine(db, 'attempts')).toHaveLength(4)
   })
 
-  it('does not pretend to delete the sign-in account', async () => {
+  it('leaves the sign-in account and profile to deleteAccount', async () => {
     const { db, client } = seed()
-    const e = await rejection(deleteAccount(client))
-    expect(e.code).toBe('account_deletion_unavailable')
-    expect(e.status).toBe(501)
-    expect(e.recovery).toMatch(/Delete all your data/)
+    // Without the typed word nothing is sent, not even the function call.
+    const e = await rejection(deleteAccount(client, 'delete'))
+    expect(e.code).toBe('not_confirmed')
     expect(db.ops).toEqual([])
     expect([...ACCOUNT_REMAINS]).toEqual(['sign-in account', 'profile'])
   })

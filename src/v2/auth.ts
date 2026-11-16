@@ -2,10 +2,10 @@
 // src/api/client.ts, which would pull the mock in. The role comes from the user's
 // `profiles` row and can't be changed from the browser (FR-3.1.4).
 
-import type { Session } from '@supabase/supabase-js'
-import { authError } from '../api/authErrors'
+import type { AuthChangeEvent, Session } from '@supabase/supabase-js'
+import { MIN_PASSWORD, authError, authLinkError, type AuthContext } from '../api/authErrors'
 import { ApiError } from '../api/errors'
-import { supabase } from '../api/supabase'
+import { authLinkAtLoad, supabase } from '../api/supabase'
 import type { ProfileRow, UserRole } from '../data/schema'
 import { createStore, useStore } from '../state/store'
 
@@ -16,11 +16,40 @@ export interface AuthState {
   /** Null while it loads, or if the row couldn't be read; `role` then falls back to dancer. */
   profile: ProfileRow | null
   role: UserRole
+  /**
+   * Signed in through a password-reset link (FR-3.1.3): the app shows only the
+   * "set a new password" screen until `updatePassword` succeeds or the user signs out.
+   */
+  recovery: boolean
+  /** A reset link that didn't work (expired, already used); SignIn shows it. */
+  linkError: ApiError | null
 }
 
-const SIGNED_OUT: AuthState = { status: 'signedOut', user: null, profile: null, role: 'dancer' }
+const SIGNED_OUT: AuthState = { status: 'signedOut', user: null, profile: null, role: 'dancer', recovery: false, linkError: null }
 
-export const authStore = createStore<AuthState>({ ...SIGNED_OUT, status: 'loading' })
+// Survives a reload of the reset screen within the tab, so a reload doesn't skip it.
+const RECOVERY_KEY = 'dpa:recovery'
+function rememberRecovery(on: boolean): void {
+  try {
+    if (on) sessionStorage.setItem(RECOVERY_KEY, '1')
+    else sessionStorage.removeItem(RECOVERY_KEY)
+  } catch {
+    // Storage may be blocked; the PASSWORD_RECOVERY event still opens the screen.
+  }
+}
+function recoveryRemembered(): boolean {
+  try {
+    return sessionStorage.getItem(RECOVERY_KEY) === '1'
+  } catch {
+    return false
+  }
+}
+
+// What the page was opened with; read once, before supabase-js clears the fragment.
+let recoveryPending = authLinkAtLoad.kind === 'tokens' && authLinkAtLoad.type === 'recovery'
+const initialLinkError = authLinkAtLoad.kind === 'error' ? authLinkError(authLinkAtLoad.errorCode) : null
+
+export const authStore = createStore<AuthState>({ ...SIGNED_OUT, status: 'loading', linkError: initialLinkError })
 
 export function useAuth(): AuthState {
   return useStore(authStore)
@@ -45,18 +74,34 @@ async function loadProfile(uid: string): Promise<void> {
   authStore.set({ ...now, profile, role: profile?.role ?? 'dancer' })
 }
 
-function accept(session: Session | null): void {
+function accept(session: Session | null, event?: AuthChangeEvent): void {
   const prev = authStore.get()
   if (!session?.user) {
-    if (prev.status !== 'signedOut') authStore.set(SIGNED_OUT)
+    recoveryPending = false
+    rememberRecovery(false)
+    if (prev.status !== 'signedOut') authStore.set({ ...SIGNED_OUT, linkError: prev.linkError })
     return
   }
   const user = { id: session.user.id, email: session.user.email ?? '' }
   const same = prev.user?.id === user.id
+  const recovery =
+    event === 'PASSWORD_RECOVERY' || recoveryPending || (same && prev.recovery) || (!same && prev.status === 'loading' && recoveryRemembered())
+  if (recovery) {
+    recoveryPending = false
+    rememberRecovery(true)
+  }
   // Token refreshes fire often; only a change of user resets the profile.
-  if (same && prev.status === 'signedIn') return
-  authStore.set({ status: 'signedIn', user, profile: same ? prev.profile : null, role: same ? prev.role : 'dancer' })
-  void loadProfile(user.id)
+  if (same && prev.status === 'signedIn' && prev.recovery === recovery) return
+  authStore.set({
+    status: 'signedIn',
+    user,
+    profile: same ? prev.profile : null,
+    role: same ? prev.role : 'dancer',
+    recovery,
+    // A link that worked replaces an older failure.
+    linkError: recovery ? null : prev.linkError,
+  })
+  if (!same) void loadProfile(user.id)
 }
 
 let started = false
@@ -70,13 +115,61 @@ export function startAuth(): void {
     .then(({ data }) => accept(data.session))
     .catch(() => accept(null))
   // No awaits on the client inside this callback: supabase-js holds a lock while it runs.
-  supabase.auth.onAuthStateChange((_event, session) => {
-    setTimeout(() => accept(session), 0)
+  supabase.auth.onAuthStateChange((event, session) => {
+    setTimeout(() => accept(session, event), 0)
   })
 }
 
-const fail = (e: unknown): ApiError =>
-  e instanceof ApiError ? e : authError((e && typeof e === 'object' ? e : {}) as Parameters<typeof authError>[0])
+const fail = (e: unknown, context?: AuthContext): ApiError =>
+  e instanceof ApiError ? e : authError((e && typeof e === 'object' ? e : {}) as Parameters<typeof authError>[0], context)
+
+/** Where the reset email sends the user back: this origin and base path, on a hash route. */
+export function resetRedirectUrl(): string {
+  return `${window.location.origin}${import.meta.env.BASE_URL}#/reset-password`
+}
+
+/**
+ * Sends the password-reset email (FR-3.1.3). The server answers the same way whether or
+ * not the email has an account, so the screen must not say which.
+ */
+export async function requestPasswordReset(email: string): Promise<void> {
+  try {
+    const { error } = await client().auth.resetPasswordForEmail(email.trim(), { redirectTo: resetRedirectUrl() })
+    if (error) throw authError(error, 'reset')
+  } catch (e) {
+    throw fail(e, 'reset')
+  }
+}
+
+/**
+ * Sets a new password for the signed-in user: after a reset link, or from Settings with
+ * `currentPassword`, which is checked first so an unattended open tab can't change it.
+ */
+export async function updatePassword(password: string, opts: { currentPassword?: string } = {}): Promise<void> {
+  if (password.length < MIN_PASSWORD) throw authError({ status: 422, code: 'weak_password' }, 'password')
+  try {
+    const auth = client().auth
+    if (opts.currentPassword !== undefined) {
+      const email = authStore.get().user?.email
+      if (!email) throw authError({ status: 401, code: 'session_not_found' }, 'password')
+      const { error } = await auth.signInWithPassword({ email, password: opts.currentPassword })
+      if (error) throw authError(error, 'password')
+    }
+    const { error } = await auth.updateUser({ password })
+    if (error) throw authError(error, 'password')
+  } catch (e) {
+    throw fail(e, 'password')
+  }
+  rememberRecovery(false)
+  const now = authStore.get()
+  if (now.recovery) authStore.set({ ...now, recovery: false })
+}
+
+/** Hides the "link didn't work" message once it has been read. */
+export function clearLinkError(): void {
+  const now = authStore.get()
+  if (now.linkError) authStore.set({ ...now, linkError: null })
+}
 
 /** Rejects with an ApiError whose `message` and `recovery` are safe to show. */
 export async function signIn(email: string, password: string): Promise<void> {
@@ -106,6 +199,8 @@ export async function signOut(): Promise<void> {
     // 'local' ends this browser's session even when the server can't be reached.
     await client().auth.signOut({ scope: 'local' })
   } finally {
+    recoveryPending = false
+    rememberRecovery(false)
     authStore.set(SIGNED_OUT)
   }
 }

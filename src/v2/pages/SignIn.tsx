@@ -1,18 +1,18 @@
 // Screen 1 — sign in / create account.
 // Design: SignIn.dc.html (wide: form + dark "Your video stays with you" panel) and
 // SignInMobile.dc.html (stage on top, form below). One responsive component.
-// Left out on purpose: "Forgot password?" and the email sign-in link — both need
-// outgoing email, which is rate-limited on this project; no dead controls.
+// "Forgot password?" (FR-3.1.3) switches the form to the reset request; the link in the
+// email opens ResetPassword. Left out: the email sign-in link (no design need yet).
 
 import { useState, type FormEvent } from 'react'
 import { MIN_PASSWORD } from '../../api/authErrors'
 import { ApiError } from '../../api/errors'
-import { signIn, signUp } from '../auth'
+import { clearLinkError, requestPasswordReset, signIn, signUp, useAuth } from '../auth'
 import { Icon, Logo, Spinner, type IconName } from '../components'
 import { playEntrance } from '../Entrance'
 import { useIsNarrow } from '../useIsNarrow'
 
-type Mode = 'signin' | 'signup'
+type Mode = 'signin' | 'signup' | 'reset'
 
 const POINTS: { icon: IconName; text: string }[] = [
   { icon: 'device', text: 'Pose estimation runs on this device. Study clips are never uploaded.' },
@@ -62,22 +62,43 @@ function StageArt() {
 
 export function SignIn() {
   const narrow = useIsNarrow()
-  const [mode, setMode] = useState<Mode>('signin')
+  const { linkError } = useAuth()
+  // A reset link that failed brings the user straight back to asking for a new one.
+  const [mode, setMode] = useState<Mode>(linkError ? 'reset' : 'signin')
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<ApiError | null>(null)
+  const [sentTo, setSentTo] = useState<string | null>(null)
   const signup = mode === 'signup'
+  const reset = mode === 'reset'
   const tooShort = signup && password.length > 0 && password.length < MIN_PASSWORD
 
   const pick = (next: Mode) => {
     setMode(next)
     setError(null)
+    setSentTo(null)
+    if (next !== 'reset') clearLinkError()
   }
 
   const submit = async (e: FormEvent) => {
     e.preventDefault()
     if (busy) return
+    if (reset) {
+      setBusy(true)
+      setError(null)
+      setSentTo(null)
+      try {
+        await requestPasswordReset(email)
+        clearLinkError()
+        setSentTo(email.trim())
+      } catch (err) {
+        setError(err as ApiError)
+      } finally {
+        setBusy(false)
+      }
+      return
+    }
     if (signup && password.length < MIN_PASSWORD) {
       setError(new ApiError(422, 'weak_password', 'That password is too short.', `Use at least ${MIN_PASSWORD} characters.`))
       return
@@ -104,24 +125,38 @@ export function SignIn() {
   const form = (
     <form onSubmit={submit} noValidate style={{ width: '100%', maxWidth: narrow ? undefined : 400, display: 'flex', flexDirection: 'column', gap: narrow ? 16 : 20 }}>
       <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-        <h1 className="t-h1">{signup ? 'Create your account' : 'Welcome back'}</h1>
-        {!narrow && <p className="muted">Review your practice clips, one movement at a time.</p>}
+        <h1 className="t-h1">{reset ? 'Reset your password' : signup ? 'Create your account' : 'Welcome back'}</h1>
+        {reset ? (
+          <p className="muted">We’ll email you a link to set a new password. Open it in this browser.</p>
+        ) : (
+          !narrow && <p className="muted">Review your practice clips, one movement at a time.</p>
+        )}
       </div>
-      <div className="seg" role="tablist" aria-label="Account" style={{ width: '100%' }}>
-        {(['signin', 'signup'] as const).map((m) => (
-          <button
-            key={m}
-            type="button"
-            role="tab"
-            aria-selected={mode === m}
-            className={mode === m ? 'on' : undefined}
-            style={{ flex: 1, justifyContent: 'center', height: narrow ? 40 : undefined }}
-            onClick={() => pick(m)}
-          >
-            {m === 'signin' ? 'Sign in' : 'Create account'}
-          </button>
-        ))}
-      </div>
+      {reset && linkError && !sentTo && (
+        <p className="err-msg" role="alert" style={{ alignItems: 'flex-start' }}>
+          <Icon name="warning" style={{ marginTop: 1 }} />
+          <span>
+            {linkError.message} {linkError.recovery && <span style={{ fontWeight: 400 }}>{linkError.recovery}</span>}
+          </span>
+        </p>
+      )}
+      {!reset && (
+        <div className="seg" role="tablist" aria-label="Account" style={{ width: '100%' }}>
+          {(['signin', 'signup'] as const).map((m) => (
+            <button
+              key={m}
+              type="button"
+              role="tab"
+              aria-selected={mode === m}
+              className={mode === m ? 'on' : undefined}
+              style={{ flex: 1, justifyContent: 'center', height: narrow ? 40 : undefined }}
+              onClick={() => pick(m)}
+            >
+              {m === 'signin' ? 'Sign in' : 'Create account'}
+            </button>
+          ))}
+        </div>
+      )}
       <div className="field">
         <label className="field-label" htmlFor="si-email">
           Email
@@ -137,26 +172,44 @@ export function SignIn() {
           onChange={(e) => setEmail(e.target.value)}
         />
       </div>
-      <div className={tooShort ? 'field has-error' : 'field'}>
-        <label className="field-label" htmlFor="si-pw">
-          Password
-        </label>
-        <input
-          className="input"
-          id="si-pw"
-          type="password"
-          autoComplete={signup ? 'new-password' : 'current-password'}
-          aria-describedby={signup ? 'si-pw-hint' : undefined}
-          required
-          value={password}
-          onChange={(e) => setPassword(e.target.value)}
-        />
-        {signup && (
-          <span className="hint" id="si-pw-hint">
-            At least {MIN_PASSWORD} characters.
+      {!reset && (
+        <div className={tooShort ? 'field has-error' : 'field'}>
+          <span style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', gap: 8 }}>
+            <label className="field-label" htmlFor="si-pw">
+              Password
+            </label>
+            {!signup && (
+              <button type="button" className="btn btn-ghost btn-sm" style={{ height: 'auto', padding: 0 }} onClick={() => pick('reset')}>
+                Forgot password?
+              </button>
+            )}
           </span>
-        )}
-      </div>
+          <input
+            className="input"
+            id="si-pw"
+            type="password"
+            autoComplete={signup ? 'new-password' : 'current-password'}
+            aria-describedby={signup ? 'si-pw-hint' : undefined}
+            required
+            value={password}
+            onChange={(e) => setPassword(e.target.value)}
+          />
+          {signup && (
+            <span className="hint" id="si-pw-hint">
+              At least {MIN_PASSWORD} characters.
+            </span>
+          )}
+        </div>
+      )}
+      {sentTo && (
+        <p className="t-small" role="status" style={{ display: 'flex', gap: 8, alignItems: 'flex-start' }}>
+          <Icon name="mail" style={{ marginTop: 2 }} />
+          <span>
+            If there is an account for <strong>{sentTo}</strong>, a reset link is on its way. It can take a few minutes; check
+            spam too. The link works once.
+          </span>
+        </p>
+      )}
       {error && (
         <p className="err-msg" role="alert" style={{ alignItems: 'flex-start' }}>
           <Icon name="warning" style={{ marginTop: 1 }} />
@@ -165,10 +218,21 @@ export function SignIn() {
           </span>
         </p>
       )}
-      <button className="btn btn-primary btn-lg btn-block" type="submit" disabled={busy || !email || !password} aria-busy={busy}>
+      <button
+        className="btn btn-primary btn-lg btn-block"
+        type="submit"
+        disabled={busy || !email || (!reset && !password)}
+        aria-busy={busy}
+      >
         {busy && <Spinner />}
-        {signup ? 'Create account' : 'Sign in'}
+        {reset ? (sentTo ? 'Send again' : 'Send reset link') : signup ? 'Create account' : 'Sign in'}
       </button>
+      {reset && (
+        <button className="btn btn-ghost btn-block" type="button" onClick={() => pick('signin')} disabled={busy}>
+          <Icon name="chevron-left" />
+          Back to sign in
+        </button>
+      )}
       {!narrow && (
         <p className="t-caption" style={{ textAlign: 'center' }}>
           Study participants: use the email your researcher invited. You&rsquo;ll only appear in the study as a code (S01–S12).

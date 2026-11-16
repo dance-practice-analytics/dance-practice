@@ -1,19 +1,19 @@
 // Screen 13 — Settings & data (FR-3.1.x, FR-3.9.x).
 // Design: Settings.dc.html (wide), SettingsMobile.dc.html (phone); patterns in States.dc.html.
-// Real: sign out, theme, reduce motion, the optional consents, counts of what is stored,
-// JSON / CSV / keypoint-file export, delete one attempt, delete all data.
-// Shown but off, with the reason: change password, delete the sign-in account.
+// Real: sign out, change password (FR-3.1.3), theme, reduce motion, the optional consents,
+// counts of what is stored, JSON / CSV / keypoint-file export, delete one attempt, delete
+// all data, delete the account (Edge Function delete-account, FR-3.9.x).
 // Left out: the design's links to pages that don't exist (privacy notice, licences, …)
 // and every size the app doesn't record (metrics, notes, local video).
 
 import { useEffect, useRef, useState, type ReactNode } from 'react'
 import { version as APP_VERSION } from '../../../package.json'
 import type { ApiError } from '../../api/errors'
-import { deleteAttemptData, type DeleteReport } from '../../data/deleteData'
+import { deleteAccount, deleteAttemptData, type DeleteReport } from '../../data/deleteData'
 import { exportAll, exportMetricsCsv } from '../../data/exportData'
 import { dataError } from '../../data/repo'
 import { ALGORITHM_VERSION } from '../../metrics/engine'
-import { client, signOut, useAuth } from '../auth'
+import { client, signOut, updatePassword, useAuth } from '../auth'
 import { releaseAllClips, releaseClip } from '../clips'
 import { ErrorAlert, Icon, NoteBox, PageHeader, Skeleton, Spinner } from '../components'
 import { CONSENT_VERSION, setConsent, useConsents, type ConsentScope } from '../consents'
@@ -22,6 +22,8 @@ import { MOVEMENT_LABELS, formatBytes, formatDate } from '../format'
 import { resetPipeline } from '../pipeline'
 import { setThemePref, useThemePref, type ThemePref } from '../theme'
 import { useIsNarrow } from '../useIsNarrow'
+import { showAccountDeleted } from './AccountDeleted'
+import { PasswordFields, passwordProblem } from './PasswordFields'
 import { fileDay, saveText } from './settings/download'
 import { Modal } from './settings/Modal'
 import { setReduceMotion, useReduceMotion } from './settings/motion'
@@ -289,6 +291,65 @@ export function Settings() {
     consents.reload()
   }
 
+  // Change password: the current one is checked first (see updatePassword).
+  const [pwOpen, setPwOpen] = useState(false)
+  const [pwCurrent, setPwCurrent] = useState('')
+  const [pwNew, setPwNew] = useState('')
+  const [pwAgain, setPwAgain] = useState('')
+  const [pwBusy, setPwBusy] = useState(false)
+  const [pwError, setPwError] = useState<ApiError | null>(null)
+  const [pwDone, setPwDone] = useState(false)
+  const openPassword = () => {
+    setPwCurrent('')
+    setPwNew('')
+    setPwAgain('')
+    setPwError(null)
+    setPwDone(false)
+    setPwOpen(true)
+  }
+  const changePassword = async () => {
+    const problem = passwordProblem(pwNew, pwAgain)
+    if (problem) return setPwError(problem)
+    setPwBusy(true)
+    setPwError(null)
+    try {
+      await updatePassword(pwNew, { currentPassword: pwCurrent })
+      setPwOpen(false)
+      setPwDone(true)
+    } catch (e) {
+      setPwError(e as ApiError)
+    } finally {
+      setPwBusy(false)
+    }
+  }
+
+  // Delete the account: the Edge Function removes files, rows and the auth user.
+  const [accOpen, setAccOpen] = useState(false)
+  const [accTyped, setAccTyped] = useState('')
+  const [accBusy, setAccBusy] = useState(false)
+  const [accError, setAccError] = useState<ApiError | null>(null)
+  const closeAccount = () => {
+    setAccOpen(false)
+    setAccTyped('')
+    setAccError(null)
+  }
+  const deleteAccountNow = async () => {
+    setAccBusy(true)
+    setAccError(null)
+    try {
+      const report = await deleteAccount(client(), accTyped)
+      resetPipeline()
+      releaseAllClips()
+      dropUrls()
+      // Shown in place of the sign-in screen once the local session is gone.
+      showAccountDeleted(report)
+      await signOut()
+    } catch (e) {
+      setAccError(e as ApiError)
+      setAccBusy(false)
+    }
+  }
+
   const processed = attempts.filter((a) => a.metrics !== null).length
   const notesCount = facts.data?.feedbackSets ?? 0
 
@@ -450,10 +511,13 @@ export function Settings() {
 
   const busyIcon = (kind: typeof exporting, icon: ReactNode) => (exporting === kind && kind !== null ? <Spinner /> : icon)
 
-  const accountRemains =
-    'Not available in this app: removing the sign-in account needs a server-side step. Delete all your data here, then ask the project team to remove the account.'
-  const passwordOff =
-    'Changing the password is off in this build: account emails are rate-limited on this project.'
+  const accountWhat =
+    'Removes your sign-in account and profile with everything above: sessions, keypoints, metrics, notes and consent choices. Can’t be undone.'
+  const passwordStatus = pwDone && (
+    <p className="t-caption" role="status">
+      Your password was changed.
+    </p>
+  )
 
   const dataWide = (
     <>
@@ -506,7 +570,8 @@ export function Settings() {
         <div style={{ flex: '1 1 300px', display: 'flex', flexDirection: 'column' }}>
           <span style={{ fontWeight: 600 }}>Delete all my data</span>
           <span className="t-caption">
-            Removes keypoints, metrics, notes, sessions and consent choices. Can’t be undone. The sign-in account stays.
+            Removes keypoints, metrics, notes, sessions and consent choices. Can’t be undone. The sign-in account stays; use
+            Delete account to remove it too.
           </span>
         </div>
         <button className="btn btn-destructive" type="button" onClick={() => setConfirmAll(true)}>
@@ -517,12 +582,12 @@ export function Settings() {
       <div style={{ display: 'flex', flexWrap: 'wrap', gap: 12, alignItems: 'center' }}>
         <div style={{ flex: '1 1 300px', display: 'flex', flexDirection: 'column' }}>
           <span style={{ fontWeight: 600 }}>Delete account</span>
-          <span className="t-caption" id="del-acc-why">
-            {accountRemains}
+          <span className="t-caption" id="del-acc-what">
+            {accountWhat}
           </span>
         </div>
-        <button className="btn btn-secondary" type="button" disabled aria-describedby="del-acc-why">
-          Delete account
+        <button className="btn btn-destructive" type="button" aria-describedby="del-acc-what" onClick={() => setAccOpen(true)}>
+          Delete account…
         </button>
       </div>
     </>
@@ -577,17 +642,17 @@ export function Settings() {
           <span style={{ flex: 1 }}>Delete all my data…</span>
           <Icon name="trash" size={18} />
         </button>
-        <button type="button" className="v2-set-rowbtn" disabled aria-describedby="del-acc-why">
-          <span style={{ flex: 1 }}>Delete account</span>
-          <span className="t-caption">not available</span>
+        <button type="button" className="v2-set-rowbtn" style={{ fontWeight: 600 }} aria-describedby="del-acc-what" onClick={() => setAccOpen(true)}>
+          <span style={{ flex: 1 }}>Delete account…</span>
+          <Icon name="trash" size={18} />
         </button>
       </div>
       {labelsCheck}
       {exportStatus}
       {attemptReportView()}
       <p className="t-caption">Video stays on this phone and is never synced.</p>
-      <p className="t-caption" id="del-acc-why">
-        Delete account: {accountRemains.charAt(0).toLowerCase() + accountRemains.slice(1)}
+      <p className="t-caption" id="del-acc-what">
+        Delete account: {accountWhat.charAt(0).toLowerCase() + accountWhat.slice(1)}
       </p>
     </>
   )
@@ -606,16 +671,14 @@ export function Settings() {
                 <span className="v2-clip">{user?.email}</span>
                 <span className="t-caption">Role: {role} · set by the project team</span>
               </div>
-              <button className="btn btn-secondary btn-sm" type="button" disabled aria-describedby="pw-why">
+              <button className="btn btn-secondary btn-sm" type="button" onClick={openPassword}>
                 Change password
               </button>
               <button className="btn btn-ghost btn-sm" type="button" onClick={() => void signOut()}>
                 Sign out
               </button>
             </div>
-            <p className="t-caption" id="pw-why">
-              {passwordOff}
-            </p>
+            {passwordStatus}
           </Section>
         )}
 
@@ -653,18 +716,16 @@ export function Settings() {
                   <span className="t-caption">Role: {role}</span>
                 </span>
               </div>
-              <button type="button" className="v2-set-rowbtn" disabled aria-describedby="pw-why">
+              <button type="button" className="v2-set-rowbtn" onClick={openPassword}>
                 <span style={{ flex: 1 }}>Change password</span>
-                <span className="t-caption">not available</span>
+                {chevron}
               </button>
               <button type="button" className="v2-set-rowbtn" onClick={() => void signOut()}>
                 <span style={{ flex: 1 }}>Sign out</span>
                 <Icon name="sign-out" size={18} style={{ color: 'var(--text-3)' }} />
               </button>
             </div>
-            <p className="t-caption" id="pw-why">
-              {passwordOff}
-            </p>
+            {passwordStatus}
             <p className="t-caption">
               {versionLine} · metrics {ALGORITHM_VERSION}
             </p>
@@ -763,10 +824,7 @@ export function Settings() {
               Video files on this device aren’t touched — remove them yourself if you want. Files you already exported are
               yours to delete.
             </p>
-            <p>
-              The sign-in account itself stays: this app can’t remove it. Afterwards, ask the project team to remove the
-              account.
-            </p>
+            <p>The sign-in account itself stays. To remove it as well, use Delete account instead.</p>
           </div>
           <div className="field">
             <label className="field-label" htmlFor="dlg-in">
@@ -792,6 +850,109 @@ export function Settings() {
             <button className="btn btn-destructive" type="button" disabled={!canDeleteAll || deleting} onClick={() => void deleteAll()}>
               {deleting && <Spinner />}
               Delete everything
+            </button>
+          </div>
+        </Modal>
+      )}
+
+      {pwOpen && (
+        <Modal labelledBy="pw-h" describedBy="pw-d" sheet={narrow} busy={pwBusy} onClose={() => setPwOpen(false)}>
+          <h2 className="t-h2" id="pw-h">
+            Change password
+          </h2>
+          <p className="t-small muted" id="pw-d">
+            For <span className="v2-clip">{user?.email}</span>. You stay signed in on this device.
+          </p>
+          <form
+            noValidate
+            style={{ display: 'flex', flexDirection: 'column', gap: 14 }}
+            onSubmit={(e) => {
+              e.preventDefault()
+              if (!pwBusy) void changePassword()
+            }}
+          >
+            <div className="field">
+              <label className="field-label" htmlFor="pw-cur">
+                Current password
+              </label>
+              <input
+                className="input"
+                id="pw-cur"
+                type="password"
+                autoComplete="current-password"
+                required
+                value={pwCurrent}
+                disabled={pwBusy}
+                onChange={(e) => setPwCurrent(e.target.value)}
+                data-autofocus
+              />
+            </div>
+            <PasswordFields idPrefix="pw" password={pwNew} again={pwAgain} onPassword={setPwNew} onAgain={setPwAgain} disabled={pwBusy} />
+            {pwError && <ErrorAlert error={pwError} />}
+            <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end', flexWrap: 'wrap' }}>
+              <button className="btn btn-secondary" type="button" onClick={() => setPwOpen(false)} disabled={pwBusy}>
+                Cancel
+              </button>
+              <button className="btn btn-primary" type="submit" disabled={pwBusy || !pwCurrent || !pwNew || !pwAgain}>
+                {pwBusy && <Spinner />}
+                Change password
+              </button>
+            </div>
+          </form>
+        </Modal>
+      )}
+
+      {accOpen && (
+        <Modal labelledBy="acc-h" describedBy="acc-d" sheet={narrow} busy={accBusy} onClose={closeAccount}>
+          <h2 className="t-h2" id="acc-h">
+            Delete your account?
+          </h2>
+          <div id="acc-d" style={{ display: 'flex', flexDirection: 'column', gap: 8 }} className="t-small muted">
+            <p>This permanently deletes from the server:</p>
+            <ul className="v2-set-ul">
+              <li>
+                Your sign-in account (<span className="v2-clip">{user?.email}</span>) and profile
+              </li>
+              <li>
+                Keypoints and metrics for {plural(attempts.length, 'attempt')} in {plural(library.data?.sessions.length ?? 0, 'session')}
+              </li>
+              {notesCount > 0 && <li>{plural(notesCount, 'set')} of practice notes</li>}
+              <li>Your subject codes and consent choices</li>
+            </ul>
+            <p>
+              Video files on this device aren’t touched. Export your data first if you want a copy. You’ll be signed out
+              afterwards.
+            </p>
+          </div>
+          <div className="field">
+            <label className="field-label" htmlFor="acc-in">
+              Type {CONFIRM_WORD} to confirm
+            </label>
+            <input
+              className="input"
+              id="acc-in"
+              autoComplete="off"
+              autoCapitalize="characters"
+              spellCheck={false}
+              value={accTyped}
+              onChange={(e) => setAccTyped(e.target.value)}
+              disabled={accBusy}
+              data-autofocus
+            />
+          </div>
+          {accError && <ErrorAlert error={accError} />}
+          <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end', flexWrap: 'wrap' }}>
+            <button className="btn btn-secondary" type="button" onClick={closeAccount} disabled={accBusy}>
+              Cancel
+            </button>
+            <button
+              className="btn btn-destructive"
+              type="button"
+              disabled={!confirmMatches(accTyped) || accBusy}
+              onClick={() => void deleteAccountNow()}
+            >
+              {accBusy && <Spinner />}
+              Delete account
             </button>
           </div>
         </Modal>

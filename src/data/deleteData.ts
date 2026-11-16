@@ -18,10 +18,19 @@
 // RLS limits every statement to the caller's rows; each one also filters by the
 // caller's uid, and only paths inside the caller's storage folder are ever sent.
 //
-// Not possible from the browser: removing the sign-in account itself and the profile
-// row (see `deleteAccount`).
+// Not possible with the browser's key: removing the sign-in account itself and the
+// profile row. `deleteAccount` asks the Edge Function `delete-account` to do that.
 
-import type { SupabaseClient } from '@supabase/supabase-js'
+import { FunctionsFetchError, FunctionsHttpError, type SupabaseClient } from '@supabase/supabase-js'
+import {
+  CONFIRM_WORD as ACCOUNT_CONFIRM_WORD,
+  FAILURES as ACCOUNT_FAILURES,
+  FUNCTION_NAME as ACCOUNT_FUNCTION,
+  isDeleteAccountReport,
+  type DeleteAccountReport,
+  type DeleteAccountRequest,
+  type FailureCode as AccountFailureCode,
+} from '../../supabase/functions/delete-account/contract'
 import { ApiError } from '../api/errors'
 import { guardAs, requireUid, selectOwn } from './exportData'
 import { dataError, keypointsPath } from './repo'
@@ -65,7 +74,7 @@ export interface DeleteReport {
   remaining: string[]
 }
 
-/** What `deleteAllMyData` leaves behind; `deleteAccount` explains why. */
+/** What `deleteAllMyData` leaves behind; only `deleteAccount` (server side) removes them. */
 export const ACCOUNT_REMAINS = ['sign-in account', 'profile'] as const
 
 const DELETE_FAILED: [string, string, string] = ['delete_failed', 'That couldn’t be deleted.', 'Try again in a moment.']
@@ -314,19 +323,60 @@ export function deleteAllMyData(client: SupabaseClient): Promise<DeleteReport> {
   })
 }
 
+// ---------- the account itself ----------
+
+export type { DeleteAccountReport }
+
+const accountFailure = (code: AccountFailureCode, status?: number): ApiError => {
+  const f = ACCOUNT_FAILURES[code]
+  return new ApiError(status || f.status, code, f.message, f.recovery)
+}
+
+const OFFLINE_ACCOUNT = new ApiError(0, 'offline', 'You’re offline, so nothing was deleted.', 'Reconnect and try again.')
+
+/** The function's error body, or the platform's answer when there is none of ours. */
+export function accountDeletionError(status: number, body: unknown): ApiError {
+  const error = typeof body === 'object' && body !== null ? (body as { error?: Record<string, unknown> }).error : undefined
+  const code = error?.code
+  // The copy comes from the shared table, never from the response text.
+  if (typeof code === 'string' && code in ACCOUNT_FAILURES) return accountFailure(code as AccountFailureCode, status)
+  if (status === 401 || status === 403) return accountFailure('unauthorized', status)
+  if (status === 404) return accountFailure('not_configured', status)
+  return accountFailure('delete_failed', status)
+}
+
 /**
- * Removing the sign-in account needs the service role key, which is never in the
- * browser, and the profile row can only go with it (delete on `profiles` is revoked).
- * Until there is a server-side function for it this always rejects with code
- * 'account_deletion_unavailable'. `deleteAllMyData` removes everything else.
+ * Deletes the signed-in account through the Edge Function `delete-account`: stored
+ * files, every row (cascade from auth.users) and the auth user. The function holds the
+ * service-role key; the browser only sends its own access token and the typed word.
+ * Resolves with the function's report; the caller then signs out locally.
  */
-export function deleteAccount(_client?: SupabaseClient): Promise<never> {
-  return Promise.reject(
-    new ApiError(
-      501,
-      'account_deletion_unavailable',
-      'The sign-in account can’t be removed from this app yet.',
-      'Delete all your data here, then ask the project team to remove the account.',
-    ),
-  )
+export async function deleteAccount(client: SupabaseClient, typed: string): Promise<DeleteAccountReport> {
+  if (typed.trim() !== ACCOUNT_CONFIRM_WORD) throw accountFailure('not_confirmed')
+  if (typeof navigator !== 'undefined' && navigator.onLine === false) throw OFFLINE_ACCOUNT
+  const body: DeleteAccountRequest = { confirm: ACCOUNT_CONFIRM_WORD }
+  let data: unknown
+  try {
+    const res = await client.functions.invoke(ACCOUNT_FUNCTION, { body })
+    if (res.error) throw res.error
+    data = res.data
+  } catch (e) {
+    if (e instanceof FunctionsHttpError) {
+      const res = e.context as Response
+      let payload: unknown = null
+      try {
+        payload = await res.json()
+      } catch {
+        payload = null
+      }
+      throw accountDeletionError(res.status, payload)
+    }
+    if (e instanceof FunctionsFetchError && typeof navigator !== 'undefined' && navigator.onLine === false) throw OFFLINE_ACCOUNT
+    throw new ApiError(0, 'network', 'Can’t reach the server right now, so nothing was deleted.', 'Check your connection and try again.')
+  }
+  // A 2xx without a report should not happen; the account may be gone, so don't claim either way.
+  if (!isDeleteAccountReport(data)) {
+    throw new ApiError(500, 'unexpected_response', 'The server gave an unexpected answer.', 'Sign in again to check whether the account still exists.')
+  }
+  return data
 }

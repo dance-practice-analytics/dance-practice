@@ -7,6 +7,7 @@ import { releaseAllClips } from './clips'
 import { ErrorAlert, Spinner } from './components'
 import { useConsents } from './consents'
 import { Entrance } from './Entrance'
+import { AccountDeleted, useAccountDeleted } from './pages/AccountDeleted'
 import { Chat } from './pages/Chat'
 import { Compare } from './pages/Compare'
 import { Consent } from './pages/Consent'
@@ -17,6 +18,7 @@ import { Library } from './pages/Library'
 import { Notes } from './pages/Notes'
 import { Processing } from './pages/Processing'
 import { Progress } from './pages/Progress'
+import { ResetPassword } from './pages/ResetPassword'
 import { Review } from './pages/Review'
 import { Settings } from './pages/Settings'
 import { SignIn } from './pages/SignIn'
@@ -70,7 +72,9 @@ function Gate() {
   const auth = useAuth()
   const consents = useConsents()
   const route = useRoute()
-  const signedIn = auth.status === 'signedIn'
+  const deleted = useAccountDeleted()
+  // A password-reset link signs the user in for one purpose: setting a new password.
+  const signedIn = auth.status === 'signedIn' && !auth.recovery
   const needsConsent = signedIn && consents.status === 'ready' && !consents.requiredAccepted
   const ready = signedIn && consents.status === 'ready' && consents.requiredAccepted
   // The profile decides this; until it has loaded, nobody is sent away from the dataset.
@@ -93,7 +97,8 @@ function Gate() {
   }, [auth.status])
 
   if (auth.status === 'loading') return <Loading label="Opening…" />
-  if (auth.status === 'signedOut') return <SignIn />
+  if (auth.status === 'signedOut') return deleted ? <AccountDeleted /> : <SignIn />
+  if (auth.recovery) return <ResetPassword />
   if (consents.status === 'loading') return <Loading label="Opening your account…" />
   if (consents.status === 'error' && consents.error) {
     return (

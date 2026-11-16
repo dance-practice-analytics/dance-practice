@@ -36,8 +36,7 @@ const ROW_ORDER: DeleteTable[] = ['sessions', 'attempts', 'attempt_keypoints', '
 const FILE_WORDS: Record<StorageBucket, string> = { keypoints: 'keypoint file', videos: 'stored video' }
 
 export const ACCOUNT_REMAINS_TEXT =
-  'Your sign-in account and profile (email and role) are still there. This app can’t remove them: that needs a ' +
-  'server-side step with a key the browser never holds. Ask the project team to remove the account.'
+  'Your sign-in account and profile (email and role) are still there. To remove them too, use Delete account.'
 
 export interface ReportText {
   title: string
