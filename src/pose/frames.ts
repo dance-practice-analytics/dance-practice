@@ -10,11 +10,28 @@ export const MAX_FPS = 30
  */
 export const DEFAULT_TARGET_FPS = MAX_FPS
 
+/**
+ * Seek target = sample time + this offset, in seconds.
+ *
+ * Measured in headless Chrome with requestVideoFrameCallback on a synthetic 30 fps test
+ * clip (scripts/calibrate-metrics.mjs --seek-check), 300 seeks per offset:
+ * - offset 0 (the frame start): the previous frame in 93 of 300 seeks, because the
+ *   container timestamps round to just after i/30;
+ * - offset half a frame (planFrames up to mt2-metrics-1.1.0): the NEXT frame in 10 of
+ *   300 seeks (every 30th frame, the same ones on every run); 0.9 frame: 30 of 300;
+ * - every offset from 0.1 ms to 0.49 frame: 0 of 300.
+ * A fixed 2 ms clears millisecond timestamp rounding (WebM, some MP4 muxers) and stays
+ * far from the late part of the frame for any clip up to 240 fps. It is absolute, not a
+ * share of the sampling interval, because the clip's own frame rate is unknown and can
+ * be higher than the sampling rate.
+ */
+export const SEEK_OFFSET_S = 0.002
+
 export interface PlannedFrame {
   /** Time stored in the PoseFrame: the start of the sampling interval, in seconds. */
   t: number
-  /** Where the video is seeked to: the middle of the interval, so a seek that rounds
-   *  down never lands on the previous frame. */
+  /** Where the video is seeked to: SEEK_OFFSET_S after `t`, so the seek lands inside the
+   *  frame that starts at `t`, neither on the previous one nor on the next. */
   seekS: number
   /** Timestamp handed to detectForVideo, in whole milliseconds, strictly increasing. */
   timestampMs: number
@@ -50,7 +67,7 @@ export function planFrames(durationS: number, targetFps?: number, baseTimestampM
     const t = i / fps
     frames.push({
       t,
-      seekS: Math.min(t + 0.5 / fps, lastSeekable),
+      seekS: Math.min(t + SEEK_OFFSET_S, lastSeekable),
       timestampMs: baseTimestampMs + Math.round(t * 1000),
     })
   }

@@ -29,8 +29,13 @@ import type {
   Phase,
 } from './types'
 
-/** Bump when a definition or constant changes, so stored values can be recomputed (FR-3.4.9). */
-export const ALGORITHM_VERSION = 'mt2-metrics-1.1.0'
+/**
+ * Bump when a definition or constant changes, so stored values can be recomputed (FR-3.4.9).
+ * 1.2.0 (calibration, src/metrics/CALIBRATION.md): parallel-relevé tie on floor-referenced
+ * heel lift with a 2% tolerance (was raw heel y, exact); swap jump 90° (was 135°); upstream,
+ * left/right swaps undone before smoothing, world One-Euro beta 0.7, seeks 2 ms into a frame.
+ */
+export const ALGORITHM_VERSION = 'mt2-metrics-1.2.0'
 
 /** Confidence bands (SDD 5.5). */
 export const CONFIDENCE_HIGH = 0.8

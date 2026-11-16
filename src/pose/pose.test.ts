@@ -1,8 +1,9 @@
 import { describe, expect, it } from 'vitest'
 import { decodeSeries, encodeSeries, KEYPOINTS_FORMAT, PRECISION } from './codec'
-import { clampFps, DEFAULT_TARGET_FPS, planFrames, toPoseFrame } from './frames'
-import { OneEuroFilter, smoothSeries } from './oneEuro'
-import { LANDMARK_COUNT, type Landmark, type PoseFrame, type PoseSeries } from './types'
+import { clampFps, DEFAULT_TARGET_FPS, planFrames, SEEK_OFFSET_S, toPoseFrame } from './frames'
+import { ONE_EURO_DEFAULTS, ONE_EURO_WORLD, OneEuroFilter, smoothSeries } from './oneEuro'
+import { looksSwapped, unswapLeftRight } from './swaps'
+import { LANDMARK_COUNT, LM, type Landmark, type PoseFrame, type PoseSeries } from './types'
 
 // Everything here is synthetic: seeded numbers, no footage.
 
@@ -160,12 +161,39 @@ describe('frame planning', () => {
     const plan = planFrames(10)
     expect(plan.fps).toBe(DEFAULT_TARGET_FPS)
     expect(plan.frames).toHaveLength(300)
-    expect(plan.frames[0]).toEqual({ t: 0, seekS: 0.5 / 30, timestampMs: 0 })
+    expect(plan.frames[0]).toEqual({ t: 0, seekS: SEEK_OFFSET_S, timestampMs: 0 })
     plan.frames.slice(1).forEach((frame, i) => {
       expect(frame.timestampMs).toBeGreaterThan(plan.frames[i].timestampMs)
       expect(Number.isInteger(frame.timestampMs)).toBe(true)
       expect(frame.seekS).toBeGreaterThan(frame.t)
       expect(frame.seekS).toBeLessThan(10)
+    })
+  })
+
+  it('seeks just after the start of each frame, never at its middle or end', () => {
+    // Chrome showed the next frame for 1 in 30 mid-frame seeks and the previous frame for
+    // 31% of seeks exactly on the frame start (see SEEK_OFFSET_S).
+    expect(SEEK_OFFSET_S).toBeGreaterThanOrEqual(0.001) // clears millisecond timestamp rounding
+    for (const fps of [30, 15, 10]) {
+      const plan = planFrames(39, fps)
+      for (const frame of plan.frames) {
+        const into = frame.seekS - frame.t
+        expect(into).toBeCloseTo(SEEK_OFFSET_S, 9)
+        // Inside the first quarter of a frame even for a 120 fps source clip.
+        expect(into).toBeLessThan(0.25 / 120)
+        // Float error never pushes the target out of its own sampling interval.
+        expect(Math.floor(frame.seekS * fps)).toBe(Math.round(frame.t * fps))
+      }
+    }
+  })
+
+  it('keeps the planned sample on the frame grid of a 30 fps clip', () => {
+    const plan = planFrames(39.0333)
+    expect(plan.frames).toHaveLength(1170)
+    plan.frames.forEach((frame, i) => {
+      expect(frame.t).toBe(i / 30)
+      // The frame of a 30 fps clip that contains the seek target is frame i.
+      expect(Math.floor(frame.seekS * 30)).toBe(i)
     })
   })
 
@@ -304,5 +332,97 @@ describe('keypoints codec', () => {
     await expect(
       decodeSeries(await broken({ image: [good.image[0].map(() => 0.5), null, null, null] })),
     ).rejects.toThrow(/not an integer/)
+  })
+})
+
+// ---------- left/right swaps ----------
+
+describe('unswapLeftRight', () => {
+  /** A rigid torso turned `yaw` degrees, shoulders 0.36 m and hips 0.2 m wide. */
+  function torso(yaw: number, swapped = false): Landmark[] {
+    const w: Landmark[] = Array.from({ length: LANDMARK_COUNT }, (_, i) => ({ x: i * 1e-3, y: 0.5, z: 0, visibility: 0.9 }))
+    const r = (yaw * Math.PI) / 180
+    const put = (i: number, half: number, y: number) => {
+      w[i] = { x: half * Math.cos(r), y, z: half * Math.sin(r), visibility: 0.95 }
+    }
+    put(LM.leftShoulder, -0.18, -0.5)
+    put(LM.rightShoulder, 0.18, -0.5)
+    put(LM.leftHip, -0.1, 0)
+    put(LM.rightHip, 0.1, 0)
+    // A leg landmark pair, to check that every pair moves with the torso.
+    put(LM.leftAnkle, -0.1, 0.9)
+    put(LM.rightAnkle, 0.1, 0.9)
+    return swapped ? torso(yaw + 180) : w
+  }
+  const series = (yaws: (number | null)[], swapped: number[] = []): PoseSeries => ({
+    fps: FPS,
+    durationS: yaws.length / FPS,
+    width: 720,
+    height: 1280,
+    model: 'synthetic',
+    smoothed: false,
+    frames: yaws.map((y, i) => {
+      const world = y === null ? null : torso(y, swapped.includes(i))
+      return { t: i / FPS, image: world && world.map((p) => ({ ...p })), world }
+    }),
+  })
+  const relabeled = (s: PoseSeries) => s.frames.flatMap((f, i) => (f.relabeled ? [i] : []))
+
+  it('puts back labels swapped for a few frames, in every left/right pair, image and world', () => {
+    const raw = series([0, 0, 0, 0, 0, 0], [2, 3, 4])
+    const out = unswapLeftRight(raw)
+    expect(relabeled(out)).toEqual([2, 3, 4])
+    for (const f of out.frames) {
+      expect(f.world![LM.leftShoulder].x).toBeCloseTo(-0.18, 9)
+      expect(f.world![LM.leftAnkle].x).toBeCloseTo(-0.1, 9)
+      expect(f.image![LM.leftShoulder].x).toBeCloseTo(-0.18, 9)
+    }
+    // Positions are not changed, only which side they are filed under; the input is untouched.
+    expect(raw.frames[2].world![LM.leftShoulder].x).toBeCloseTo(0.18, 9)
+  })
+
+  it('leaves a real turn alone up to 90° per frame and finds a swap during it', () => {
+    const fast = Array.from({ length: 12 }, (_, i) => i * 80)
+    expect(relabeled(unswapLeftRight(series(fast)))).toEqual([])
+    expect(relabeled(unswapLeftRight(series(fast, [5, 6])))).toEqual([5, 6])
+  })
+
+  it('does not decide across a gap or from an untracked torso', () => {
+    // After the gap the labels are taken as they come: the rotation in between is unknown.
+    expect(relabeled(unswapLeftRight(series([0, 0, null, 0, 0], [3, 4])))).toEqual([])
+    const weak = series([0, 0, 0, 0], [2, 3])
+    weak.frames[1].world![LM.leftHip].visibility = 0.1
+    expect(relabeled(unswapLeftRight(weak))).toEqual([])
+  })
+
+  it('looksSwapped is the 90° rule on a rigid torso', () => {
+    expect(looksSwapped(torso(89), torso(0))).toBe(false)
+    expect(looksSwapped(torso(91), torso(0))).toBe(true)
+  })
+
+  it('runs before the smoothing, so a swap does not turn into a rotation', () => {
+    const smoothed = smoothSeries(series(Array.from({ length: 30 }, () => 0), [10, 11]))
+    expect(relabeled(smoothed)).toEqual([10, 11])
+    for (const f of smoothed.frames) expect(f.world![LM.rightShoulder].x).toBeCloseTo(0.18, 9)
+  })
+
+  it('survives the keypoints file', async () => {
+    const smoothed = smoothSeries(series(Array.from({ length: 10 }, () => 0), [4]))
+    const back = await decodeSeries(await encodeSeries(smoothed))
+    expect(relabeled(back)).toEqual([4])
+    const plain = await decodeSeries(await encodeSeries(smoothSeries(series([0, 0, 0]))))
+    expect(plain.frames.some((f) => 'relabeled' in f)).toBe(false)
+    const blob = await encodeSeries(smoothed)
+    const file = JSON.parse(await new Response(blob.stream().pipeThrough(new DecompressionStream('gzip'))).text())
+    expect(file.relabeled).toEqual([4])
+    const bad = new Blob([JSON.stringify({ ...file, relabeled: [99] })]).stream().pipeThrough(new CompressionStream('gzip'))
+    await expect(decodeSeries(new Blob([await new Response(bad).arrayBuffer()]))).rejects.toThrow(/"relabeled"/)
+  })
+})
+
+describe('smoothSeries parameters', () => {
+  it('uses the SDD values on image landmarks and beta 0.7 on world landmarks', () => {
+    expect(ONE_EURO_DEFAULTS).toEqual({ minCutoff: 1.0, beta: 0.007, dCutoff: 1.0 })
+    expect(ONE_EURO_WORLD).toEqual({ minCutoff: 1.0, beta: 0.7, dCutoff: 1.0 })
   })
 })

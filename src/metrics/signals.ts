@@ -31,9 +31,19 @@ export const VIS_MIN = 0.6
  */
 export const TRACK_MIN = 0.3
 
-/** A one-frame yaw jump larger than this is a left/right label swap, not a rotation
- *  (it is closer to 180° than to a quarter turn; at 30 fps it would be over 11 turns/s). */
-export const SWAP_JUMP_DEG = 135
+/**
+ * A one-frame yaw jump larger than this is a left/right label swap, not a rotation.
+ *
+ * A swap during a real step of s degrees shows as a jump of 180° − s, so a threshold T
+ * tells both apart only while s < T and s < 180° − T. 90° is the value that serves the
+ * fastest turns (any step under 90°/frame, 7.5 turns/s at 30 fps); the 135° used up to
+ * mt2-metrics-1.1.0 missed every swap during steps over 45°/frame (3.75 turns/s, inside a
+ * fast pirouette). Synthetic sweep, swaps only, no smoothing, 20 runs per cell: at peak
+ * rates of 4–6 turns/s, 135° counted 1–3 turns right in 10–19 of 20 runs, 90° in 20 of 20
+ * (CALIBRATION.md). Since mt2-metrics-1.2.0 swaps are mostly undone before smoothing
+ * (src/pose/swaps.ts, the same 90° criterion on the torso); this catches what is left.
+ */
+export const SWAP_JUMP_DEG = 90
 
 export type Side = 'left' | 'right'
 
@@ -124,7 +134,7 @@ export interface YawSignal {
   rate: (number | null)[]
   /** Index of the previous tracked frame the rate was measured from. */
   from: (number | null)[]
-  /** True where a left/right swap was undone. */
+  /** True where a left/right swap was undone, here or before smoothing (`PoseFrame.relabeled`). */
   swap: boolean[]
 }
 
@@ -144,6 +154,8 @@ export function shoulderYaw(series: PoseSeries): YawSignal {
     const l = f.world[LM.leftShoulder]
     const r = f.world[LM.rightShoulder]
     const raw = Math.atan2(r.z - l.z, r.x - l.x) * DEG
+    // Swapped labels already put back before smoothing (src/pose/swaps.ts) count as repaired.
+    if (f.relabeled) out.swap[i] = true
     if (prev < 0) {
       out.yaw[i] = raw
     } else {

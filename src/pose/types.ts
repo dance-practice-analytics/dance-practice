@@ -20,6 +20,9 @@ export interface PoseFrame {
   t: number
   image: Landmark[] | null
   world: Landmark[] | null
+  /** True when the tracker's left/right labels were swapped in this frame and have been
+   *  exchanged back (src/pose/swaps.ts). Absent otherwise. */
+  relabeled?: true
 }
 
 export interface PoseSeries {

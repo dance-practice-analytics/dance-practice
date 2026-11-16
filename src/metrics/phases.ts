@@ -6,7 +6,7 @@
 // result can say that it describes the first of several.
 
 import type { PoseSeries } from '../pose/types'
-import { LEG, heelAboveToe, legLength, median, seen, shoulderYaw, type Side, type YawSignal } from './signals'
+import { heelAboveToe, legLength, median, shoulderYaw, type Side, type YawSignal } from './signals'
 import type { Movement, NullReason, Phase } from './types'
 
 /** Lift starts when the heel is more than this share of leg length above the floor... */
@@ -34,10 +34,28 @@ export const FINISH_S = 0.5
 /** "Vertical heel velocity near zero": the rise ends when the heel climbs slower than
  *  5% of leg length per second (about 4 cm/s). The SDD gives no number; this is the choice.
  *  Checked on real MediaPipe output (three synthetic clips) and kept: the supporting heel
- *  climbs at 6–20% per second during the rise, and the hold starts between 0.14 s before
- *  and 0.07 s after the moment the clip generator ends its rise. Asking for 3 slow frames
- *  in a row was tried and put it 0.07–0.13 s after that moment: no closer, so not adopted. */
+ *  climbs at 6–20% per second during the rise. Asking for 3 slow frames in a row was tried
+ *  and was no closer. Calibration of 2026-11-15 (CALIBRATION.md), kept again: in the
+ *  synthetic sweep 0.03 lags more and 0.1 fires early more often; a velocity over 0.1 or
+ *  0.2 s instead of one frame narrows the spread on synthetic noise, but on real tracker
+ *  output (24 attempts) the hold starts 0.18–0.24 s early with every window, because the
+ *  tracker's heel climbs in two steps with a plateau between them. Not a noise problem,
+ *  so not fixed with a window. */
 export const RISE_END_RATE = 0.05
+/**
+ * Two heels whose lift (above each foot's own floor level, over the lifted part) differs by
+ * less than this share of leg length are "equally high" (SDD 5.4: parallel relevé, left
+ * leg). The same 2% as LIFT_ON: a difference the engine would not call a lift is not a
+ * difference between the feet either.
+ *
+ * Up to mt2-metrics-1.1.0 the rule compared the raw world heel y with an exact `>=`. With
+ * tracker noise two equally high heels are never exactly equal, so a parallel relevé got
+ * its supporting leg from noise: in 20 noisy runs of the same synthetic relevé 10 chose the
+ * left leg and 10 the right, and the pelvis–ankle offset of the right-leg runs measured
+ * the other ankle (0.22 leg lengths further away in that test). Raw y also ignored the per-foot
+ * standing offset that the floor level removes.
+ */
+export const SUPPORT_TIE = LIFT_ON
 /** Shoulder-line yaw rate above which lifted frames of a pirouette are the turn. */
 export const TURN_RATE_DEG_S = 90
 
@@ -69,7 +87,12 @@ export interface Segmentation {
  * LIFT_OFF. A gap keeps the current state and breaks a run of consecutive frames: the
  * machine never assumes what happened while tracking was lost.
  */
-export function detectLift(lift: (number | null)[], from = 0): { onset: number; end: number } | null {
+export function detectLift(
+  lift: (number | null)[],
+  from = 0,
+  on = LIFT_ON,
+  off = LIFT_OFF,
+): { onset: number; end: number } | null {
   let run = 0
   let onset = -1
   for (let i = from; i < lift.length; i++) {
@@ -79,9 +102,9 @@ export function detectLift(lift: (number | null)[], from = 0): { onset: number; 
       continue
     }
     if (onset < 0) {
-      run = v > LIFT_ON ? run + 1 : 0
+      run = v > on ? run + 1 : 0
       if (run >= LIFT_ON_FRAMES) onset = i - LIFT_ON_FRAMES + 1
-    } else if (v < LIFT_OFF) {
+    } else if (v < off) {
       return { onset, end: i }
     }
   }
@@ -94,6 +117,22 @@ export function countLifts(lift: (number | null)[]): number {
   let count = 0
   for (let found = detectLift(lift); found; found = detectLift(lift, found.end)) count++
   return count
+}
+
+/**
+ * Rise end: the first frame in [onset, end) whose forward heel velocity (to the next
+ * frame) is under `rate` leg lengths per second; `end` when there is none. Frames next
+ * to a gap are skipped.
+ */
+export function riseEnd(signal: (number | null)[], t: number[], onset: number, end: number, rate = RISE_END_RATE): number {
+  for (let i = onset; i + 1 < end; i++) {
+    const a = signal[i]
+    const b = signal[i + 1]
+    const dt = t[i + 1] - t[i]
+    if (a === null || b === null || !(dt > 0)) continue
+    if ((b - a) / dt < rate) return i
+  }
+  return end
 }
 
 export function segmentPhases(series: PoseSeries, movement: Movement): Segmentation {
@@ -142,8 +181,8 @@ export function segmentPhases(series: PoseSeries, movement: Movement): Segmentat
 
   // The supporting leg is defined by the hold, and the hold by the supporting heel.
   // Break the circle in two passes: find the lifted part from whichever heel is higher,
-  // pick the leg whose heel is lowest there (largest y, since y points down), then run
-  // the state machine again on that heel alone.
+  // pick the leg whose heel is lowest there, then run the state machine again on that
+  // heel alone.
   const either = lift.left.map((l, i) => {
     const r = lift.right[i]
     return l === null ? r : r === null ? l : Math.max(l, r)
@@ -152,37 +191,26 @@ export function segmentPhases(series: PoseSeries, movement: Movement): Segmentat
   const rough = detectLift(either)
   if (!rough) return none('no_lift_detected', prepOnly)
 
-  const heelY = (s: Side): number | null => {
-    const ys: number[] = []
-    for (let i = rough.onset; i < rough.end; i++) {
-      const w = frames[i].world
-      if (seen(w, [LEG[s].heel])) ys.push(w[LEG[s].heel].y)
-    }
-    return median(ys)
+  // Heel height above its own floor level, as a share of leg length: the per-foot floor
+  // removes the standing offset MediaPipe gives each foot, so the two feet are comparable.
+  const heelLift = (s: Side): number | null => {
+    const values: number[] = []
+    for (let i = rough.onset; i < rough.end; i++) if (lift[s][i] !== null) values.push(lift[s][i] as number)
+    return median(values)
   }
   // A foot without a floor level or a leg length has no lift signal and cannot support.
   const usable = (s: Side) => floor[s] !== null && leg[s] !== null
-  const yl = usable('left') ? heelY('left') : null
-  const yr = usable('right') ? heelY('right') : null
-  // A tie (both heels up, as in a parallel relevé) goes to the left leg.
-  const support: Side = !usable('left') ? 'right' : yr === null || (yl !== null && yl >= yr) ? 'left' : 'right'
+  const hl = usable('left') ? heelLift('left') : null
+  const hr = usable('right') ? heelLift('right') : null
+  // The lower heel supports. Heels within SUPPORT_TIE of each other are equally high (a
+  // parallel relevé on both feet), and the tie goes to the left leg (SDD 5.4).
+  const support: Side = hl === null ? (hr === null ? 'left' : 'right') : hr === null || hl - hr < SUPPORT_TIE ? 'left' : 'right'
   const signal = lift[support]
   const lifted = detectLift(signal)
   if (!lifted) return none('no_lift_detected', prepOnly)
   const { onset, end } = lifted
 
-  // Rise ends at the first lifted frame whose forward heel velocity is near zero.
-  let holdStart = end
-  for (let i = onset; i < end - 1; i++) {
-    const a = signal[i]
-    const b = signal[i + 1]
-    const dt = frames[i + 1].t - frames[i].t
-    if (a === null || b === null || !(dt > 0)) continue
-    if ((b - a) / dt < RISE_END_RATE) {
-      holdStart = i
-      break
-    }
-  }
+  const holdStart = riseEnd(signal, frames.map((f) => f.t), onset, end)
 
   // Pirouette: the turn runs from the first to the last lifted frame that rotates faster
   // than the threshold, starting at the frame that rotation was measured from.

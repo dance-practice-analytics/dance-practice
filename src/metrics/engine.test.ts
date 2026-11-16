@@ -358,7 +358,7 @@ describe('real MediaPipe output (synthetic stick-figure clip, front view)', () =
     expect(real.frames).toHaveLength(540)
     expect(real.frames.every((f) => f.world)).toBe(true)
     // Why mt2-metrics-1.0.0 returned no_floor_reference for this clip.
-    expect(share(LM.rightFootIndex, VIS_MIN)).toBe(0)
+    expect(share(LM.rightFootIndex, VIS_MIN)).toBeLessThan(0.01)
     expect(share(LM.leftFootIndex, VIS_MIN)).toBeLessThan(0.25)
     // Under the tracking gate only while the tracker settles (right toe, 7 of the first 8 frames).
     expect(share(LM.rightFootIndex, TRACK_MIN)).toBeCloseTo(533 / 540, 9)
@@ -367,12 +367,14 @@ describe('real MediaPipe output (synthetic stick-figure clip, front view)', () =
   })
 
   it('finds the first lift where the clip generator put it', () => {
+    // Since mt2-metrics-1.2.0 this parallel relevé is measured on the left leg (the SDD tie
+    // rule); before, the right heel read a hair lower and won.
     expect(spans(m)).toEqual([
-      ['prep', 0, 138],
-      ['rise', 138, 144],
-      ['hold', 144, 194],
-      ['finish', 194, 209],
-      ['recovery', 209, 540],
+      ['prep', 0, 131],
+      ['rise', 131, 138],
+      ['hold', 138, 199],
+      ['finish', 199, 214],
+      ['recovery', 214, 540],
     ])
     // The generator rises over 3.93–4.73 s, holds to 5.87 s and lowers the heels over 5.87–6.87 s.
     const [, rise, hold, finish] = m.phases
@@ -382,8 +384,9 @@ describe('real MediaPipe output (synthetic stick-figure clip, front view)', () =
     expect(finish.start).toBeGreaterThan(5.87)
     expect(finish.start).toBeLessThan(6.87)
     const seg = segmentPhases(real, 'releve_balance')
+    expect(seg.support).toBe('left')
     expect(seg.lifts).toBe(2)
-    expect(seg.legLength).toBeCloseTo(0.787, 2)
+    expect(seg.legLength).toBeCloseTo(0.771, 2)
   })
 
   it('does not see a lift while the figure stands still or settles', () => {
@@ -391,25 +394,29 @@ describe('real MediaPipe output (synthetic stick-figure clip, front view)', () =
     // reads far below the floor, never above it.
     const { lift } = segmentPhases(real, 'releve_balance')
     const standing = lift.slice(0, 118).filter((v): v is number => v !== null)
-    // The supporting (right) toe is under the tracking gate in 7 of the first 8 frames:
-    // those are gaps, not values, and there are none afterwards.
-    expect(standing).toHaveLength(111)
-    expect(lift.slice(8).every((v) => v !== null)).toBe(true)
+    // The supporting (left) foot is tracked in every frame (the right toe is under the
+    // tracking gate in 7 of the first 8 frames, but it does not support here).
+    expect(standing).toHaveLength(118)
+    expect(Math.min(...standing)).toBeLessThan(-0.05)
     expect(Math.max(...standing)).toBeLessThan(0.01)
   })
 
   it('reports values with the confidence the visibility supports', () => {
     expect(m.algorithm_version).toBe(ALGORITHM_VERSION)
-    // Shoulders and hips are fully visible.
-    expect(m.trunk_inclination_deg).toBeCloseTo(3.01, 1)
+    // Shoulders and hips are fully visible. The drawn trunk leans 1.3° (median); MediaPipe
+    // gives the flat figure a sideways lean of ~2° even while it stands (CALIBRATION.md).
+    expect(m.trunk_inclination_deg).toBeCloseTo(2.98, 1)
     expect(m.confidence.trunk_inclination_deg).toMatchObject({ level: 'high', score: 1 })
-    // The ankle is weakly visible while lifted: a value, at medium confidence.
-    expect(m.pelvis_ankle_offset_norm).toBeCloseTo(0.147, 2)
-    expect(m.confidence.pelvis_ankle_offset_norm.level).toBe('medium')
-    expect(m.confidence.pelvis_ankle_offset_norm.score).toBeCloseTo(0.64, 2)
-    expect(m.balance_duration_s).toBeCloseTo(1, 6)
-    expect(m.confidence.balance_duration_s.level).toBe('medium')
-    expect(m.confidence.balance_duration_s.score).toBeCloseTo(0.55, 2)
+    // The left ankle is weakly visible while lifted: a value, at low confidence. Drawn
+    // offset 0.12; the tracker puts the hip midpoint ~0.04 leg lengths towards the left
+    // ankle in every clip, and the right ankle as far the other way (CALIBRATION.md).
+    expect(m.pelvis_ankle_offset_norm).toBeCloseTo(0.073, 2)
+    expect(m.confidence.pelvis_ankle_offset_norm.level).toBe('low')
+    expect(m.confidence.pelvis_ankle_offset_norm.score).toBeCloseTo(0.46, 2)
+    // Drawn: 2.1 s. Depth noise of the tracker breaks the band (CALIBRATION.md, known limit).
+    expect(m.balance_duration_s).toBeCloseTo(0.6, 6)
+    expect(m.confidence.balance_duration_s.level).toBe('low')
+    expect(m.confidence.balance_duration_s.score).toBeCloseTo(0.34, 2)
     for (const k of ['trunk_inclination_deg', 'pelvis_ankle_offset_norm', 'balance_duration_s'] as const) {
       expect(m.confidence[k].clip_notes).toEqual(['multiple_lifts_detected'])
       expect(m.confidence[k].reason).toBeUndefined()
