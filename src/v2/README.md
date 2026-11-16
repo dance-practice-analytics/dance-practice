@@ -29,7 +29,7 @@ error patterns; `Main.dc.html` shows every component class.
 | `format.ts` | Metric catalogue, labels, number / time formatting, `readMetric`, `frameAt`, `phaseAt`. |
 | `useIsNarrow.ts` | `useIsNarrow()` — true under 900px. |
 | `components/` | Shared presentational components (import from `../components`). |
-| `pages/` | One file per route. `SignIn` and `Consent` are done; the rest are stubs to replace. |
+| `pages/` | One file per route. Also, outside the router: `ResetPassword` (set a new password after a reset link), `AccountDeleted` (after Settings → Delete account) and `PasswordFields` (shared new-password inputs). |
 | `studio.css` | The design stylesheet, verbatim. **Do not edit.** |
 | `v2.css` | Shell grid and a few helpers (`v2-` prefix). |
 
@@ -93,10 +93,30 @@ after an action (e.g. after import, go to processing). `#/review` without an id:
 
 ```ts
 useAuth(): { status: 'loading'|'signedOut'|'signedIn'; user: { id, email } | null;
-             profile: ProfileRow | null; role: 'dancer' | 'researcher' }
+             profile: ProfileRow | null; role: 'dancer' | 'researcher';
+             recovery: boolean;            // signed in through a reset link → only ResetPassword shows
+             linkError: ApiError | null }  // a reset link that failed (expired / used); SignIn shows it
 signOut(): Promise<void>
 client(): SupabaseClient            // pass to src/data/repo.ts functions
+requestPasswordReset(email): Promise<void>   // FR-3.1.3; redirectTo = origin + BASE_URL + '#/reset-password'
+updatePassword(pw, { currentPassword? }): Promise<void>  // reset screen, or Settings (checks the current one first)
 ```
+
+Password recovery: SignIn → "Forgot password?" → `resetPasswordForEmail`. The link in the
+email lands with the session in the URL fragment; `src/api/supabase.ts` reads it before
+supabase-js clears it (`authLinkAtLoad`, helpers in `src/api/authLink.ts`) and also moves
+`#/reset-password#access_token=…` into a form supabase-js understands. `App` shows
+`ResetPassword` while `recovery` is true (also after a reload, via sessionStorage); the
+`PASSWORD_RECOVERY` event sets it too. Errors go through `authError(e, 'reset' | 'password')`
+in `src/api/authErrors.ts`. Redirect URLs are allowed in `supabase/config.toml`
+(`site_url`, `additional_redirect_urls`). The built-in mail service only delivers to the
+project's team addresses and refuses domains without mail (`email_address_invalid`), so
+use a custom SMTP before participants rely on it.
+
+Account deletion: Settings → Delete account (type DELETE) → `deleteAccount(client(), typed)`
+in `src/data/deleteData.ts` → Edge Function `supabase/functions/delete-account` (service
+role, server side only) → `showAccountDeleted(report)` + `signOut()`; `App` shows
+`AccountDeleted` until the user presses Done.
 
 `role` is the real `profiles.role` (read-only for the user; set by hand in the Supabase
 dashboard). Don't add a role switch. Pages render only when signed in with both required
@@ -288,7 +308,8 @@ rule: differences are computed on the rounded values that are on screen.
 - `src/data/exportData.ts`: `exportAll(client(), options)`, `exportMetricsCsv(client())`;
   `src/data/deleteData.ts`: `deleteAttemptData`, `deleteSessionData`, `deleteAllMyData`
   (each returns a `DeleteReport`). Settings and Library use these; call `invalidate()`
-  and `releaseClip()` afterwards.
+  and `releaseClip()` afterwards. `deleteAccount(client(), typed)` calls the Edge Function
+  `delete-account` and returns its `DeleteAccountReport` (files, rows and the auth user).
 - `src/feedback/client.ts`: `generateFeedback(…)`, `listFeedback(client(), attemptId)`,
   `AI_CONSENT_SCOPE` (= `'ai_metrics_only'`), `DISCLAIMER`. The Edge Function is not
   deployed yet: handle its `FeedbackError` with the designed error state.

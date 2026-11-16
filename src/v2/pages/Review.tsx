@@ -217,7 +217,7 @@ function Workspace({ attempt, series, attempts }: WorkspaceProps) {
           </a>
           <a className="btn btn-secondary" href={chatHref}>
             <Icon name="chat" />
-            Ask AI
+            Ask Mika
           </a>
         </>
       }
@@ -295,7 +295,7 @@ function Workspace({ attempt, series, attempts }: WorkspaceProps) {
         Notes
       </a>
       <a className="btn btn-secondary btn-lg" href={chatHref} style={{ padding: '0 8px' }}>
-        Ask AI
+        Ask Mika
       </a>
     </div>
   )

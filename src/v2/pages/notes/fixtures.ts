@@ -1,4 +1,4 @@
-// Synthetic rows for the page tests (Progress, Practice notes, Ask AI). Invented numbers
+// Synthetic rows for the page tests (Progress, Practice notes, Mika). Invented numbers
 // only — no participant data.
 
 import type { SessionSummary } from '../../../data/repo'

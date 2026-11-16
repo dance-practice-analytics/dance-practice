@@ -1,4 +1,4 @@
-// View model of the Ask AI screen. The assistant has no backend in the prototype, so
+// View model of the Mika (AI assistant) screen. The assistant has no backend in the prototype, so
 // this only prepares the context panel — the real measurements a question would be
 // about — and the suggested questions. Nothing here sends or answers anything.
 

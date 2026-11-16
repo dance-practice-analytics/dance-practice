@@ -26,7 +26,7 @@ const SIDE_ITEMS: NavItem[] = [
   { route: { name: 'compare' }, label: 'Compare', icon: 'compare' },
   { route: { name: 'progress' }, label: 'Progress', icon: 'progress' },
   { route: { name: 'notes' }, label: 'Practice notes', icon: 'notes' },
-  { route: { name: 'chat' }, label: 'Ask AI', icon: 'chat' },
+  { route: { name: 'chat' }, label: 'Mika', icon: 'chat' },
   { route: { name: 'dataset' }, label: 'Study dataset', icon: 'dataset', researcherOnly: true },
   { route: { name: 'settings' }, label: 'Settings & data', icon: 'settings' },
 ]

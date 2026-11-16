@@ -1,4 +1,4 @@
-// Picks the attempt a screen is about (Practice notes, Ask AI): processed attempts
+// Picks the attempt a screen is about (Practice notes, Mika): processed attempts
 // grouped by session. Presentational; the page navigates.
 
 import type { AttemptView } from '../../data'

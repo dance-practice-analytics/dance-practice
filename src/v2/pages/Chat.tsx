@@ -1,4 +1,4 @@
-// Screen 11 — Ask AI.
+// Screen 11 — Mika, the AI practice assistant (named after the domain mentor).
 // Design: Chat.dc.html, ChatMobile.dc.html.
 // The assistant has no service behind it in the prototype (the MT-2 plan only has the
 // generate-feedback function), so this is the designed screen as a shell: the context
@@ -39,8 +39,8 @@ export function Chat() {
   if (attempts.loading || !all) {
     return (
       <>
-        <PageHeader title="Ask AI" />
-        {attempts.error ? <ErrorAlert error={attempts.error} onRetry={attempts.refetch} /> : <SkeletonList label="Loading Ask AI" />}
+        <PageHeader title="Mika" />
+        {attempts.error ? <ErrorAlert error={attempts.error} onRetry={attempts.refetch} /> : <SkeletonList label="Loading Mika" />}
       </>
     )
   }
@@ -49,7 +49,7 @@ export function Chat() {
     const missing = Boolean(routeId)
     return (
       <>
-        <PageHeader title="Ask AI" subtitle="Questions about one attempt, answered from its metrics only." />
+        <PageHeader title="Mika" subtitle="Your AI practice assistant. Questions about one attempt, answered from its metrics only." />
         {attempts.error && <ErrorAlert error={attempts.error} onRetry={attempts.refetch} />}
         {missing && latestProcessed(all) && <AttemptPicker id="chat-attempt" attempts={all} value={null} onChange={pick} />}
         <EmptyState
@@ -75,9 +75,9 @@ export function Chat() {
   return (
     <>
       <PageHeader
-        title="Ask AI"
+        title="Mika"
         eyebrow={narrow ? attemptLine(attempt) : undefined}
-        subtitle="Questions about one attempt, answered from its metrics only."
+        subtitle="Your AI practice assistant. Questions about one attempt, answered from its metrics only."
         backHref={reviewHref}
         mobileActions={metricsTag}
       />
@@ -225,7 +225,7 @@ function Conversation({ attempt, questions, narrow }: ConversationProps) {
       {!narrow && (
         <div style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '14px 20px', borderBottom: '1px solid var(--line)', flexWrap: 'wrap' }}>
           <h2 className="t-h3" id="chat-h" style={{ flex: 1 }}>
-            Ask AI
+            Ask Mika
           </h2>
           <span className="tag">Metrics only</span>
           <button className="btn btn-ghost btn-sm" type="button" disabled aria-describedby={NOT_CONNECTED_ID}>
@@ -257,11 +257,11 @@ function Conversation({ attempt, questions, narrow }: ConversationProps) {
           </div>
           <h3 className="t-h3">Ask about this attempt’s measurements</h3>
           <p className="t-small muted">
-            Answers would describe your metrics and point to which ones they used. The AI won’t grade your technique or give medical advice.
+            Answers would describe your metrics and point to which ones they used. Mika won’t grade your technique or give medical advice.
           </p>
           <div id={NOT_CONNECTED_ID} style={{ textAlign: 'left', width: '100%' }}>
             <NoteBox title="Not connected in this prototype.">
-              Ask AI has no service behind it yet, so questions can’t be sent and nothing is shared. Practice notes, review and compare use the
+              Mika has no service behind it yet, so questions can’t be sent and nothing is shared. Practice notes, review and compare use the
               same measurements. <a href={href({ name: 'notes', attemptId: attempt.id })}>Open practice notes for this attempt</a>
             </NoteBox>
           </div>

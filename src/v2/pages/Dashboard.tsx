@@ -41,7 +41,7 @@ export function Dashboard() {
             <a
               className="btn btn-ghost btn-icon btn-lg"
               href={href({ name: 'chat', attemptId: latestProcessed(data?.attempts)?.id })}
-              aria-label="Ask AI about your practice"
+              aria-label="Ask Mika about your practice"
             >
               <Icon name="chat" style={iconSize} />
             </a>
