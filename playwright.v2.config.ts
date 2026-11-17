@@ -41,6 +41,8 @@ export default defineConfig({
     ? {
         command: `npx vite build --outDir ${OUT_DIR} --emptyOutDir && npx vite preview --outDir ${OUT_DIR} --port ${PORT} --strictPort`,
         url: `http://localhost:${PORT}`,
+        // Served from the root here, even if BASE_PATH=/app/ is left set from a deploy build.
+        env: { BASE_PATH: '/' },
         timeout: 240_000,
         reuseExistingServer: !process.env.CI,
       }

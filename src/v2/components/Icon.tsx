@@ -15,6 +15,8 @@ const PATHS = {
   progress: 'M4 19h16M6 15l4-5 4 3 5-7',
   notes: 'M6 3h9l4 4v14H6zM9 12h7M9 16h5',
   chat: 'M4 5h16v11H9l-5 4zM8 9h8M8 12h5',
+  // Mika, the AI practice assistant: a small friendly robot (antenna, head, eyes, smile).
+  mika: 'M12 3v2.5M12 2.6h.01M7.5 7.5h9a2.5 2.5 0 0 1 2.5 2.5v6a2.5 2.5 0 0 1-2.5 2.5h-9A2.5 2.5 0 0 1 5 16v-6a2.5 2.5 0 0 1 2.5-2.5zM9.5 11.5v1M14.5 11.5v1M10 15.5c1.2.8 2.8.8 4 0M3 12v2.5M21 12v2.5',
   dataset: 'M3 5h18v14H3zM3 10h18M3 15h18M9 5v14',
   settings: 'M4 7h10M18 7h2M4 17h4M12 17h8M14 4v6M8 14v6',
   // privacy and states

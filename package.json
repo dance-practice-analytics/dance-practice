@@ -16,7 +16,8 @@
     "e2e": "playwright test",
     "e2e:ui": "playwright test --ui",
     "e2e:v2": "playwright test -c playwright.v2.config.ts",
-    "check:rls": "node scripts/rls-check.mjs"
+    "check:rls": "node scripts/rls-check.mjs",
+    "deploy": "node scripts/deploy-vercel.mjs"
   },
   "dependencies": {
     "@mediapipe/tasks-vision": "^1.2.3",

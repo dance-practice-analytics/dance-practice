@@ -42,7 +42,7 @@ export function Dashboard() {
               href={href({ name: 'chat', attemptId: latestProcessed(data?.attempts)?.id })}
               aria-label="Ask Mika about your practice"
             >
-              <Icon name="chat" style={iconSize} />
+              <Icon name="mika" style={iconSize} />
             </a>
             <a className="btn btn-ghost btn-icon btn-lg" href={href({ name: 'import' })} aria-label="Import clips">
               <Icon name="plus" style={iconSize} />

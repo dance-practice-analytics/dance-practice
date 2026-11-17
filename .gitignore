@@ -28,3 +28,6 @@ android/app/build/
 
 # v2 smoke e2e build (playwright.v2.config.ts)
 dist-e2e-v2/
+
+# Vercel project link (scripts/deploy-vercel.mjs reads it; account-specific ids)
+.vercel/

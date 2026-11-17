@@ -232,7 +232,7 @@ function Workspace({ attempt, series, attempts }: WorkspaceProps) {
             Practice notes
           </a>
           <a className="btn btn-secondary" href={chatHref}>
-            <Icon name="chat" />
+            <Icon name="mika" />
             Ask Mika
           </a>
         </>

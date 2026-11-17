@@ -164,7 +164,7 @@ function LatestCard({ latest, showSubject }: { latest: LatestSession; showSubjec
         <LatestActions latest={latest} />
         {latest.review && (
           <a className="btn btn-secondary" href={href({ name: 'chat', attemptId: latest.review.id })}>
-            <Icon name="chat" />
+            <Icon name="mika" />
             Ask about this session
           </a>
         )}

@@ -16,7 +16,7 @@ import { useIsNarrow } from '../useIsNarrow'
 type Mode = 'signin' | 'signup' | 'reset'
 
 /** The public project website (landing page). */
-const PROJECT_SITE = 'https://dance-practice-analytics.github.io'
+const PROJECT_SITE = 'https://dance-practice-teal.vercel.app/'
 
 const POINTS: { icon: IconName; text: string }[] = [
   { icon: 'device', text: 'Pose estimation runs on this device. Study clips are never uploaded.' },

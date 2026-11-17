@@ -7,10 +7,11 @@ project_id = "fcdgjzlbjrzkonaained"
 minimum_password_length = 10
 # Where account emails (password reset, FR-3.1.3) may send the user back. A redirectTo
 # that matches none of these falls back to site_url. The app sends
-# <origin><base path>#/reset-password.
-site_url = "https://dance-practice-teal.vercel.app"
+# <origin><base path>#/reset-password. The app lives under /app/ (the landing page is /).
+site_url = "https://dance-practice-teal.vercel.app/app/"
 additional_redirect_urls = [
   "https://dance-practice-teal.vercel.app/**",              # Vercel (production)
+  "https://dance-practice-teal.vercel.app/app/**",          # Vercel, the app under /app/
   "http://localhost:5173/**",                               # npm run dev
   "http://localhost:4173/**",                               # npm run preview
   "https://dance-practice-analytics.github.io/dance-practice/**", # GitHub Pages

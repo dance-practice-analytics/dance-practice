@@ -4,8 +4,8 @@ A web app (installable as a PWA) that helps a dancer review their own practice c
 
 Capstone project for CS 4850 (Fall 2026), Kennesaw State University, team MT-2-HCI: Andres Turipe Toro. Domain mentor: Dr. Milka Trajkova.
 
-- App: https://dance-practice-teal.vercel.app
-- Project site: https://dance-practice-analytics.github.io
+- Project site: https://dance-practice-teal.vercel.app
+- App: https://dance-practice-teal.vercel.app/app/
 
 ## Privacy principles
 
@@ -84,14 +84,16 @@ CI (`.github/workflows/ci.yml`) runs the type check and unit tests on every push
 
 ## Deployment
 
-**Web app (Vercel).** The Vercel project is not connected to GitHub; deploy a locally built folder:
+**Site and web app (Vercel).** One domain serves both: https://dance-practice-teal.vercel.app/ is the project site (source in `site/`) and https://dance-practice-teal.vercel.app/app/ is the app. The Vercel project is not connected to GitHub; one script builds and publishes both:
 
 ```
-npm run build
-npx vercel deploy <folder> --prod
+npm run deploy                          # node scripts/deploy-vercel.mjs
+node scripts/deploy-vercel.mjs --dry-run   # build, assemble and scan only
 ```
 
-Build without `BASE_PATH`, remove `dist/clips` (synthetic test clips are not part of the app), and run the deploy from a folder that holds the `.vercel` project link. The production domain must be listed in `supabase/config.toml` (`site_url`, `additional_redirect_urls`) for password-reset links to work.
+It builds the app with `BASE_PATH=/app/` (Supabase values from `.env.local`), assembles a folder outside the repository (default `<tmp>/dance-practice-deploy/dance-practice`, or `--out <dir>`) with `site/*` at the root and `dist/*` under `app/` (without `dist/clips`), stamps the service worker version with the commit, scans every file for secrets (`sk-`, `sb_secret_`, `service_role`, `TEST_ACCOUNT`, any non-`VITE_` value in `.env.local`) and runs `npx vercel deploy <folder> --prod --yes`. It needs the Vercel project link in `.vercel/project.json` (git-ignored; create it once with `npx vercel link`, or pass `--link <dir>`). Routing and cache headers are in `site/vercel.json`; `site/sw.js` removes the service worker that older deploys registered at the root. Old app links (`/#/...`) are forwarded to `/app/#/...` by the site. The app URL must stay in `supabase/config.toml` (`site_url`, `additional_redirect_urls`) for password-reset links to work; apply changes with `npx supabase config push --yes`.
+
+The former site at https://dance-practice-analytics.github.io now only redirects here.
 
 **GitHub Pages (optional).** `.github/workflows/deploy-pages.yml` builds with `BASE_PATH=/<repo>/` and publishes on push to `main`. See `docs/pwa.md` for the one-time repository settings and the PWA details.
 

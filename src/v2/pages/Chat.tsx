@@ -412,7 +412,7 @@ function Conversation({ attempt, scope, compareAttemptId, questions, narrow, con
         {empty && (
           <div className="v2-chat-intro" style={{ padding: narrow ? '16px 0' : '40px 0' }}>
             <div className="well" style={{ width: 56, height: 56, display: 'flex', alignItems: 'center', justifyContent: 'center', borderRadius: 16 }}>
-              <Icon name="chat" size={24} />
+              <Icon name="mika" size={24} />
             </div>
             <h3 className="t-h3">Ask about this attempt’s measurements</h3>
             <p className="t-small muted">

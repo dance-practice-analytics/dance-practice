@@ -28,7 +28,7 @@ const ATTEMPT_SCREENS: Partial<Record<RouteName, { label: string; icon: IconName
   review: { label: 'Review', icon: 'review' },
   compare: { label: 'Compare', icon: 'compare' },
   notes: { label: 'Practice notes', icon: 'notes' },
-  chat: { label: 'Mika', icon: 'chat' },
+  chat: { label: 'Mika', icon: 'mika' },
 }
 const ATTEMPT_ROUTES = Object.keys(ATTEMPT_SCREENS) as RouteName[]
 
@@ -40,7 +40,7 @@ const SIDE_ITEMS: NavItem[] = [
   { route: { name: 'compare' }, label: 'Compare', icon: 'compare' },
   { route: { name: 'progress' }, label: 'Progress', icon: 'progress' },
   { route: { name: 'notes' }, label: 'Practice notes', icon: 'notes' },
-  { route: { name: 'chat' }, label: 'Mika', icon: 'chat' },
+  { route: { name: 'chat' }, label: 'Mika', icon: 'mika' },
   { route: { name: 'dataset' }, label: 'Study dataset', icon: 'dataset', researcherOnly: true },
   { route: { name: 'settings' }, label: 'Settings & data', icon: 'settings' },
 ]
