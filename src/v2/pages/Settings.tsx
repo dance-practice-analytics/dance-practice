@@ -13,12 +13,12 @@ import { deleteAccount, deleteAttemptData, type DeleteReport } from '../../data/
 import { exportAll, exportMetricsCsv } from '../../data/exportData'
 import { dataError } from '../../data/repo'
 import { ALGORITHM_VERSION } from '../../metrics/engine'
-import { client, signOut, updatePassword, useAuth } from '../auth'
+import { client, signOut, updateDisplayName, updatePassword, useAuth } from '../auth'
 import { releaseAllClips, releaseClip } from '../clips'
 import { ErrorAlert, Icon, NoteBox, PageHeader, Skeleton, Spinner } from '../components'
 import { CONSENT_VERSION, setConsent, useConsents, type ConsentScope } from '../consents'
 import { invalidate, useLibrary, type AttemptView } from '../data'
-import { MOVEMENT_LABELS, formatBytes, formatDate } from '../format'
+import { MOVEMENT_LABELS, chosenName, formatBytes, formatDate } from '../format'
 import { resetPipeline } from '../pipeline'
 import { setThemePref, useThemePref, type ThemePref } from '../theme'
 import { useIsNarrow } from '../useIsNarrow'
@@ -108,6 +108,69 @@ function FixedRow({ title, caption }: { title: string; caption: ReactNode }) {
         Required
       </span>
     </div>
+  )
+}
+
+/** Optional name for the Dashboard greeting; saved to the user's own profile row. */
+function NameField() {
+  const { profile, user } = useAuth()
+  const saved = chosenName(profile?.display_name, user?.email) ?? ''
+  const [value, setValue] = useState(saved)
+  const [busy, setBusy] = useState(false)
+  const [error, setError] = useState<ApiError | null>(null)
+  const [done, setDone] = useState(false)
+  // The profile loads after the page; show it once it arrives.
+  useEffect(() => setValue(saved), [saved])
+  const save = async () => {
+    setBusy(true)
+    setError(null)
+    setDone(false)
+    try {
+      await updateDisplayName(value)
+      setDone(true)
+    } catch (e) {
+      setError(e as ApiError)
+    } finally {
+      setBusy(false)
+    }
+  }
+  return (
+    <form
+      noValidate
+      style={{ display: 'flex', flexDirection: 'column', gap: 8 }}
+      onSubmit={(e) => {
+        e.preventDefault()
+        if (!busy) void save()
+      }}
+    >
+      <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, alignItems: 'flex-end' }}>
+        <div className="field" style={{ flex: '1 1 220px' }}>
+          <label className="field-label" htmlFor="acc-name">
+            Name (optional)
+          </label>
+          <input
+            className="input"
+            id="acc-name"
+            autoComplete="given-name"
+            maxLength={60}
+            value={value}
+            disabled={busy}
+            onChange={(e) => {
+              setValue(e.target.value)
+              setDone(false)
+            }}
+          />
+        </div>
+        <button className="btn btn-secondary btn-sm" type="submit" disabled={busy || value.trim() === saved}>
+          {busy && <Spinner />}
+          Save name
+        </button>
+      </div>
+      <span className="t-caption" role="status">
+        {done ? 'Saved.' : 'Used only to greet you on the Dashboard.'}
+      </span>
+      {error && <ErrorAlert error={error} />}
+    </form>
   )
 }
 
@@ -679,6 +742,7 @@ export function Settings() {
               </button>
             </div>
             {passwordStatus}
+            <NameField />
           </Section>
         )}
 
@@ -716,6 +780,7 @@ export function Settings() {
                   <span className="t-caption">Role: {role}</span>
                 </span>
               </div>
+              <NameField />
               <button type="button" className="v2-set-rowbtn" onClick={openPassword}>
                 <span style={{ flex: 1 }}>Change password</span>
                 {chevron}

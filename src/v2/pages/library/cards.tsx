@@ -1,15 +1,16 @@
 // Pieces the Library and the Dashboard both show: the attempt tile, the "Next focus"
-// card (from stored practice notes) and the "Trend" card (session medians).
+// card (from stored practice notes, else a "Next step" from the dancer's own clips) and the "Trend" card (session medians).
 // Design: Library.dc.html, LibraryMobile.dc.html, Dashboard.dc.html.
 
 import { useId, useMemo, useState, type CSSProperties } from 'react'
-import { Icon, Skeleton } from '../../components'
+import { AttemptThumb, CompactGap, Icon, Skeleton } from '../../components'
 import type { AttemptView } from '../../data'
-import { METRICS, metricsFor, type MetricKey } from '../../format'
+import { isCompactGap, METRICS, metricsFor, type MetricKey } from '../../format'
 import { usePipelineItem } from '../../pipeline'
 import { href } from '../../router'
 import { layoutSeries } from './chart'
-import { TILE_LABEL, buildTrend, tileStatus, type Focus, type NextFocus, type TileKind, type Trend } from './model'
+import { ONE_SESSION_HINT, TILE_LABEL, buildTrend, firstSentence, hasSingleValue, tileStatus, type Focus, type NextFocus, type TileKind, type Trend } from './model'
+import type { NextStep } from './nextStep'
 import type { AccountNotes } from './notes'
 
 // ---------- attempt tile ----------
@@ -40,13 +41,13 @@ export function AttemptTile({ attempt, kind, size = 'small' }: AttemptTileProps)
       aria-label={`Attempt ${attempt.number}, ${kind === 'processing' ? `processing ${label}` : TILE_LABEL[kind]}`}
       title={attempt.clip_name ?? undefined}
     >
-      <div className={hatched ? 'thumb v2-lib-hatch' : 'thumb'} style={{ height: large ? 60 : 40 }}>
+      <AttemptThumb attempt={attempt} className={hatched ? 'thumb v2-lib-hatch' : 'thumb'} style={{ height: large ? 60 : 40 }}>
         {!large && (
           <span className="v2-lib-n mono" aria-hidden="true">
             {attempt.number}
           </span>
         )}
-      </div>
+      </AttemptThumb>
       {large && (
         <span className="t-small" style={{ fontWeight: 600 }}>
           Attempt {attempt.number}
@@ -71,14 +72,32 @@ export interface NextFocusCardProps {
   compact?: boolean
   /** Show the subject code after the label (accounts with subjects). */
   showSubject?: boolean
+  /** Shown as "Next step" when there is no note's focus (see ./nextStep.ts). */
+  step?: NextStep | null
   style?: CSSProperties
 }
 
-export function NextFocusCard({ focus, notes, emptyHref, compact, showSubject, style }: NextFocusCardProps) {
+export function NextFocusCard({ focus, notes, emptyHref, compact, showSubject, step, style }: NextFocusCardProps) {
   const id = useId()
   const pad = compact ? 16 : 20
   const button = compact ? 'btn btn-secondary btn-lg btn-block' : 'btn btn-secondary btn-sm'
   const base = { padding: pad, display: 'flex', flexDirection: 'column' as const, gap: compact ? 10 : 12, minWidth: 0, ...style }
+
+  // No note to take a focus from: a next step from the dancer's own clips instead.
+  if (!focus && step && !notes.loading) {
+    return (
+      <section className="card" style={base} aria-labelledby={id}>
+        <p className="t-label">Next step</p>
+        <h2 className="t-h3" id={id}>
+          {step.title}
+        </h2>
+        <p className="t-small muted">{step.body}</p>
+        <a className={button} href={href(step.action.route)} style={compact ? undefined : { alignSelf: 'flex-start' }}>
+          {step.action.label}
+        </a>
+      </section>
+    )
+  }
 
   if (!focus) {
     return (
@@ -174,10 +193,10 @@ function TrendChart({ trend, metric }: { trend: Trend; metric: MetricKey }) {
     <svg viewBox="0 0 300 110" role="img" aria-label={trend.aria} style={{ width: '100%', height: 'auto' }}>
       <line x1="0" y1="90" x2="300" y2="90" stroke="var(--line)" />
       <line x1="0" y1="20" x2="300" y2="20" stroke="var(--line)" strokeDasharray="2 4" />
-      <text x="0" y="14" fontSize="10" fill="var(--text-3)" fontFamily={MONO}>
+      <text x="0" y="14" fontSize="11" fill="var(--text-2)" fontFamily={MONO}>
         {max === null ? '—' : `${Number((max * METRICS[metric].scale).toPrecision(6))}${unit}`}
       </text>
-      <text x="0" y="104" fontSize="10" fill="var(--text-3)" fontFamily={MONO}>
+      <text x="0" y="104" fontSize="11" fill="var(--text-2)" fontFamily={MONO}>
         0{unit}
       </text>
       {layout.lines.map((pts) => (
@@ -213,6 +232,22 @@ function TrendChart({ trend, metric }: { trend: Trend; metric: MetricKey }) {
   )
 }
 
+/** Fewer than two sessions with a value: the value large, what it is, and the hint (no one-dot chart). */
+function SingleValue({ trend, metric }: { trend: Trend; metric: MetricKey }) {
+  const point = [...trend.points].reverse().find((p) => p.median !== null)
+  const unit = METRICS[metric].unitShort
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+      <span className="metric-value" style={{ fontSize: 32, lineHeight: '40px', color: point ? undefined : 'var(--text-3)' }}>
+        {point ? point.text.slice(0, point.text.length - unit.length) : '—'}
+        {point && unit.trim() && <span className="metric-unit">{unit.trim()}</span>}
+      </span>
+      {point && <span className="t-caption">Median of {point.label}</span>}
+      <span className="t-small muted">{firstSentence(METRICS[metric].description)}</span>
+    </div>
+  )
+}
+
 function useTrend(focus: Focus, wanted: MetricKey | null) {
   const options = metricsFor(focus.movement)
   const metric = wanted && options.includes(wanted) ? wanted : options[0]
@@ -231,6 +266,7 @@ export function TrendCard({ focus, showSubject }: TrendCardProps) {
   const [wanted, setWanted] = useState<MetricKey | null>(null)
   const { options, metric, trend } = useTrend(focus, wanted)
   const many = trend.points.length > 3
+  const single = hasSingleValue(trend)
   return (
     <section className="card" style={{ padding: 20, display: 'flex', flexDirection: 'column', gap: 12, minWidth: 0 }} aria-label="Trend">
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
@@ -252,19 +288,37 @@ export function TrendCard({ focus, showSubject }: TrendCardProps) {
           ))}
         </select>
       </div>
-      <TrendChart trend={trend} metric={metric} />
-      <div style={{ display: 'flex', justifyContent: trend.points.length === 1 ? 'center' : 'space-between', gap: 8 }} className="t-caption">
-        {trend.points.map((p) => (
-          <span key={p.sessionId}>{many ? `${p.number}${p.partial ? ' · partial' : ''}` : p.label}</span>
-        ))}
-      </div>
+      {single ? (
+        <SingleValue trend={trend} metric={metric} />
+      ) : (
+        <>
+          <TrendChart trend={trend} metric={metric} />
+          <div style={{ display: 'flex', justifyContent: trend.points.length === 1 ? 'center' : 'space-between', gap: 8 }} className="t-caption">
+            {trend.points.map((p) => (
+              <span key={p.sessionId}>{many ? `${p.number}${p.partial ? ' · partial' : ''}` : p.label}</span>
+            ))}
+          </div>
+        </>
+      )}
       <p className="t-small muted">
-        {trend.sentence}
+        {trendLine(trend)}
         {trend.notes.length > 0 && ` ${trend.notes.join(' ')}`}
       </p>
-      {trend.reason && <p className="reason hatch">{trend.reason} Not shown as 0.</p>}
+      <TrendReason trend={trend} metric={metric} />
     </section>
   )
+}
+
+/** Why the latest session has no value: a slim row when the clip had nothing to measure (no plié), else the hatched box. */
+function TrendReason({ trend, metric }: { trend: Trend; metric: MetricKey }) {
+  if (!trend.reason) return null
+  if (isCompactGap(trend.reason)) return <CompactGap name={METRICS[metric].label} reason={trend.reason} />
+  return <p className="reason hatch">{trend.reason} Not shown as 0.</p>
+}
+
+/** The change sentence, or the one-session hint when exactly one session has a value. */
+function trendLine(trend: Trend): string {
+  return hasSingleValue(trend) && trend.series.sessions.some((s) => s.median !== null) ? ONE_SESSION_HINT : trend.sentence
 }
 
 /** Phone: latest median, a sparkline and the sentence (LibraryMobile.dc.html). */
@@ -284,6 +338,9 @@ export function TrendCardCompact({ focus }: TrendCardProps) {
         <p className="t-label">{METRICS[metric].label}</p>
         <span className="t-caption">session medians</span>
       </div>
+      {hasSingleValue(trend) ? (
+        <SingleValue trend={trend} metric={metric} />
+      ) : (
       <div style={{ display: 'flex', alignItems: 'flex-end', gap: 16 }}>
         <div style={{ display: 'flex', flexDirection: 'column' }}>
           <span className="metric-value" style={{ fontSize: 26, color: has ? undefined : 'var(--text-3)' }}>
@@ -308,11 +365,12 @@ export function TrendCardCompact({ focus }: TrendCardProps) {
           })}
         </svg>
       </div>
+      )}
       <p className="t-small muted">
-        {trend.sentence}
+        {trendLine(trend)}
         {trend.notes.length > 0 && ` ${trend.notes.join(' ')}`}
       </p>
-      {trend.reason && <p className="reason hatch">{trend.reason} Not shown as 0.</p>}
+      <TrendReason trend={trend} metric={metric} />
     </section>
   )
 }

@@ -1,7 +1,9 @@
 import { describe, expect, it } from 'vitest'
 import type { AttemptMetricsRow } from '../data/schema'
 import {
+  chosenName,
   differenceText,
+  greeting,
   formatMetricWithUnit,
   formatNumber,
   formatTimecode,
@@ -68,6 +70,9 @@ describe('v2 format', () => {
     expect(readMetric(null, 'turn_count').reason).toBe('Not processed yet.')
     expect(metricsFor('releve_balance')).not.toContain('turn_count')
     expect(metricsFor('pirouette')).toContain('turn_count')
+    // Knee over toes is measured in a plié in the prep or finish of either movement
+    // (metrics/engine.ts), so a relevé balance from demi-plié has a value: keep it listed.
+    expect(metricsFor('releve_balance')).toContain('knee_tracking_dev_deg')
   })
 
   it('looks up frames and phases by time', () => {
@@ -79,5 +84,23 @@ describe('v2 format', () => {
     const phases = [{ phase: 'hold' as const, start: 1, end: 2 }]
     expect(phaseAt(phases, 1.5)?.phase).toBe('hold')
     expect(phaseAt(phases, 2)).toBeNull()
+  })
+})
+
+describe('v2 greeting', () => {
+  const at = (h: number) => new Date(2026, 10, 16, h, 30)
+
+  it('follows local time and adds only the first name', () => {
+    expect(greeting(at(8))).toBe('Good morning')
+    expect(greeting(at(12))).toBe('Good afternoon')
+    expect(greeting(at(17), '  ')).toBe('Good afternoon')
+    expect(greeting(at(18), 'Ana María Pérez')).toBe('Good evening, Ana')
+    expect(greeting(at(0), 'Ana')).toBe('Good morning, Ana')
+  })
+
+  it('never uses a name derived from the email', () => {
+    expect(chosenName('demo.dancer.1843c8', 'demo.dancer.1843C8@example.org')).toBeNull()
+    expect(chosenName(null, 'a@b.c')).toBeNull()
+    expect(chosenName(' Ana ', 'demo.dancer@example.org')).toBe('Ana')
   })
 })

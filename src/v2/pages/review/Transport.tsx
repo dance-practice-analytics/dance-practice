@@ -4,6 +4,7 @@
 import type { ReactNode } from 'react'
 import { Icon } from '../../components'
 import { formatTimecode } from '../../format'
+import { useViewMode } from '../../viewMode'
 import { frameIndex, RATES, type Clock } from './clock'
 import { useClockValue } from './useClock'
 
@@ -68,7 +69,7 @@ export function SpeedControl({ clock, dense }: { clock: Clock; dense?: boolean }
           type="button"
           className={rate === r ? 'on' : undefined}
           aria-pressed={rate === r}
-          style={dense ? { padding: '0 9px' } : undefined}
+          style={dense ? { padding: '0 9px', height: 40 } : undefined}
           onClick={() => clock.setRate(r)}
         >
           {r}×
@@ -86,6 +87,8 @@ export interface TransportProps {
 }
 
 export function Transport({ clock, narrow, children }: TransportProps) {
+  // The frame number is for frame-by-frame work: Detail view only.
+  const detail = useViewMode() === 'detail'
   if (narrow) {
     return (
       <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
@@ -109,7 +112,7 @@ export function Transport({ clock, narrow, children }: TransportProps) {
       <StepButton clock={clock} direction={-1} />
       <PlayButton clock={clock} />
       <StepButton clock={clock} direction={1} />
-      <TimeReadout clock={clock} />
+      <TimeReadout clock={clock} showFrame={detail} />
       <span style={{ flex: 1 }} />
       <SpeedControl clock={clock} />
       {children}

@@ -4,20 +4,20 @@
 // `profiles.role`; there is no role switch. View-model: ./dashboard/model.ts.
 
 import { useAuth } from '../auth'
-import { EmptyState, ErrorAlert, Icon, PageHeader, PrivacyPill, Skeleton } from '../components'
+import { EmptyState, ErrorAlert, Icon, PageHeader, Skeleton } from '../components'
 import { latestProcessed, useLibrary } from '../data'
 import { href } from '../router'
 import { useIsNarrow } from '../useIsNarrow'
 import { DancerDashboard } from './dashboard/Dancer'
 import { ResearcherDashboard } from './dashboard/Researcher'
-import { useLiveStatus, useWho } from './library/hooks'
+import { useGreeting, useLiveStatus } from './library/hooks'
 import './library/library.css'
 import { useAccountNotes } from './library/notes'
 
 export function Dashboard() {
   const lib = useLibrary()
   const { role } = useAuth()
-  const who = useWho()
+  const hello = useGreeting()
   const narrow = useIsNarrow()
   const notes = useAccountNotes()
   const live = useLiveStatus()
@@ -29,13 +29,12 @@ export function Dashboard() {
     <>
       <PageHeader
         title="Dashboard"
-        eyebrow={`Signed in as ${who}`}
+        eyebrow={hello}
         subtitle={
           researcher
             ? 'Study progress, clips that need attention, and recent activity.'
             : 'Your latest practice, how each metric has changed, and what is still processing.'
         }
-        actions={<PrivacyPill>Clips processed on this device, not uploaded</PrivacyPill>}
         mobileActions={
           <>
             <a
@@ -51,12 +50,12 @@ export function Dashboard() {
           </>
         }
       />
-      {narrow && <PrivacyPill style={{ alignSelf: 'flex-start' }} />}
       {lib.error && <ErrorAlert error={lib.error} onRetry={lib.refetch} />}
 
       {lib.loading ? (
         <LoadingDashboard narrow={narrow} />
-      ) : !data ? null : data.attempts.length === 0 ? (
+      ) : !data ? null : data.attempts.length === 0 && researcher ? (
+        // A dancer with no clips gets the first-run welcome inside DancerDashboard.
         <EmptyState
           icon="review"
           title="No clips yet"

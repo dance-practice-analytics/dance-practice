@@ -2,6 +2,7 @@
 
 import { useMemo } from 'react'
 import { useAuth } from '../../auth'
+import { chosenName, greeting } from '../../format'
 import { usePipeline } from '../../pipeline'
 import type { LiveStatus } from './model'
 
@@ -18,8 +19,8 @@ export function useLiveStatus(): LiveStatus {
   )
 }
 
-/** How the signed-in person is named in a header: their display name, else their role. */
-export function useWho(): string {
-  const { profile, role } = useAuth()
-  return profile?.display_name?.trim() || role
+/** 'Good evening, Ana' for the Dashboard: the name only if the person set one in Settings. */
+export function useGreeting(): string {
+  const { profile, user } = useAuth()
+  return greeting(new Date(), chosenName(profile?.display_name, user?.email))
 }

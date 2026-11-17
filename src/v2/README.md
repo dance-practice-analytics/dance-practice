@@ -18,7 +18,7 @@ error patterns; `Main.dc.html` shows every component class.
 | --- | --- |
 | `main.tsx` | Entry: loads `fonts.css`, `studio.css`, `v2.css`, mounts `App`. |
 | `App.tsx` | Auth gate → consent gate → `Shell` + routed page. No screen logic. |
-| `Shell.tsx` | Sidebar (≥ 900px) / bottom nav (< 900px). Pages render inside `<main class="v2-main">`. |
+| `Shell.tsx` | Sidebar (≥ 900px) / bottom nav (< 900px). Pages render inside `<main class="v2-main">`. Top level only: Dashboard, Library, Import, Progress, (Study dataset), Settings & data; the phone bar is Home, Library, Import, Progress, Settings. Review / Compare / Practice notes / Mika are opened from an attempt and show as a sub-item under Library while open (Library gets `.parent`, the sub-item `aria-current="page"`). Processing shows under Import only while the queue has clips (with a count) or while it is open; the phone bar shows the count on Import. |
 | `router.ts` | Hash routes: `Route`, `href`, `navigate`, `useRoute`, `parseRoute`. |
 | `auth.ts` | Supabase auth store: `useAuth`, `signIn`, `signUp`, `signOut`, `client()`. |
 | `consents.ts` | `useConsents`, `acceptConsents`, `setConsent` (table `consents`). |
@@ -51,7 +51,7 @@ export function Library() {
   const attempts = useAttempts()
   return (
     <>
-      <PageHeader title="Library" mobileTitle="My practice" actions={<PrivacyPill />} />
+      <PageHeader title="Library" mobileTitle="My practice" />
       {attempts.error && <ErrorAlert error={attempts.error} onRetry={attempts.refetch} />}
       {attempts.loading ? <SkeletonList label="Loading library" />
         : attempts.data?.length === 0 ? <EmptyState icon="review" title="No clips yet" action={…}>…</EmptyState>
@@ -274,7 +274,8 @@ No component fetches data. All copy is passed in.
 - **`ConfBadge`** `{ level: 'high'|'medium'|'low'|'none'; label? }` — `.conf` bars + word.
 - **`StatusPill`** `{ status: 'queued'|'processing'|'done'|'failed'|'cancelled'; label? }`.
 - **`PrivacyPill`** `{ children?; onStage?; style? }` — default text "Processed on this
-  device, not uploaded".
+  device, not uploaded". Use it only where the on-device decision or video is in view
+  (Import, Processing, the video stage); list pages rely on the one sidebar line.
 - **`EmptyState`** `{ icon: IconName; title; children?; action?: ReactNode; bare?; style? }`.
 - **`Alert`** `{ title?; children?; actions?: ReactNode; role?: 'alert' | 'status' }` and
   **`ErrorAlert`** `{ error: { message; recovery? }; onRetry? }` for a caught `ApiError`.

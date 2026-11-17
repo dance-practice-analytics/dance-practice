@@ -1,44 +1,106 @@
 // Frame of every signed-in screen (Sidebar.dc.html, BottomNav.dc.html).
-// Wide: 240px sidebar with all destinations. Under 900px: the page's own `.mhead`
-// (rendered by PageHeader) and the five-item bottom navigation.
+// Wide: 240px sidebar with the top-level destinations only. Under 900px: the page's
+// own `.mhead` (rendered by PageHeader) and the five-item bottom navigation.
+// Review, Compare, Practice notes and Mika belong to one attempt: they are opened from
+// the attempt (Library, Dashboard, Review header), and while one is open the sidebar
+// shows it as a sub-item under Library. Processing is the second half of Import: it
+// appears under Import only while clips are queued or being read (or while open).
 // The role shown is the real profiles.role; the Dancer/Researcher switch on the
 // canvas is a design prop, so here it is a label, not a control.
 
 import type { ReactNode } from 'react'
 import { signOut, useAuth } from './auth'
 import { Icon, Logo, type IconName } from './components/Icon'
-import { href, type Route, type RouteName } from './router'
+import { usePipeline } from './pipeline'
+import { href, useRoute, type Route, type RouteName } from './router'
 import { toggleTheme, useTheme } from './theme'
 
 interface NavItem {
   route: Route
   label: string
   icon: IconName
+  /** Other routes that light this item up as their parent (the item gets `.parent`, not aria-current). */
+  covers?: RouteName[]
   researcherOnly?: boolean
 }
 
+/** Screens of one attempt, shown as a "current attempt" sub-item under Library. */
+const ATTEMPT_SCREENS: Partial<Record<RouteName, { label: string; icon: IconName }>> = {
+  review: { label: 'Review', icon: 'review' },
+  compare: { label: 'Compare', icon: 'compare' },
+  notes: { label: 'Practice notes', icon: 'notes' },
+  chat: { label: 'Mika', icon: 'chat' },
+}
+const ATTEMPT_ROUTES = Object.keys(ATTEMPT_SCREENS) as RouteName[]
+
 const SIDE_ITEMS: NavItem[] = [
   { route: { name: 'dashboard' }, label: 'Dashboard', icon: 'home' },
-  { route: { name: 'library' }, label: 'Library', icon: 'library' },
-  { route: { name: 'import' }, label: 'Import', icon: 'import' },
-  { route: { name: 'processing' }, label: 'Processing', icon: 'processing' },
-  { route: { name: 'review' }, label: 'Review', icon: 'review' },
-  { route: { name: 'compare' }, label: 'Compare', icon: 'compare' },
+  { route: { name: 'library' }, label: 'Library', icon: 'library', covers: ATTEMPT_ROUTES },
+  { route: { name: 'import' }, label: 'Import', icon: 'import', covers: ['processing'] },
   { route: { name: 'progress' }, label: 'Progress', icon: 'progress' },
-  { route: { name: 'notes' }, label: 'Practice notes', icon: 'notes' },
-  { route: { name: 'chat' }, label: 'Mika', icon: 'chat' },
   { route: { name: 'dataset' }, label: 'Study dataset', icon: 'dataset', researcherOnly: true },
   { route: { name: 'settings' }, label: 'Settings & data', icon: 'settings' },
 ]
 
-// The phone has five slots; each one also lights up for the screens reached from it.
+// The phone has five slots, the same top level as the sidebar; each one also lights
+// up for the screens reached from it.
 const BOTTOM_ITEMS: (NavItem & { covers: RouteName[] })[] = [
-  { route: { name: 'dashboard' }, label: 'Home', icon: 'home', covers: ['dashboard', 'library', 'dataset'] },
+  { route: { name: 'dashboard' }, label: 'Home', icon: 'home', covers: ['dashboard', 'dataset'] },
+  { route: { name: 'library' }, label: 'Library', icon: 'library', covers: ['library', ...ATTEMPT_ROUTES] },
   { route: { name: 'import' }, label: 'Import', icon: 'import', covers: ['import', 'processing'] },
-  { route: { name: 'review' }, label: 'Review', icon: 'review', covers: ['review', 'compare', 'notes', 'chat'] },
   { route: { name: 'progress' }, label: 'Progress', icon: 'progress', covers: ['progress'] },
   { route: { name: 'settings' }, label: 'Settings', icon: 'settings', covers: ['settings'] },
 ]
+
+/** Clips waiting or being read in this tab. Own component: the queue updates on every frame step. */
+function useQueueCount(): number {
+  return usePipeline().items.filter((it) => it.status === 'queued' || it.status === 'processing').length
+}
+
+function QueueCount({ inline }: { inline?: boolean }) {
+  const n = useQueueCount()
+  if (n === 0) return null
+  return (
+    <span className={inline ? 'v2-navcount' : 'v2-navcount v2-navcount-dot'}>
+      {n}
+      <span className="v2-sr"> {n === 1 ? 'clip' : 'clips'} in the queue</span>
+    </span>
+  )
+}
+
+/** "Processing" under Import: only while the queue has work, or while it is the open screen. */
+function ProcessingSubItem({ active }: { active: RouteName }) {
+  const n = useQueueCount()
+  const on = active === 'processing'
+  if (n === 0 && !on) return null
+  return (
+    <ul className="v2-subnav">
+      <li>
+        <a href={href({ name: 'processing' })} className={on ? 'active' : undefined} aria-current={on ? 'page' : undefined}>
+          <Icon name="processing" />
+          Processing
+          {n > 0 && <QueueCount inline />}
+        </a>
+      </li>
+    </ul>
+  )
+}
+
+/** The open attempt screen under Library; links to the exact route so the ids are kept. */
+function AttemptSubItem({ route }: { route: Route }) {
+  const screen = ATTEMPT_SCREENS[route.name]
+  if (!screen) return null
+  return (
+    <ul className="v2-subnav" aria-label="Current attempt">
+      <li>
+        <a href={href(route)} className="active" aria-current="page">
+          <Icon name={screen.icon} />
+          <span className="v2-clip">{screen.label}</span>
+        </a>
+      </li>
+    </ul>
+  )
+}
 
 export interface ShellProps {
   /** The current route name, for `aria-current`. */
@@ -50,6 +112,8 @@ export interface ShellProps {
 export function Shell({ active, children }: ShellProps) {
   const { user, role, profile } = useAuth()
   const theme = useTheme()
+  // The full route (with ids) for the "current attempt" sub-item; `active` is its name.
+  const route = useRoute()
   const items = SIDE_ITEMS.filter((i) => role === 'researcher' || !i.researcherOnly)
 
   return (
@@ -69,12 +133,20 @@ export function Shell({ active, children }: ShellProps) {
         <ul className="sidenav" style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
           {items.map((it) => {
             const on = it.route.name === active
+            // A parent of the open screen is marked visually; aria-current stays on the sub-item.
+            const parent = !on && !!it.covers?.includes(active)
             return (
               <li key={it.route.name}>
-                <a href={href(it.route)} className={on ? 'active' : undefined} aria-current={on ? 'page' : undefined}>
+                <a
+                  href={href(it.route)}
+                  className={on ? 'active' : parent ? 'parent' : undefined}
+                  aria-current={on ? 'page' : undefined}
+                >
                   <Icon name={it.icon} />
                   {it.label}
                 </a>
+                {it.route.name === 'library' && <AttemptSubItem route={route} />}
+                {it.route.name === 'import' && <ProcessingSubItem active={active} />}
               </li>
             )
           })}
@@ -82,15 +154,10 @@ export function Shell({ active, children }: ShellProps) {
 
         <div style={{ flex: 1 }} />
 
-        <div className="well" style={{ padding: 12, display: 'flex', flexDirection: 'column', gap: 8 }}>
-          <span className="privacy" style={{ background: 'var(--surface)', alignSelf: 'flex-start' }}>
-            <Icon name="device" />
-            On-device mode
-          </span>
-          <p className="t-caption">
-            {role === 'researcher' ? 'Clips stay on this computer' : 'Your study clips stay on this device'}
-          </p>
-        </div>
+        <p className="t-caption" style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '0 8px' }}>
+          <Icon name="device" size={14} style={{ flex: 'none' }} />
+          Clips stay on this device
+        </p>
 
         <div style={{ display: 'flex', flexDirection: 'column', gap: 8, padding: '0 4px' }}>
           <div style={{ display: 'flex', flexDirection: 'column', minWidth: 0 }}>
@@ -124,10 +191,13 @@ export function Shell({ active, children }: ShellProps) {
         <nav className="bnav" aria-label="Primary">
           {BOTTOM_ITEMS.map((it) => {
             const on = it.covers.includes(active)
+            // 'page' only for the exact screen; 'true' when the slot is the open screen's parent.
+            const current = it.route.name === active ? 'page' : on ? 'true' : undefined
             return (
-              <a key={it.route.name} href={href(it.route)} className={on ? 'active' : undefined} aria-current={on ? 'page' : undefined}>
+              <a key={it.route.name} href={href(it.route)} className={on ? 'active' : undefined} aria-current={current}>
                 <span className="ic">
                   <Icon name={it.icon} />
+                  {it.route.name === 'import' && <QueueCount />}
                 </span>
                 {it.label}
               </a>

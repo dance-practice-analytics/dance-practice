@@ -66,6 +66,7 @@ describe('metricTiles', () => {
     expect([trunk.value, trunk.unit, trunk.confidenceLabel]).toEqual(['4.9', '°', 'Clear view'])
     expect(trunk.delta).toBe('Median on Nov 11 is 1.9° less lean than on Oct 28')
     expect(trunk.note).toBeNull()
+    expect(trunk.single).toBe(false)
     expect(t.caption).toBe('Session medians: Oct 28 → Nov 4 → Nov 11 (1 of 2 attempts processed so far). Compared with your own first session only.')
     expect(JSON.stringify(t)).not.toMatch(/better|worse|improv|good|bad|score/i)
   })
@@ -95,7 +96,9 @@ describe('metricTiles', () => {
     const tile = metricTiles(pickFocus([s], a)!, NOW).tiles[0]
     expect([tile.value, tile.low, tile.confidenceLabel]).toEqual(['5.0', true, 'Mixed view'])
     expect(tile.note).toBe('1 attempt on Nov 4 had low confidence and is not in the median.')
-    expect(tile.delta).toBe('Needs two sessions with a value to show change')
+    expect(tile.delta).toBe('Record another session to see change.')
+    expect(tile.single).toBe(true)
+    expect(tile.about).toBe('How far your torso tips away from straight up, from the hips to the shoulders.')
   })
 })
 

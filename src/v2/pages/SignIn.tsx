@@ -25,34 +25,66 @@ const POINTS: { icon: IconName; text: string }[] = [
  * illustration, not pose data, so it lives here and is hidden from assistive tech;
  * the real VideoStage only ever draws tracked landmarks.
  */
+// A relevé in passé seen from the front: arms in high fifth, the working foot at the
+// supporting knee, the trunk (what the app measures) in the accent colour and the
+// plumb line through the supporting foot. Joints follow the MediaPipe topology.
+const J = {
+  head: [100, 40], neck: [100, 60],
+  ls: [82, 63], rs: [118, 63], le: [65, 36], re: [135, 36], lw: [85, 11], rw: [115, 11],
+  lh: [90, 128], rh: [110, 128], mh: [100, 128],
+  lk: [95, 186], la: [97, 232], lt: [98, 246],
+  rk: [148, 160], ra: [103, 181], rt: [96, 187],
+} as const
+const pts = (...keys: (keyof typeof J)[]) => keys.map((k) => J[k].join(',')).join(' ')
+// Arms in high fifth are rounded: one curve from shoulder to wrist passing the elbow.
+const ARM_L = 'M82,63 C58,52 60,20 85,11'
+const ARM_R = 'M118,63 C142,52 140,20 115,11'
+const DOTS: (keyof typeof J)[] = ['ls', 'rs', 'le', 're', 'lw', 'rw', 'lh', 'rh', 'lk', 'la', 'lt', 'rk', 'ra']
+
 function StageArt() {
   const bone = '#F3F1EC'
   return (
     <div
       aria-hidden="true"
-      style={{ position: 'relative', width: '100%', aspectRatio: '16 / 9', background: '#1E1D1B', borderRadius: 12, overflow: 'hidden' }}
+      style={{ position: 'relative', width: '100%', aspectRatio: '4 / 3', background: 'linear-gradient(#1E1D1B, #252320 76%)', borderRadius: 12, overflow: 'hidden' }}
     >
+      <style>{`
+        @media (prefers-reduced-motion: no-preference) {
+          .stage-art-figure { animation: stage-art-sway 6s ease-in-out infinite; transform-box: view-box; transform-origin: 98px 246px; }
+        }
+        @keyframes stage-art-sway { 0%, 100% { transform: rotate(-0.8deg); } 50% { transform: rotate(1.2deg); } }
+      `}</style>
       <div style={{ position: 'absolute', left: 0, right: 0, bottom: 0, height: '24%', background: '#2A2825' }} />
-      <div style={{ position: 'absolute', left: 0, right: 0, top: '47%', height: 3, background: '#34312D' }} />
-      <svg viewBox="0 0 200 300" style={{ position: 'absolute', top: '5%', height: '90%', left: '50%', transform: 'translateX(-50%)' }}>
-        <line x1="101" y1="262" x2="101" y2="10" stroke="rgba(243,241,236,.38)" strokeWidth="1" strokeDasharray="3 4" />
-        <g transform="rotate(2.4 101 254)" fill="none" strokeLinecap="round" strokeLinejoin="round" stroke={bone} strokeWidth="2.25">
-          <circle cx="100" cy="32" r="12" />
-          <polyline points="84,62 116,62" />
-          <polyline points="84,62 70,92 86,118" />
-          <polyline points="116,62 130,92 114,118" />
-          <polyline points="100,54 100,140" stroke="#A9BCF2" strokeWidth="3.5" />
-          <polyline points="90,140 110,140" />
-          <polyline points="96,140 99,198 101,254" />
-          <polyline points="101,254 104,272" />
-          <polyline points="106,140 140,178 104,196" />
-          <g fill={bone} stroke="none">
-            {[
-              [100, 54], [84, 62], [116, 62], [70, 92], [130, 92], [86, 118], [114, 118],
-              [90, 140], [110, 140], [140, 178], [104, 196], [101, 254], [104, 272], [99, 198],
-            ].map(([cx, cy]) => (
-              <circle key={`${cx}-${cy}`} cx={cx} cy={cy} r="3.5" />
+      <div style={{ position: 'absolute', left: 0, right: 0, top: '76%', height: 1, background: '#3A3732' }} />
+      <svg viewBox="0 0 200 300" style={{ position: 'absolute', top: '5%', height: '90%', left: '50%', transform: 'translateX(-50%)', overflow: 'visible' }}>
+        <ellipse cx="98" cy="248" rx="18" ry="3" fill="#000" opacity=".35" />
+        <line x1="98" y1="248" x2="98" y2="6" stroke="rgba(243,241,236,.3)" strokeWidth="1" strokeDasharray="2 4" />
+        <g className="stage-art-figure" style={{ filter: 'drop-shadow(0 0 5px rgba(243,241,236,.16))' }}>
+          {/* A faint body under the skeleton, so it reads as a dancer being tracked. */}
+          <g fill="none" stroke={bone} strokeOpacity=".09" strokeLinecap="round" strokeLinejoin="round" strokeWidth="13">
+            <path d={ARM_L} />
+            <path d={ARM_R} />
+            <polyline points={pts('lh', 'lk', 'la', 'lt')} />
+            <polyline points={pts('rh', 'rk', 'ra', 'rt')} />
+            <polygon points={pts('ls', 'rs', 'rh', 'lh')} fill={bone} fillOpacity=".09" strokeWidth="9" />
+            <circle cx={J.head[0]} cy={J.head[1]} r="11" fill={bone} fillOpacity=".09" strokeWidth="4" />
+          </g>
+          <g fill="none" strokeLinecap="round" strokeLinejoin="round" stroke={bone} strokeWidth="2.4">
+            <circle cx={J.head[0]} cy={J.head[1]} r="10.5" />
+            <polyline points={pts('ls', 'rs')} />
+            <path d={ARM_L} />
+            <path d={ARM_R} />
+            <polyline points={pts('lh', 'rh')} />
+            <polyline points={pts('lh', 'lk', 'la', 'lt')} />
+            <polyline points={pts('rh', 'rk', 'ra', 'rt')} />
+            <polyline points={pts('mh', 'neck')} stroke="#A9BCF2" strokeWidth="3.6" />
+          </g>
+          <g fill={bone}>
+            {DOTS.map((k) => (
+              <circle key={k} cx={J[k][0]} cy={J[k][1]} r="3" />
             ))}
+            <circle cx={J.mh[0]} cy={J.mh[1]} r="3.4" fill="#A9BCF2" />
+            <circle cx={J.neck[0]} cy={J.neck[1]} r="3.4" fill="#A9BCF2" />
           </g>
         </g>
       </svg>
@@ -264,7 +296,6 @@ export function SignIn() {
       <section style={{ flex: '1 1 520px', minWidth: 0, display: 'flex', flexDirection: 'column', padding: '32px 24px' }}>
         {brand}
         <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '48px 0' }}>{form}</div>
-        <p className="t-caption">KSU CS 4850 capstone</p>
       </section>
 
       <aside style={{ flex: '1 1 520px', minWidth: 0, padding: 24, display: 'flex' }}>
@@ -282,7 +313,7 @@ export function SignIn() {
             minHeight: 560,
           }}
         >
-          <div style={{ maxWidth: 520, width: '100%', alignSelf: 'center' }}>
+          <div style={{ maxWidth: 560, width: '100%', alignSelf: 'center' }}>
             <StageArt />
           </div>
           <div style={{ display: 'flex', flexDirection: 'column', gap: 16, maxWidth: 480 }}>

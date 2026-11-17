@@ -81,6 +81,8 @@ Done:
   - Known issues: `planFrames` in `src/pose/frames.ts` seeks to mid-frame and Chrome presents the next frame about 1 time in 30; phone Processing layout fix unverified with a full queue; `clip_notes` not shown in the UI or sent to the notes function.
   - PWA files exist (`public/sw.js`, manifest, icons, `.github/workflows/deploy-pages.yml`, `docs/pwa.md`); nothing deployed. Capacitor/Android not started (needs Android Studio + JDK 21).
   - The test account holds subjects S01/S02 with six processed synthetic clips.
+  - Published on Vercel (2026-11-16): https://dance-practice-teal.vercel.app. Not connected to GitHub: build locally (`npm run build`, no BASE_PATH), drop `dist/clips`, then `npx vercel deploy <folder> --prod` from a folder holding the `.vercel` link. The domain is in `supabase/config.toml` (`site_url`, redirect URLs).
+  - Readability pass (2026-11-16): light theme by default; side nav cut to Dashboard/Library/Import/Progress/Settings (attempt screens appear under Library); pose thumbnails (`AttemptThumb`); Dashboard greeting + optional display name; data-derived "Next step" card (`library/nextStep.ts`); first-run Welcome with "Try with a sample session" (`src/v2/sample*.ts`, synthetic, no video, recognised by its title/label); `knee_not_bent` shown as a compact gap (`CompactGap`); Progress "Session n" labels and date presets; relink card on the stage; A/B chips in Compare; text tokens raised to AA.
 
 Build order (prototype demo first):
 1. Supabase client (`@supabase/supabase-js`), email auth, replace the mock API in `src/api/client.ts` behind the same types.

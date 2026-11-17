@@ -6,13 +6,13 @@
 
 import { useMemo, useState } from 'react'
 import type { CameraView, MovementType } from '../../data/schema'
-import { EmptyState, ErrorAlert, PageHeader, Skeleton } from '../components'
+import { CompactGap, EmptyState, ErrorAlert, PageHeader, Skeleton } from '../components'
 import { latestProcessed, useLibrary } from '../data'
-import { METRICS, MOVEMENT_LABELS, VIEW_LABELS, type MetricKey } from '../format'
+import { compactGapReason, isCompactGap, METRICS, MOVEMENT_LABELS, VIEW_LABELS, type MetricKey } from '../format'
 import { href } from '../router'
 import { useIsNarrow } from '../useIsNarrow'
 import { ProgressChart, ProgressLegend } from './progress/ProgressChart'
-import { buildProgress, defaultMovement, tableRows, type ProgressView } from './progress/model'
+import { buildProgress, DATE_RANGES, defaultMovement, tableRows, type DateRange, type MetricPanel, type ProgressView } from './progress/model'
 import './progress/progress.css'
 
 const MOVEMENTS: MovementType[] = ['releve_balance', 'pirouette']
@@ -22,6 +22,8 @@ export function Progress() {
   const narrow = useIsNarrow()
   const [pickedMovement, setMovement] = useState<MovementType | null>(null)
   const [cameraView, setCameraView] = useState<CameraView | undefined>(undefined)
+  const [range, setRange] = useState<DateRange>('all')
+  // Days of the 'Custom…' range; kept while another range is picked.
   const [from, setFrom] = useState('')
   const [to, setTo] = useState('')
   const [tableMetric, setTableMetric] = useState<MetricKey | null>(null)
@@ -29,8 +31,8 @@ export function Progress() {
   const data = library.data
   const movement = pickedMovement ?? defaultMovement(data?.sessions ?? [])
   const view = useMemo(
-    () => (data ? buildProgress(data.sessions, data.attempts, { movement, cameraView, from, to }) : null),
-    [data, movement, cameraView, from, to],
+    () => (data ? buildProgress(data.sessions, data.attempts, { movement, cameraView, range, from, to }) : null),
+    [data, movement, cameraView, range, from, to],
   )
 
   const pickMovement = (m: MovementType) => {
@@ -75,6 +77,8 @@ export function Progress() {
       ) : view && data ? (
         <ProgressBody
           view={view}
+          range={range}
+          setRange={setRange}
           from={from}
           to={to}
           setFrom={setFrom}
@@ -94,6 +98,8 @@ export function Progress() {
 
 interface BodyProps {
   view: ProgressView
+  range: DateRange
+  setRange(r: DateRange): void
   from: string
   to: string
   setFrom(v: string): void
@@ -104,13 +110,11 @@ interface BodyProps {
   reviewHref(sessionId: string): string
 }
 
-function ProgressBody({ view, from, to, setFrom, setTo, setCameraView, tableMetric, setTableMetric, reviewHref }: BodyProps) {
+function ProgressBody(props: BodyProps) {
+  const { view, range, setRange, from, to, setFrom, setTo, setCameraView, tableMetric, setTableMetric, reviewHref } = props
   const movementName = MOVEMENT_LABELS[view.movement]
-  const filtered = Boolean(from || to)
-  const clearDates = () => {
-    setFrom('')
-    setTo('')
-  }
+  const filtered = range !== 'all'
+  const clearDates = () => setRange('all')
 
   // No session of this movement at all: nothing to filter, one next step.
   if (view.movementSessions === 0) {
@@ -156,18 +160,36 @@ function ProgressBody({ view, from, to, setFrom, setTo, setCameraView, tableMetr
             </div>
           </div>
         )}
-        <label className="field">
-          <span className="field-label">From</span>
-          <input className="input input-sm" type="date" value={from} max={to || undefined} onChange={(e) => setFrom(e.target.value)} />
-        </label>
-        <label className="field">
-          <span className="field-label">To</span>
-          <input className="input input-sm" type="date" value={to} min={from || undefined} onChange={(e) => setTo(e.target.value)} />
-        </label>
-        {filtered && (
-          <button className="btn btn-ghost btn-sm" type="button" onClick={clearDates} style={{ marginBottom: 2 }}>
-            Clear dates
-          </button>
+        <div className="field" style={{ flex: '0 1 auto' }}>
+          <span className="field-label" id="prog-range-label">
+            Dates
+          </span>
+          <div className="seg" role="radiogroup" aria-labelledby="prog-range-label">
+            {DATE_RANGES.map((r) => (
+              <button
+                key={r.key}
+                type="button"
+                role="radio"
+                aria-checked={r.key === range}
+                className={r.key === range ? 'on' : undefined}
+                onClick={() => setRange(r.key)}
+              >
+                {r.label}
+              </button>
+            ))}
+          </div>
+        </div>
+        {range === 'custom' && (
+          <>
+            <label className="field">
+              <span className="field-label">From</span>
+              <input className="input input-sm" type="date" value={from} max={to || undefined} onChange={(e) => setFrom(e.target.value)} />
+            </label>
+            <label className="field">
+              <span className="field-label">To</span>
+              <input className="input input-sm" type="date" value={to} min={from || undefined} onChange={(e) => setTo(e.target.value)} />
+            </label>
+          </>
         )}
       </div>
 
@@ -178,7 +200,7 @@ function ProgressBody({ view, from, to, setFrom, setTo, setCameraView, tableMetr
           action={
             filtered ? (
               <button className="btn btn-ghost" type="button" onClick={clearDates}>
-                Clear dates
+                Show all dates
               </button>
             ) : undefined
           }
@@ -211,7 +233,7 @@ function ProgressBody({ view, from, to, setFrom, setTo, setCameraView, tableMetr
           </div>
 
           <div className="v2-prog-grid">
-            {view.panels.map((panel) => (
+            {view.panels.filter((p) => !isCompactPanel(p)).map((panel) => (
               <figure key={panel.key} className="card v2-prog-card">
                 <figcaption style={{ display: 'flex', justifyContent: 'space-between', gap: 8, alignItems: 'center' }}>
                   <span className="t-small" style={{ fontWeight: 600 }}>
@@ -222,6 +244,14 @@ function ProgressBody({ view, from, to, setFrom, setTo, setCameraView, tableMetr
                 <ProgressChart panel={panel} sessions={view.sessions} />
                 <p className="t-small muted">{panel.summary}</p>
               </figure>
+            ))}
+            {view.panels.filter(isCompactPanel).map((panel) => (
+              <CompactGap
+                key={panel.key}
+                name={panel.series.info.label}
+                reason={panel.series.points[0]?.gap?.nullReason}
+                detail={compactDetail(panel)}
+              />
             ))}
           </div>
 
@@ -263,13 +293,15 @@ function ProgressBody({ view, from, to, setFrom, setTo, setCameraView, tableMetr
                     </tr>
                   </thead>
                   <tbody>
-                    {tableRows(tablePanel).map((row) => (
+                    {tableRows(tablePanel, view.names).map((row) => (
                       <tr key={row.sessionId}>
                         <th scope="row" style={{ fontWeight: 500, padding: 12, borderBottom: '1px solid var(--line)', color: 'var(--text)', fontSize: 13, whiteSpace: 'normal' }}>
                           <a href={reviewHref(row.sessionId)} style={{ whiteSpace: 'nowrap' }}>
-                            {row.dateLabel}
+                            {row.name}
                           </a>
-                          {row.title && <span className="t-caption" style={{ display: 'block' }}>{row.title}</span>}
+                          <span className="t-caption" style={{ display: 'block' }}>
+                            {row.title ? `${row.dateLabel} · ${row.title}` : row.dateLabel}
+                          </span>
                         </th>
                         <td>
                           <span className="v2-prog-values num">
@@ -326,6 +358,20 @@ function ProgressBody({ view, from, to, setFrom, setTo, setCameraView, tableMetr
       )}
     </>
   )
+}
+
+/**
+ * Every attempt shown lacks this value only because the clip had nothing to measure (e.g.
+ * no plié for "Knee over toes"): a slim row below the charts instead of an empty chart.
+ */
+function isCompactPanel(panel: MetricPanel): boolean {
+  const { points, state } = panel.series
+  return state === 'no_data' && points.length > 0 && points.every((p) => p.value === null && isCompactGap(p.gap?.nullReason))
+}
+
+function compactDetail(panel: MetricPanel): string | undefined {
+  const many = panel.series.points.length > 1
+  return many && compactGapReason(panel.series.points[0]?.gap?.nullReason) === 'knee_not_bent' ? 'no plié in any clip' : undefined
 }
 
 /** The distinct reasons behind the dashes and uncounted values of one table row. */

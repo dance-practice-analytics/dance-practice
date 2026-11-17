@@ -3,7 +3,7 @@ import { renderToStaticMarkup } from 'react-dom/server'
 import { describe, expect, it } from 'vitest'
 import { attempt, session } from '../notes/fixtures'
 import { ProgressChart } from './ProgressChart'
-import { buildProgress, CHART, chartGeometry, defaultMovement, niceCeil, tableRows } from './model'
+import { buildProgress, CHART, chartGeometry, dateBounds, defaultMovement, niceCeil, sessionNames, tableRows } from './model'
 
 const NOW = new Date('2026-11-15T12:00:00')
 
@@ -54,21 +54,46 @@ describe('buildProgress', () => {
     expect(view.panels.map((p) => p.key)).not.toContain('turn_count')
   })
 
+  it('numbers the sessions of the movement in time order, whatever the filters', () => {
+    // The front-view session keeps its number although it is not on the side-view chart.
+    expect([...view.names]).toEqual([
+      ['s1', 'Session 1'],
+      ['s2', 'Session 2'],
+      ['s4', 'Session 3'],
+      ['s3', 'Session 4'],
+    ])
+    expect(view.sessions.map((s) => `${s.name} ${s.dateLabel}`)).toEqual(['Session 1 Oct 28', 'Session 2 Nov 4', 'Session 4 Nov 11'])
+    expect(sessionNames(sessions, attempts, 'pirouette')).toEqual(new Map([['s5', 'Session 1']]))
+  })
+
+  it('tells apart sessions of the same day by name', () => {
+    const am = session('d1', '2026-11-15')
+    const pm = { ...session('d2', '2026-11-15'), created_at: '2026-11-15T20:00:00.000Z' }
+    const same = buildProgress([pm, am], [attempt('x1', am, 1, trunk(6)), attempt('x2', pm, 1, trunk(6.4))], { movement: 'releve_balance' }, NOW)
+    const p = same.panels.find((q) => q.key === 'trunk_inclination_deg')!
+    expect(same.sessions.map((s) => [s.name, s.dateLabel])).toEqual([
+      ['Session 1', 'Nov 15'],
+      ['Session 2', 'Nov 15'],
+    ])
+    expect(p.summary).toBe('Medians 6.0° → 6.4°. Session 2 is 0.4° more lean than Session 1.')
+    expect(tableRows(p, same.names, NOW).map((r) => r.name)).toEqual(['Session 1', 'Session 2'])
+  })
+
   it('lists the sessions it leaves out with the reason, except other movements', () => {
-    expect(view.excluded).toEqual([{ sessionId: 's4', what: 'Nov 5 · Front view', reason: 'Not shown: filmed from a different camera view' }])
+    expect(view.excluded).toEqual([{ sessionId: 's4', what: 'Session 3 · Nov 5 · Front view', reason: 'Not shown: filmed from a different camera view' }])
   })
 
   it('marks a partly processed session and says how much of it is processed', () => {
-    expect(view.sessions[2]).toMatchObject({ label: 'Nov 11 · partial', partial: true, attempts: 3, processed: 2 })
-    expect(view.sessionsNote).toBe('3 sessions · 10 attempts · Nov 11 has 2 of 3 processed')
+    expect(view.sessions[2]).toMatchObject({ name: 'Session 4', dateLabel: 'Nov 11', partial: true, attempts: 3, processed: 2 })
+    expect(view.sessionsNote).toBe('3 sessions · 10 attempts · Session 4 has 2 of 3 processed')
   })
 
-  it('words the change with the insights sentence and readable dates', () => {
+  it('words the change with the insights numbers and session names', () => {
     expect(panel.series.state).toBe('ready')
-    expect(panel.summary).toBe('Medians 6.8° → 5.8° → 4.9°. Median on Nov 11 is 1.9° less lean than on Oct 28.')
+    expect(panel.summary).toBe('Medians 6.8° → 5.8° → 4.9°. Session 4 is 1.9° less lean than Session 1.')
     expect(panel.phaseLabel).toBe('Hold')
     expect(panel.aria).toContain('Torso lean, Hold.')
-    expect(panel.aria).toContain('Oct 28: 6.8°')
+    expect(panel.aria).toContain('Session 1 (Oct 28): 6.8°')
     expect(panel.aria).toContain('1 low-confidence value not counted in the medians')
     expect(panel.aria).toContain('2 attempts without a value')
   })
@@ -77,11 +102,20 @@ describe('buildProgress', () => {
     const f = buildProgress(sessions, attempts, { movement: 'releve_balance', cameraView: 'front' }, NOW)
     expect(f.sessions.map((s) => s.sessionId)).toEqual(['s4'])
     expect(f.panels[0].series.state).toBe('needs_two_sessions')
-    expect(f.panels[0].summary).toBe('Median 9.0° on Nov 5. Needs two sessions with a value to show change.')
+    expect(f.panels[0].summary).toBe('Median 9.0° in Session 3 (Nov 5). Needs two sessions with a value to show change.')
 
     const d = buildProgress(sessions, attempts, { movement: 'releve_balance', from: '2026-11-01' }, NOW)
     expect(d.sessions.map((s) => s.sessionId)).toEqual(['s2', 's3'])
     expect(d.excluded.map((e) => e.reason)).toContain('Not shown: outside the selected dates')
+
+    const week = buildProgress(sessions, attempts, { movement: 'releve_balance', range: 'last7' }, NOW)
+    expect(week.sessions.map((s) => s.sessionId)).toEqual(['s3'])
+    const month = buildProgress(sessions, attempts, { movement: 'releve_balance', range: 'last30', from: '2026-11-10' }, NOW)
+    expect(month.sessions.map((s) => s.sessionId)).toEqual(['s1', 's2', 's3'])
+    const all = buildProgress(sessions, attempts, { movement: 'releve_balance', range: 'all', from: '2026-11-10' }, NOW)
+    expect(all.sessions).toHaveLength(3)
+    const custom = buildProgress(sessions, attempts, { movement: 'releve_balance', range: 'custom', to: '2026-11-04' }, NOW)
+    expect(custom.sessions.map((s) => s.sessionId)).toEqual(['s1', 's2'])
   })
 
   it('explains a metric that has no value in any attempt', () => {
@@ -97,6 +131,19 @@ describe('buildProgress', () => {
     expect(defaultMovement(sessions)).toBe('releve_balance')
     expect(defaultMovement([pir, s1])).toBe('pirouette')
     expect(defaultMovement([])).toBe('releve_balance')
+  })
+})
+
+describe('dateBounds', () => {
+  it('ends the fixed ranges today and counts today as one of the days', () => {
+    expect(dateBounds('all', NOW)).toEqual({})
+    expect(dateBounds('last7', NOW)).toEqual({ from: '2026-11-09', to: '2026-11-15' })
+    expect(dateBounds('last30', NOW)).toEqual({ from: '2026-10-17', to: '2026-11-15' })
+  })
+
+  it('uses the picked days only for a custom range, and an empty day as open', () => {
+    expect(dateBounds('custom', NOW, { from: '2026-11-01', to: '' })).toEqual({ from: '2026-11-01', to: undefined })
+    expect(dateBounds('last7', NOW, { from: '2026-01-01' })).toEqual({ from: '2026-11-09', to: '2026-11-15' })
   })
 })
 
@@ -157,7 +204,8 @@ describe('chartGeometry', () => {
 
 describe('tableRows', () => {
   it('lists every attempt with the reason for a dash or an uncounted value', () => {
-    const rows = tableRows(panel, NOW)
+    const rows = tableRows(panel, view.names, NOW)
+    expect(rows.map((r) => r.name)).toEqual(['Session 1', 'Session 2', 'Session 4'])
     expect(rows.map((r) => r.dateLabel)).toEqual(['Oct 28', 'Nov 4', 'Nov 11'])
     expect(rows[1].values.map((v) => v.text)).toEqual(['6.0°', '4.2°', '—', '5.6°'])
     expect(rows[1].values[1].note).toBe('Low confidence, not counted')
@@ -186,7 +234,8 @@ describe('ProgressChart', () => {
 
   it('uses tokens only and labels the sessions', () => {
     expect(html).not.toMatch(/#[0-9a-fA-F]{3,6}\b/)
-    expect(html).toContain('Nov 11 · partial')
+    expect(html).toContain('>Session 4<')
+    expect(html).toContain('>Nov 11 · partial<')
     expect(html).toContain('>10°<')
   })
 })

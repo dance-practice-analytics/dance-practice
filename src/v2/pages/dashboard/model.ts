@@ -6,16 +6,19 @@
 import type { SessionSummary } from '../../../data/repo'
 import type { MovementType } from '../../../data/schema'
 import type { FeedbackNote } from '../../../feedback/client'
-import { NEEDS_TWO_SESSIONS_TEXT, dashboardSummary, localDay } from '../../../insights'
+import { dashboardSummary, localDay } from '../../../insights'
 import type { DashboardSummary } from '../../../insights'
 import type { AttemptView } from '../../data'
 import { METRICS, MOVEMENT_LABELS, formatDate, formatDateTime, formatMetric, metricsFor, readMetrics, type MetricKey } from '../../format'
 import type { PipelineItem } from '../../pipeline'
 import {
+  ONE_SESSION_HINT,
   PERSONAL,
   TILE_LABEL,
   buildTrend,
   countKinds,
+  firstSentence,
+  hasSingleValue,
   metricRows,
   plural,
   prettyDates,
@@ -123,6 +126,10 @@ export interface MetricTile {
   delta: string | null
   /** Hatched line: why there is no value, or what is left out of the median. */
   note: string | null
+  /** Fewer than two sessions have a value: the card shows the value alone, no mini chart. */
+  single: boolean
+  /** One plain line on what the measurement is (first sentence of its description). */
+  about: string
   trend: Trend
 }
 
@@ -145,6 +152,7 @@ export function metricTiles(focus: Focus, now: Date = new Date()): MetricTiles {
     const lowCount = source?.points.filter((p) => p.lowConfidence).length ?? 0
     const counted = source?.points.filter((p) => p.counted) ?? []
     const none = median === null
+    const single = hasSingleValue(trend)
     const confidence: TileConfidence = none ? 'none' : lowCount > 0 ? 'low' : counted.some((p) => p.confidence === 'medium') ? 'medium' : 'high'
     const note = none
       ? (trend.reason ?? 'No measurements yet.')
@@ -162,8 +170,10 @@ export function metricTiles(focus: Focus, now: Date = new Date()): MetricTiles {
       low: !none && lowCount > 0,
       confidence,
       confidenceLabel: { high: 'Clear view', medium: 'Partly hidden', low: 'Mixed view', none: 'Not seen' }[confidence],
-      delta: none ? null : trend.series.state === 'ready' ? prettyDates(trend.series.change.text, now) : NEEDS_TWO_SESSIONS_TEXT,
+      delta: none ? null : single ? ONE_SESSION_HINT : prettyDates(trend.series.change.text, now),
       note,
+      single,
+      about: firstSentence(def.description),
       trend,
     }
   })

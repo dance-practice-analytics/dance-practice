@@ -13,7 +13,7 @@ import { compareAttempts, type MetricComparison } from '../../insights'
 import type { MetricKey, PhaseSpan } from '../../metrics/types'
 import type { PoseSeries } from '../../pose/types'
 import { useClip } from '../clips'
-import { Alert, EmptyState, ErrorAlert, Icon, MetricCard, metricCardProps, PageHeader, SkeletonWorkspace } from '../components'
+import { Alert, AttemptThumb, CompactGap, EmptyState, ErrorAlert, Icon, MetricCard, metricCardProps, PageHeader, SkeletonWorkspace } from '../components'
 import { latestProcessed, useAttempt, useAttempts, type AttemptView } from '../data'
 import {
   differenceText,
@@ -21,6 +21,7 @@ import {
   formatNumber,
   formatSeconds,
   formatTimecode,
+  isCompactGap,
   MOVEMENT_LABELS,
   readMetrics,
   STATUS_LABELS,
@@ -31,7 +32,7 @@ import { useIsNarrow } from '../useIsNarrow'
 import { useViewMode, ViewModeSwitch } from '../viewMode'
 import { createClock, type Clock } from './review/clock'
 import { attemptName, comparisonInput, describeAttempt, neighbourInSession, sessionName } from './review/labels'
-import { RelinkNote } from './review/Relink'
+import { RelinkOverlay } from './review/Relink'
 import './review/review.css'
 import { SyncedStage } from './review/SyncedStage'
 import { buildTrace, countBands, niceMax, seriesEnd, traceMax, trackingBands, trunkAt, visibilityAt } from './review/timeline'
@@ -241,7 +242,7 @@ function Workspace({ attempt, series, attempts }: WorkspaceProps) {
               title={a.clip_name ?? undefined}
               style={narrow ? { width: 96, minWidth: 96 } : { width: 132 }}
             >
-              <div className={a.status === 'done' ? 'thumb' : 'thumb hatch'} style={{ height: narrow ? 44 : 56 }} />
+              <AttemptThumb attempt={a} className={a.status === 'done' ? 'thumb' : 'thumb hatch'} style={{ height: narrow ? 44 : 56 }} />
               <span className="t-small" style={{ fontWeight: 600 }}>
                 {narrow ? `#${a.number}` : attemptName(a)}
               </span>
@@ -253,7 +254,10 @@ function Workspace({ attempt, series, attempts }: WorkspaceProps) {
     </section>
   )
 
-  const cards = readings.map((r) => {
+  // A metric with nothing to measure in this clip (no plié) is a slim row after the cards.
+  const compact = (r: (typeof readings)[number]) => r.value === null && isCompactGap(r.reason)
+  const cards = [...readings.filter((r) => !compact(r)), ...readings.filter(compact)].map((r) => {
+    if (compact(r)) return <CompactGap key={r.key} name={r.def.label} reason={r.reason} />
     const row = rows.get(r.key)
     // A difference only where both values can be compared; otherwise the reason, in words.
     const difference = row?.comparable ? differenceText(r.key, row.b.value, row.a.value, otherName) : null
@@ -338,17 +342,15 @@ function Workspace({ attempt, series, attempts }: WorkspaceProps) {
       ariaLabel={`Tracked pose skeleton of ${attemptName(attempt).toLowerCase()}${src ? ', drawn over the video' : ', shown without the video'}`}
       onVideoError={() => setVideoFailed(true)}
       style={{ maxHeight: narrow ? '56vh' : 'min(64vh, 640px)' }}
-    />
+    >
+      {!clip && !videoFailed && <RelinkOverlay missing={[{ attempt, name: 'this attempt' }]} attempts={attempts} describe={describeAttempt} />}
+    </SyncedStage>
   )
 
-  const relink = videoFailed ? (
+  const relink = videoFailed && (
     <Alert title="This browser can’t play that video file." role="status">
       The skeleton is shown on its own. Export the clip as MP4 (H.264) to see it here.
     </Alert>
-  ) : (
-    !clip && (
-      <RelinkNote missing={[{ attempt, name: 'this attempt' }]} attempts={attempts} describe={describeAttempt} />
-    )
   )
 
   const transport = (

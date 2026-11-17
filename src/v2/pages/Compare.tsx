@@ -12,9 +12,9 @@ import { compareAttempts, type AttemptComparison, type MetricComparison } from '
 import type { PhaseSpan } from '../../metrics/types'
 import type { PoseSeries } from '../../pose/types'
 import { useClip } from '../clips'
-import { ConfBadge, EmptyState, ErrorAlert, NoteBox, PageHeader, SkeletonWorkspace } from '../components'
+import { CompactGap, ConfBadge, EmptyState, ErrorAlert, NoteBox, PageHeader, SkeletonWorkspace } from '../components'
 import { useAttempt, useAttempts, type AttemptView } from '../data'
-import { formatTimecode, MOVEMENT_LABELS, PHASE_LABELS, readMetric, VIEW_LABELS } from '../format'
+import { compactGapReason, formatTimecode, isCompactGap, MOVEMENT_LABELS, PHASE_LABELS, readMetric, VIEW_LABELS } from '../format'
 import { href, navigate, useRoute } from '../router'
 import { useIsNarrow } from '../useIsNarrow'
 import { useViewMode, ViewModeSwitch } from '../viewMode'
@@ -22,7 +22,7 @@ import { alignmentText, buildTimeMap, type AlignMode, type TimeMap } from './com
 import { choosePair } from './compare/pick'
 import { createClock, type Clock } from './review/clock'
 import { attemptName, comparisonInput, describeAttempt, sessionName } from './review/labels'
-import { RelinkNote } from './review/Relink'
+import { RelinkOverlay } from './review/Relink'
 import './review/review.css'
 import { SyncedStage } from './review/SyncedStage'
 import { buildTrace, niceMax, seriesEnd, traceMax, trackingBands, trunkAt } from './review/timeline'
@@ -32,6 +32,19 @@ import { countRender, useClockValue, useTransportKeys } from './review/useClock'
 
 const NO_PHASES: readonly PhaseSpan[] = []
 const LABELS = { a: 'A', b: 'B' }
+
+/**
+ * 'A' or 'B' as a pill in that attempt's series colour, with its line style inside (A dashed,
+ * B solid), so every label on the page matches what is drawn for it. Colours carry no judgement.
+ */
+function AttemptChip({ side }: { side: 'a' | 'b' }) {
+  return (
+    <span className={`v2-chip v2-chip-${side}`}>
+      {side === 'a' ? 'A' : 'B'}
+      <span className="v2-chip-line" aria-hidden="true" />
+    </span>
+  )
+}
 
 export function Compare() {
   const route = useRoute()
@@ -222,14 +235,14 @@ function Pickers({ processed, a, b, narrow, onPick }: PickersProps) {
     return (
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, minmax(0, 1fr))', gap: 10 }}>
         <div className="card v2-cmp-pick">
-          <label className="t-caption" htmlFor="cmp-a">
-            <span className="sw-a" /> A
+          <label className="t-caption" htmlFor="cmp-a" aria-label="Attempt A">
+            <AttemptChip side="a" />
           </label>
           {select('a')}
         </div>
         <div className="card v2-cmp-pick" style={{ borderColor: 'var(--accent)' }}>
-          <label className="t-caption" htmlFor="cmp-b">
-            <span className="sw-b" /> B
+          <label className="t-caption" htmlFor="cmp-b" aria-label="Attempt B">
+            <AttemptChip side="b" />
           </label>
           {select('b')}
         </div>
@@ -239,14 +252,14 @@ function Pickers({ processed, a, b, narrow, onPick }: PickersProps) {
   return (
     <>
       <div className="field" style={{ width: 170 }}>
-        <label className="field-label" htmlFor="cmp-a">
-          <span className="sw-a" /> A
+        <label className="field-label" htmlFor="cmp-a" aria-label="Attempt A">
+          <AttemptChip side="a" />
         </label>
         {select('a')}
       </div>
       <div className="field" style={{ width: 170 }}>
-        <label className="field-label" htmlFor="cmp-b">
-          <span className="sw-b" /> B
+        <label className="field-label" htmlFor="cmp-b" aria-label="Attempt B">
+          <AttemptChip side="b" />
         </label>
         {select('b')}
       </div>
@@ -307,6 +320,10 @@ function Workspace({ a, b, seriesA, seriesB, attempts, pickers, eyebrow, backHre
   const aLeads = showA && srcA !== null
   const view = (x: AttemptView) => (x.session.camera_view ? (narrow ? VIEW_LABELS[x.session.camera_view].replace(' view', '') : VIEW_LABELS[x.session.camera_view]) : undefined)
   const stageStyle = { maxHeight: narrow ? '50vh' : 'min(56vh, 520px)' }
+  // "Choose the file again" sits on each stage; when A's stage is hidden (phone, B or
+  // Overlay mode) B's stage asks for A's file too.
+  const missingA = !clipA ? [{ attempt: a, name: 'A' }] : []
+  const missingB = [...(!clipA && !showA ? missingA : []), ...(!clipB ? [{ attempt: b, name: 'B' }] : [])]
 
   const stageA = showA && (
     <SyncedStage
@@ -321,7 +338,9 @@ function Workspace({ a, b, seriesA, seriesB, attempts, pickers, eyebrow, backHre
       placeholder={<span className="t-small">No keypoints are saved for A.</span>}
       onVideoError={() => setFailed((f) => ({ ...f, a: true }))}
       style={stageStyle}
-    />
+    >
+      <RelinkOverlay missing={missingA} attempts={attempts} describe={describeAttempt} />
+    </SyncedStage>
   )
   const stageB = showB && (
     <SyncedStage
@@ -340,7 +359,9 @@ function Workspace({ a, b, seriesA, seriesB, attempts, pickers, eyebrow, backHre
       placeholder={<span className="t-small">No keypoints are saved for B.</span>}
       onVideoError={() => setFailed((f) => ({ ...f, b: true }))}
       style={stageStyle}
-    />
+    >
+      <RelinkOverlay missing={missingB} attempts={attempts} describe={describeAttempt} />
+    </SyncedStage>
   )
 
   const alignControl = (
@@ -366,11 +387,6 @@ function Workspace({ a, b, seriesA, seriesB, attempts, pickers, eyebrow, backHre
       </div>
     </div>
   )
-
-  const missing = [
-    ...(!clipA ? [{ attempt: a, name: 'A' }] : []),
-    ...(!clipB ? [{ attempt: b, name: 'B' }] : []),
-  ]
 
   return (
     <>
@@ -405,7 +421,7 @@ function Workspace({ a, b, seriesA, seriesB, attempts, pickers, eyebrow, backHre
               onClick={() => setMode(m)}
               style={{ flex: 1, justifyContent: 'center', height: 40 }}
             >
-              {m === 'a' ? 'A' : m === 'b' ? 'B' : 'Overlay'}
+              {m === 'overlay' ? 'Overlay' : <AttemptChip side={m} />}
             </button>
           ))}
         </div>
@@ -425,7 +441,6 @@ function Workspace({ a, b, seriesA, seriesB, attempts, pickers, eyebrow, backHre
       {(failed.a || failed.b) && (
         <NoteBox title="This browser can’t play one of the video files.">Its skeleton is shown on its own.</NoteBox>
       )}
-      <RelinkNote missing={missing} attempts={attempts} describe={describeAttempt} />
 
       <Timelines clock={clock} a={a} b={b} sA={sA} sB={sB} durA={durA} phasesA={phasesA} phasesB={phasesB} map={map} asked={asked} narrow={narrow} alignControl={narrow ? alignControl : null} detail={!simple} />
 
@@ -440,8 +455,10 @@ function PairTime({ clock, map, durB }: { clock: Clock; map: TimeMap; durB: numb
   const t = useClockValue(clock, (s) => s.time)
   const playing = useClockValue(clock, (s) => s.playing)
   return (
-    <span className="mono" style={{ fontSize: 13, whiteSpace: 'nowrap' }} aria-live={playing ? 'off' : 'polite'}>
-      A {formatTimecode(t)} · B {formatTimecode(Math.min(map.toB(t), durB))}
+    <span className="mono" style={{ fontSize: 13, whiteSpace: 'nowrap', display: 'inline-flex', alignItems: 'center', gap: 6 }} aria-live={playing ? 'off' : 'polite'}>
+      <AttemptChip side="a" /> {formatTimecode(t)}
+      <span aria-hidden="true">·</span>
+      <AttemptChip side="b" /> {formatTimecode(Math.min(map.toB(t), durB))}
     </span>
   )
 }
@@ -489,11 +506,15 @@ function Timelines({ clock, a, b, sA, sB, durA, phasesA, phasesB, map, asked, na
 
       <div className="v2-cmp-rows">
         <div className="v2-cmp-row">
-          <span className="t-small v2-cmp-rowlabel">A</span>
+          <span className="v2-cmp-rowlabel">
+            <AttemptChip side="a" />
+          </span>
           <PhaseRibbon clock={clock} phases={phasesA} duration={durA} small compact minLabelShare={minShare} label="Phases of A" emptyText="No phases found in A" />
         </div>
         <div className="v2-cmp-row">
-          <span className="t-small v2-cmp-rowlabel">B</span>
+          <span className="v2-cmp-rowlabel">
+            <AttemptChip side="b" />
+          </span>
           <PhaseRibbon
             clock={clock}
             phases={phasesB}
@@ -539,10 +560,10 @@ function Timelines({ clock, a, b, sA, sB, durA, phasesA, phasesB, map, asked, na
             </span>
             <span className="t-caption" style={{ display: 'inline-flex', gap: 12, alignItems: 'baseline', flexWrap: 'wrap' }}>
               <span>
-                <span className="sw-a" /> A {attemptName(a).toLowerCase()} {sA && <TrunkReadout clock={clock} series={sA} />}
+                <AttemptChip side="a" /> {attemptName(a).toLowerCase()} {sA && <TrunkReadout clock={clock} series={sA} />}
               </span>
               <span>
-                <span className="sw-b" /> B {attemptName(b).toLowerCase()} {sB && <TrunkReadout clock={clock} series={sB} toLocal={map.toB} />}
+                <AttemptChip side="b" /> {attemptName(b).toLowerCase()} {sB && <TrunkReadout clock={clock} series={sB} toLocal={map.toB} />}
               </span>
             </span>
           </div>
@@ -590,6 +611,24 @@ function nullReasons(row: MetricComparison, a: AttemptView, b: AttemptView): str
   return [ra ? `A: ${ra}` : null, rb ? `B: ${rb}` : null].filter((x): x is string => x !== null)
 }
 
+/** Neither clip had anything to measure for this row (e.g. no plié in either): a slim row below the differences. */
+function bothCompact(row: MetricComparison, a: AttemptView, b: AttemptView): boolean {
+  return (
+    row.a.value === null &&
+    row.b.value === null &&
+    isCompactGap(readMetric(a.metrics, row.metric).reason) &&
+    isCompactGap(readMetric(b.metrics, row.metric).reason)
+  )
+}
+
+function CompactRows({ rows, a }: { rows: MetricComparison[]; a: AttemptView }) {
+  return rows.map((row) => {
+    const reason = readMetric(a.metrics, row.metric).reason
+    const detail = compactGapReason(reason) === 'knee_not_bent' ? 'no plié in either clip' : undefined
+    return <CompactGap key={row.metric} name={row.info.label} reason={reason} detail={detail} />
+  })
+}
+
 function phasesOf(row: MetricComparison, a: AttemptView, b: AttemptView): string {
   const pa = readMetric(a.metrics, row.metric).phases
   const pb = readMetric(b.metrics, row.metric).phases
@@ -598,6 +637,8 @@ function phasesOf(row: MetricComparison, a: AttemptView, b: AttemptView): string
 
 function Differences({ comparison, a, b, narrow, simple }: { comparison: AttemptComparison; a: AttemptView; b: AttemptView; narrow: boolean; simple: boolean }) {
   const explanation = pairExplanation(comparison)
+  const fullRows = comparison.rows.filter((row) => !bothCompact(row, a, b))
+  const compactRows = comparison.rows.filter((row) => bothCompact(row, a, b))
   const sentence = (row: MetricComparison) => (
     <>
       {row.sentence}
@@ -627,7 +668,7 @@ function Differences({ comparison, a, b, narrow, simple }: { comparison: Attempt
         <p className="t-caption">B compared with A.</p>
         {explanation}
         <ul style={{ display: 'flex', flexDirection: 'column', gap: 10, listStyle: 'none', margin: 0, padding: 0 }}>
-          {comparison.rows.map((row) => {
+          {fullRows.map((row) => {
             const phase = phasesOf(row, a, b)
             return (
               <li
@@ -644,13 +685,13 @@ function Differences({ comparison, a, b, narrow, simple }: { comparison: Attempt
                   {/* Each value keeps its badge on the same line when the row wraps. */}
                   <span style={{ display: 'inline-flex', gap: 8, alignItems: 'center' }}>
                     <span>
-                      <span className="sw-a" /> {row.a.text}
+                      <AttemptChip side="a" /> {row.a.text}
                     </span>
                     <ConfBadge level={row.a.confidence ?? 'none'} />
                   </span>
                   <span style={{ display: 'inline-flex', gap: 8, alignItems: 'center' }}>
                     <span>
-                      <span className="sw-b" /> {row.b.text}
+                      <AttemptChip side="b" /> {row.b.text}
                     </span>
                     <ConfBadge level={row.b.confidence ?? 'none'} />
                   </span>
@@ -659,6 +700,7 @@ function Differences({ comparison, a, b, narrow, simple }: { comparison: Attempt
             )
           })}
         </ul>
+        <CompactRows rows={compactRows} a={a} />
         <p className="t-caption">Differences are descriptive. They don’t say which attempt is better.</p>
       </>
     )
@@ -682,17 +724,17 @@ function Differences({ comparison, a, b, narrow, simple }: { comparison: Attempt
               <th scope="col">Measurement</th>
               {!simple && <th scope="col">Phase</th>}
               <th scope="col" className="r">
-                <span className="sw-a" /> A
+                <AttemptChip side="a" />
               </th>
               <th scope="col" className="r">
-                <span className="sw-b" /> B
+                <AttemptChip side="b" />
               </th>
               <th scope="col">B compared with A</th>
               <th scope="col">How well seen, A / B</th>
             </tr>
           </thead>
           <tbody>
-            {comparison.rows.map((row) => {
+            {fullRows.map((row) => {
               const phase = phasesOf(row, a, b)
               return (
                 <tr key={row.metric} className={row.comparable ? undefined : 'v2-cmp-nc'}>
@@ -717,6 +759,11 @@ function Differences({ comparison, a, b, narrow, simple }: { comparison: Attempt
           </tbody>
         </table>
       </div>
+      {compactRows.length > 0 && (
+        <div style={{ padding: '0 16px 14px', display: 'flex', flexDirection: 'column', gap: 8 }}>
+          <CompactRows rows={compactRows} a={a} />
+        </div>
+      )}
     </section>
   )
 }

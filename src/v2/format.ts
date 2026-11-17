@@ -89,6 +89,32 @@ export const NULL_REASON_TEXT: Record<NullReason, string> = {
   not_applicable: 'Not measured for this movement.',
 }
 
+/**
+ * Null reasons that mean "this clip had nothing to measure here" rather than a tracking
+ * problem: the metric still applies but is shown as a slim quiet row (CompactGap), not a
+ * full card with a big hatched box. Text after "<Metric> · not measured — ".
+ */
+export const COMPACT_GAP_TEXT: Partial<Record<NullReason, string>> = {
+  knee_not_bent: 'no plié in this clip',
+}
+
+/**
+ * The compact-gap reason for a null reason given as its code ('knee_not_bent') or as its
+ * dancer-facing sentence from NULL_REASON_TEXT; null for every other reason.
+ */
+export function compactGapReason(reason: string | null | undefined): NullReason | null {
+  if (!reason) return null
+  for (const code of Object.keys(COMPACT_GAP_TEXT) as NullReason[]) {
+    if (reason === code || reason === NULL_REASON_TEXT[code]) return code
+  }
+  return null
+}
+
+/** True when a missing value should render as a compact gap row instead of a full card. */
+export function isCompactGap(reason: string | null | undefined): boolean {
+  return compactGapReason(reason) !== null
+}
+
 export const METRIC_NOTE_TEXT: Record<MetricNote, string> = {
   left_right_swap_corrected: 'A left/right swap in the tracking was corrected.',
   tracking_lost_in_turn: 'Tracking was lost for part of the turn; rotation in that gap isn’t counted.',
@@ -143,6 +169,28 @@ export function formatDateTime(value: string | null | undefined): string {
   const d = new Date(value)
   if (Number.isNaN(d.getTime())) return NO_VALUE
   return d.toLocaleString('en-US', { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' })
+}
+
+// ---------- greeting ----------
+
+/**
+ * The name the person chose in Settings, or null. The sign-up trigger fills
+ * `profiles.display_name` with the email's local part, so that default counts as no name:
+ * a greeting never shows anything derived from the email.
+ */
+export function chosenName(displayName: string | null | undefined, email: string | null | undefined): string | null {
+  const name = displayName?.trim()
+  if (!name) return null
+  const local = email?.split('@')[0]?.trim().toLowerCase()
+  return local && name.toLowerCase() === local ? null : name
+}
+
+/** 'Good morning, Ana' by local time (before 12 / before 18 / evening); without a name, just 'Good morning'. */
+export function greeting(now: Date, name?: string | null): string {
+  const h = now.getHours()
+  const part = h < 12 ? 'morning' : h < 18 ? 'afternoon' : 'evening'
+  const first = name?.trim().split(/\s+/)[0]
+  return first ? `Good ${part}, ${first}` : `Good ${part}`
 }
 
 /** '1.2 MB', '340 KB'. */

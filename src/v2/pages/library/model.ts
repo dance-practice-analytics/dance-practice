@@ -446,6 +446,20 @@ export interface Trend {
   aria: string
 }
 
+/** Hint on a metric card while fewer than two sessions have a value (no chart then). */
+export const ONE_SESSION_HINT = 'Record another session to see change.'
+
+/** Fewer than two sessions have a value: show the value alone, not a one-dot chart. */
+export function hasSingleValue(trend: Trend): boolean {
+  return trend.series.sessions.filter((s) => s.median !== null).length < 2
+}
+
+/** The first sentence of a metric description: a one-line plain explanation. */
+export function firstSentence(text: string): string {
+  const m = /^.*?[.!?](?=\s|$)/.exec(text.trim())
+  return m ? m[0] : text.trim()
+}
+
 /** A round axis top above the largest value. */
 export function niceMax(value: number): number {
   if (!(value > 0)) return 1

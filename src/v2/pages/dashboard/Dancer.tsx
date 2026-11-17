@@ -3,13 +3,15 @@
 
 import { useMemo } from 'react'
 import type { Library } from '../../data'
-import { ConfBadge, Icon, Skeleton, StatusPill } from '../../components'
+import { AttemptThumb, CompactGap, ConfBadge, Icon, Skeleton, StatusPill } from '../../components'
+import { isCompactGap } from '../../format'
 import { latestProcessed } from '../../data'
 import { usePipeline } from '../../pipeline'
 import { href } from '../../router'
 import { AttemptTile, NextFocusCard, useTileLabel } from '../library/cards'
 import { layoutSeries } from '../library/chart'
 import { nextFocus, pickFocus, recentNotes, tileStatus, type LiveStatus, type Tile } from '../library/model'
+import { nextStep } from '../library/nextStep'
 import type { AccountNotes } from '../library/notes'
 import {
   accountSummary,
@@ -22,6 +24,7 @@ import {
   type MetricTile,
   type MovementCard,
 } from './model'
+import { Welcome } from './Welcome'
 
 const CARD = { padding: 20, display: 'flex', flexDirection: 'column' as const, gap: 12, minWidth: 0 }
 const HEAD = { display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', gap: 8 }
@@ -40,16 +43,20 @@ export function DancerDashboard({ data, notes, live, narrow }: DancerProps) {
   const tiles = useMemo(() => (focus ? metricTiles(focus) : null), [focus])
   const other = useMemo(() => (focus ? otherMovement(focus) : null), [focus])
   const next = useMemo(() => (notes.notes ? nextFocus(notes.notes, attempts) : null), [notes.notes, attempts])
+  const step = useMemo(() => nextStep(sessions, attempts), [sessions, attempts])
   const practice = useMemo(() => practiceLine(accountSummary(sessions, attempts)), [sessions, attempts])
   const notesHref = href({ name: 'notes', attemptId: latestProcessed(attempts)?.id })
   const hasSubjects = sessions.some((s) => s.subject_code)
   const prefix = hasSubjects && focus?.code ? `${focus.code} · ` : ''
 
+  // First run (no clips yet): three steps, Import, or a synthetic sample session.
+  if (attempts.length === 0) return <Welcome narrow={narrow} />
+
   if (narrow) {
     return (
       <>
         {latest && <LatestCardPhone latest={latest} />}
-        <NextFocusCard focus={next} notes={notes} emptyHref={notesHref} compact showSubject={hasSubjects} />
+        <NextFocusCard focus={next} step={step} notes={notes} emptyHref={notesHref} compact showSubject={hasSubjects} />
         {tiles && (
           <>
             <div style={HEAD}>
@@ -62,8 +69,11 @@ export function DancerDashboard({ data, notes, live, narrow }: DancerProps) {
               </a>
             </div>
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, minmax(0, 1fr))', gap: 10 }}>
-              {tiles.tiles.map((t) => (
+              {tiles.tiles.filter((t) => !compactTile(t)).map((t) => (
                 <MetricTilePhone key={t.metric} tile={t} />
+              ))}
+              {tiles.tiles.filter(compactTile).map((t) => (
+                <CompactGap key={t.metric} name={t.name} reason={t.note} href={href({ name: 'progress' })} />
               ))}
             </div>
             <p className="t-caption">{tiles.caption}</p>
@@ -81,7 +91,7 @@ export function DancerDashboard({ data, notes, live, narrow }: DancerProps) {
     <div style={{ display: 'flex', flexDirection: 'column', gap: 24 }}>
       <div style={{ display: 'flex', flexWrap: 'wrap', gap: 16, alignItems: 'stretch' }}>
         {latest && <LatestCard latest={latest} showSubject={hasSubjects} />}
-        <NextFocusCard focus={next} notes={notes} emptyHref={notesHref} showSubject={hasSubjects} style={{ flex: '1 1 300px' }} />
+        <NextFocusCard focus={next} step={step} notes={notes} emptyHref={notesHref} showSubject={hasSubjects} style={{ flex: '1 1 300px' }} />
       </div>
 
       {tiles && (
@@ -96,8 +106,11 @@ export function DancerDashboard({ data, notes, live, narrow }: DancerProps) {
             </a>
           </div>
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(min(240px, 100%), 1fr))', gap: 12 }}>
-            {tiles.tiles.map((t) => (
+            {tiles.tiles.filter((t) => !compactTile(t)).map((t) => (
               <MetricTileWide key={t.metric} tile={t} />
+            ))}
+            {tiles.tiles.filter(compactTile).map((t) => (
+              <CompactGap key={t.metric} name={t.name} reason={t.note} href={href({ name: 'progress' })} />
             ))}
           </div>
           <p className="t-caption">{tiles.caption}</p>
@@ -172,7 +185,7 @@ function PhoneTile({ tile }: { tile: Tile }) {
       aria-label={`Attempt ${tile.attempt.number}, ${label}`}
       style={{ display: 'flex', flexDirection: 'column', gap: 4, alignItems: 'center', textDecoration: 'none', color: 'var(--text)', minHeight: 64, minWidth: 0 }}
     >
-      <div className={hatched ? 'thumb v2-lib-hatch' : 'thumb'} style={{ width: '100%', height: 40 }} />
+      <AttemptThumb attempt={tile.attempt} className={hatched ? 'thumb v2-lib-hatch' : 'thumb'} style={{ width: '100%', height: 40 }} />
       <span className={`status st-${tileStatus(tile.kind)}`} style={{ fontSize: 11 }}>
         <span className="dot" style={{ width: 8, height: 8 }} aria-hidden="true" />#{tile.attempt.number}
       </span>
@@ -224,6 +237,9 @@ function Spark({ tile, height }: { tile: MetricTile; height: number }) {
   )
 }
 
+/** No value only because the clip had nothing to measure (e.g. no plié): a slim row, not a card. */
+const compactTile = (t: MetricTile) => t.none && isCompactGap(t.note)
+
 const tileClass = (t: MetricTile) => (t.none ? 'metric is-none' : t.low ? 'metric is-low' : 'metric')
 
 function MetricTileWide({ tile }: { tile: MetricTile }) {
@@ -233,20 +249,34 @@ function MetricTileWide({ tile }: { tile: MetricTile }) {
         <span className="metric-name">{tile.name}</span>
         <ConfBadge level={tile.confidence} label={tile.confidenceLabel} />
       </span>
-      <span style={{ display: 'flex', alignItems: 'flex-end', gap: 12 }}>
-        <span className="metric-value" style={{ fontSize: 26, lineHeight: '30px', whiteSpace: 'nowrap' }}>
-          {tile.value}
-          {!tile.none && <span className="metric-unit">{tile.unit}</span>}
-        </span>
-        <Spark tile={tile} height={40} />
-      </span>
-      {tile.delta && <span className="metric-delta">{tile.delta}</span>}
-      {tile.note && (
-        <span className="reason hatch" style={{ display: 'block' }}>
-          {tile.note}
-          {tile.none && ' Not shown as 0.'}
+      {tile.single ? (
+        // Fewer than two sessions with a value: the value alone, no one-dot chart.
+        <>
+          <span className="metric-value" style={{ fontSize: 32, lineHeight: '40px', whiteSpace: 'nowrap' }}>
+            {tile.value}
+            {!tile.none && <span className="metric-unit">{tile.unit}</span>}
+          </span>
+          <span className="t-small muted">{tile.about}</span>
+        </>
+      ) : (
+        <span style={{ display: 'flex', alignItems: 'flex-end', gap: 12, minHeight: 40 }}>
+          <span className="metric-value" style={{ fontSize: 26, lineHeight: '30px', whiteSpace: 'nowrap' }}>
+            {tile.value}
+            {!tile.none && <span className="metric-unit">{tile.unit}</span>}
+          </span>
+          <Spark tile={tile} height={40} />
         </span>
       )}
+      {/* Pinned to the bottom so cards of one row line up whatever their content. */}
+      <span style={{ marginTop: 'auto', display: 'flex', flexDirection: 'column', gap: 10 }}>
+        {tile.delta && <span className="metric-delta">{tile.delta}</span>}
+        {tile.note && (
+          <span className="reason hatch" style={{ display: 'block' }}>
+            {tile.note}
+            {tile.none && ' Not shown as 0.'}
+          </span>
+        )}
+      </span>
     </a>
   )
 }
@@ -257,7 +287,7 @@ function MetricTilePhone({ tile }: { tile: MetricTile }) {
       <span className="metric-name" style={{ fontSize: 12, lineHeight: '16px' }}>
         {tile.name}
       </span>
-      <span className="metric-value" style={{ fontSize: 22, lineHeight: '26px' }}>
+      <span className="metric-value" style={tile.single ? { fontSize: 26, lineHeight: '32px' } : { fontSize: 22, lineHeight: '26px' }}>
         {tile.value}
         {!tile.none && (
           <span className="metric-unit" style={{ fontSize: 12 }}>
@@ -265,15 +295,20 @@ function MetricTilePhone({ tile }: { tile: MetricTile }) {
           </span>
         )}
       </span>
-      <Spark tile={tile} height={32} />
+      {tile.single ? (
+        // Fewer than two sessions with a value: no one-dot chart, a plain line instead.
+        <span className="t-caption">{tile.about}</span>
+      ) : (
+        <Spark tile={tile} height={32} />
+      )}
       {tile.note ? (
-        <span className="reason hatch" style={{ display: 'block', fontSize: 12, lineHeight: '16px' }}>
+        <span className="reason hatch" style={{ display: 'block', fontSize: 12, lineHeight: '16px', marginTop: 'auto' }}>
           {tile.none ? 'No tracking. ' : ''}
           {tile.note}
         </span>
       ) : (
         tile.delta && (
-          <span className="metric-delta" style={{ fontSize: 12, lineHeight: '16px' }}>
+          <span className="metric-delta" style={{ fontSize: 12, lineHeight: '16px', marginTop: 'auto' }}>
             {tile.delta}
           </span>
         )

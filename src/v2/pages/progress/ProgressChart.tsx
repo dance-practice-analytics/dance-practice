@@ -15,7 +15,7 @@ const MONO = 'Geist Mono, ui-monospace, monospace'
 
 export function ProgressChart({ panel, sessions }: ProgressChartProps) {
   const g = panel.geometry
-  // With many sessions only some dates fit under the chart; the table has all of them.
+  // With many sessions only some labels fit under the chart; the table has all of them.
   const every = Math.max(1, Math.ceil(sessions.length / 6))
   return (
     <>
@@ -28,12 +28,12 @@ export function ProgressChart({ panel, sessions }: ProgressChartProps) {
         <line x1={CHART.left} y1={CHART.top} x2={CHART.right} y2={CHART.top} stroke="var(--line)" strokeDasharray="2 4" />
         <line x1={CHART.left} y1={CHART.bottom} x2={CHART.right} y2={CHART.bottom} stroke="var(--line)" />
         {panel.maxLabel !== null && (
-          <text x="0" y={CHART.top + 4} fontSize="10" fill="var(--text-3)" fontFamily={MONO}>
+          <text x="0" y={CHART.top + 4} fontSize="11" fill="var(--text-2)" fontFamily={MONO}>
             {panel.maxLabel}
           </text>
         )}
         {panel.minLabel !== null && (
-          <text x="0" y={CHART.bottom + 4} fontSize="10" fill="var(--text-3)" fontFamily={MONO}>
+          <text x="0" y={CHART.bottom + 4} fontSize="11" fill="var(--text-2)" fontFamily={MONO}>
             {panel.minLabel}
           </text>
         )}
@@ -75,9 +75,19 @@ export function ProgressChart({ panel, sessions }: ProgressChartProps) {
         ))}
       </svg>
       <div style={{ display: 'flex', paddingLeft: `${(CHART.left / CHART.width) * 100}%` }} className="t-caption" aria-hidden="true">
+        {/* Session name, then its short date: sessions of one day share the date. */}
         {sessions.map((s, i) => (
-          <span key={s.sessionId} className="v2-clip" style={{ flex: 1, textAlign: 'center', minWidth: 0 }}>
-            {i % every === 0 || i === sessions.length - 1 ? s.label : ''}
+          <span key={s.sessionId} style={{ flex: 1, textAlign: 'center', minWidth: 0 }}>
+            {(i % every === 0 || i === sessions.length - 1) && (
+              <>
+                <span className="v2-clip" style={{ display: 'block' }}>
+                  {s.name}
+                </span>
+                <span className="v2-clip subtle" style={{ display: 'block' }}>
+                  {s.partial ? `${s.dateLabel} · partial` : s.dateLabel}
+                </span>
+              </>
+            )}
           </span>
         ))}
       </div>

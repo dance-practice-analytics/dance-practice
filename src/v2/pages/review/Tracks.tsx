@@ -264,7 +264,7 @@ export const TraceLayer = memo(function TraceLayer(props: TraceLayerProps) {
 
 export function TimeAxis({ duration }: { duration: number }) {
   return (
-    <div className="mono subtle" aria-hidden="true" style={{ display: 'flex', justifyContent: 'space-between', fontSize: 11 }}>
+    <div className="mono muted" aria-hidden="true" style={{ display: 'flex', justifyContent: 'space-between', fontSize: 12 }}>
       {[0, 0.25, 0.5, 0.75, 1].map((f) => (
         <span key={f}>{formatTimecode(duration * f)}</span>
       ))}

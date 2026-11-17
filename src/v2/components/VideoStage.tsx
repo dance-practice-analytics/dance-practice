@@ -13,8 +13,8 @@ import { PrivacyPill } from './primitives'
 /** Below this visibility a landmark counts as weakly seen (same threshold as the metrics engine). */
 export const LOW_VISIBILITY = 0.6
 
-// Body segments (MediaPipe indices). The face is reduced to a head circle.
-const SEGMENTS: readonly (readonly [number, number])[] = [
+// Body segments (MediaPipe indices). The face is reduced to a head circle. AttemptThumb draws the same ones.
+export const SEGMENTS: readonly (readonly [number, number])[] = [
   [LM.leftShoulder, LM.rightShoulder],
   [LM.leftShoulder, LM.leftElbow],
   [LM.leftElbow, LM.leftWrist],

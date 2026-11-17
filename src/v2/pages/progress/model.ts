@@ -4,9 +4,14 @@
 
 import type { AttemptMetricsRow, CameraView, MovementType } from '../../../data/schema'
 import {
+  addDays,
+  describeDifference,
   exclusionText,
   gapText,
+  localDay,
+  NO_DIFFERENCE_TEXT,
   progressSeries,
+  sessionDay,
   type ExcludedSession,
   type Gap,
   type ProgressPoint,
@@ -136,13 +141,42 @@ export function chartGeometry(sessions: readonly ProgressSession[]): ChartGeomet
 
 // ---------- captions ----------
 
-/** The insights sentence with its ISO days shown the way the rest of the screen shows dates. */
-export function changeSentence(series: ProgressSeries, now: Date = new Date()): string {
-  let text = series.change.text
-  for (const m of [series.change.first, series.change.latest]) {
-    if (m) text = text.split(m.date).join(formatDate(m.date, now))
-  }
-  return text
+/** Session id → 'Session 3'. Sessions of one day share a date, so captions name them by number. */
+export type SessionNames = ReadonlyMap<string, string>
+
+/**
+ * 'Session 1', 'Session 2'… for every session of the movement that has attempts, oldest
+ * first in the charts' order (day, then creation time). The numbering ignores the camera
+ * view and date filters, so a session keeps its name whatever is on screen.
+ */
+export function sessionNames(
+  sessions: readonly SessionSummary[],
+  attempts: readonly AttemptView[],
+  movement: MovementType,
+): Map<string, string> {
+  const bySession = new Map<string, AttemptView[]>()
+  for (const a of attempts) bySession.set(a.session_id, [...(bySession.get(a.session_id) ?? []), a])
+  const dated = sessions.flatMap((s) => {
+    const own = bySession.get(s.id)
+    const date = s.movement_type === movement && own ? sessionDay(s, own) : null
+    return date ? [{ s, date }] : []
+  })
+  dated.sort((a, b) => a.date.localeCompare(b.date) || a.s.created_at.localeCompare(b.s.created_at) || a.s.id.localeCompare(b.s.id))
+  return new Map(dated.map((d, i) => [d.s.id, `Session ${i + 1}`]))
+}
+
+function nameOf(names: SessionNames, sessionId: string, date: string | null, now: Date): string {
+  return names.get(sessionId) ?? formatDate(date, now)
+}
+
+/** The insights change, worded with session names: 'Session 3 is 1.9° less lean than Session 1'. */
+export function changeSentence(series: ProgressSeries, names: SessionNames, now: Date = new Date()): string {
+  const { first, latest, difference } = series.change
+  if (series.change.state !== 'ready' || !first || !latest || difference === null) return series.change.text
+  const a = nameOf(names, first.sessionId, first.date, now)
+  const b = nameOf(names, latest.sessionId, latest.date, now)
+  const size = describeDifference(series.metric, difference)
+  return size === null ? `${NO_DIFFERENCE_TEXT} between ${a} and ${b}` : `${b} is ${size} than ${a}`
 }
 
 /** Why a point has no value, as a sentence. */
@@ -166,7 +200,7 @@ export function commonGapSentence(points: readonly ProgressPoint[]): string | nu
   return best
 }
 
-export function panelSummary(series: ProgressSeries, now: Date = new Date()): string {
+export function panelSummary(series: ProgressSeries, names: SessionNames, now: Date = new Date()): string {
   if (series.state === 'not_applicable') return 'Not measured for this movement.'
   if (series.state === 'no_data') {
     const why = commonGapSentence(series.points)
@@ -174,16 +208,16 @@ export function panelSummary(series: ProgressSeries, now: Date = new Date()): st
   }
   if (series.state === 'needs_two_sessions') {
     const only = series.sessions.find((s) => s.median !== null)!
-    return `Median ${only.medianText} on ${formatDate(only.date, now)}. ${changeSentence(series, now)}.`
+    return `Median ${only.medianText} in ${nameOf(names, only.sessionId, only.date, now)} (${formatDate(only.date, now)}). ${changeSentence(series, names, now)}.`
   }
   // A session without a median stays in the list as a dash: a gap, not a skipped step.
-  return `Medians ${series.sessions.map((s) => s.medianText).join(' → ')}. ${changeSentence(series, now)}.`
+  return `Medians ${series.sessions.map((s) => s.medianText).join(' → ')}. ${changeSentence(series, names, now)}.`
 }
 
-export function panelAria(series: ProgressSeries, phaseLabel: string | null, now: Date = new Date()): string {
+export function panelAria(series: ProgressSeries, phaseLabel: string | null, names: SessionNames, now: Date = new Date()): string {
   const head = phaseLabel ? `${series.info.label}, ${phaseLabel}.` : `${series.info.label}.`
   const medians = series.sessions
-    .map((s) => `${formatDate(s.date, now)}: ${s.median === null ? 'no value' : s.medianText}`)
+    .map((s) => `${nameOf(names, s.sessionId, s.date, now)} (${formatDate(s.date, now)}): ${s.median === null ? 'no value' : s.medianText}`)
     .join(', ')
   const low = series.points.filter((p) => p.lowConfidence).length
   const missing = series.points.filter((p) => p.value === null).length
@@ -195,7 +229,7 @@ export function panelAria(series: ProgressSeries, phaseLabel: string | null, now
     head,
     series.sessions.length ? `Session medians — ${medians}.` : 'No sessions.',
     extra.length ? `${extra.join('; ')}.` : null,
-    series.state === 'ready' ? `${changeSentence(series, now)}.` : null,
+    series.state === 'ready' ? `${changeSentence(series, names, now)}.` : null,
     'Every value is in the sessions table.',
   ]
     .filter(Boolean)
@@ -204,10 +238,36 @@ export function panelAria(series: ProgressSeries, phaseLabel: string | null, now
 
 // ---------- the screen ----------
 
+/** The date control: a fixed window ending today, everything, or the dancer's own days. */
+export type DateRange = 'all' | 'last7' | 'last30' | 'custom'
+
+export const DATE_RANGES: readonly { key: DateRange; label: string }[] = [
+  { key: 'last7', label: 'Last 7 days' },
+  { key: 'last30', label: 'Last 30 days' },
+  { key: 'all', label: 'All' },
+  { key: 'custom', label: 'Custom…' },
+]
+
+/** First and last day (inclusive, YYYY-MM-DD) of a date range; undefined = open on that side. */
+export function dateBounds(
+  range: DateRange,
+  now: Date = new Date(),
+  custom: { from?: string; to?: string } = {},
+): { from?: string; to?: string } {
+  if (range === 'all') return {}
+  if (range === 'custom') return { from: custom.from || undefined, to: custom.to || undefined }
+  const today = localDay(now)!
+  // 'Last 7 days' is today and the six days before it.
+  return { from: addDays(today, range === 'last7' ? -6 : -29), to: today }
+}
+
 export interface ProgressFilters {
   movement: MovementType
   /** Undefined = the view most sessions were filmed from. */
   cameraView?: CameraView
+  /** Default 'custom' with `from`/`to`, so no range and no days means all sessions. */
+  range?: DateRange
+  /** Only used by the 'custom' range. */
   from?: string
   to?: string
 }
@@ -227,8 +287,10 @@ export interface MetricPanel {
 export interface SessionColumn {
   sessionId: string
   date: string
-  /** 'Nov 11' or 'Nov 11 · partial'. */
-  label: string
+  /** 'Session 3': sessions of one day share a date, so they are told apart by number. */
+  name: string
+  /** 'Nov 11', shown under the name. */
+  dateLabel: string
   title: string | null
   partial: boolean
   attempts: number
@@ -238,7 +300,7 @@ export interface SessionColumn {
 
 export interface ExcludedLine {
   sessionId: string
-  /** 'Nov 4 · Front view'. */
+  /** 'Session 2 · Nov 4 · Front view'. */
   what: string
   reason: string
 }
@@ -250,9 +312,11 @@ export interface ProgressView {
   /** Views that sessions of this movement were filmed from (for the control). */
   views: CameraView[]
   sessions: SessionColumn[]
+  /** Names of every session of the movement, also those filtered out. */
+  names: SessionNames
   panels: MetricPanel[]
   excluded: ExcludedLine[]
-  /** '3 sessions · 12 attempts · Nov 11 has 2 of 5 processed'. */
+  /** '3 sessions · 12 attempts · Session 3 has 2 of 5 processed'. */
   sessionsNote: string
   /** How many sessions of the movement exist before the view and date filters. */
   movementSessions: number
@@ -286,14 +350,16 @@ export function buildProgress(
   const rows = attempts.flatMap((a) => (a.metrics ? [a.metrics] : []))
   const ofMovement = sessions.filter((s) => s.movement_type === movement)
   const views = VIEW_ORDER.filter((v) => ofMovement.some((s) => s.camera_view === v))
+  const names = sessionNames(sessions, attempts, movement)
+  const bounds = dateBounds(filters.range ?? 'custom', now, filters)
 
   const panels = metricsFor(movement).map((key): MetricPanel => {
     const series = progressSeries(sessions, attempts, rows, {
       movement,
       metric: key,
       cameraView: filters.cameraView,
-      from: filters.from || undefined,
-      to: filters.to || undefined,
+      from: bounds.from,
+      to: bounds.to,
     })
     const geometry = chartGeometry(series.sessions)
     const phaseLabel = phasesOf(rows, movement, key)
@@ -304,8 +370,8 @@ export function buildProgress(
       geometry,
       maxLabel: geometry.max === null ? null : axisLabel(key, geometry.max),
       minLabel: geometry.min === null ? null : geometry.min === 0 ? '0' : axisLabel(key, geometry.min),
-      summary: panelSummary(series, now),
-      aria: panelAria(series, phaseLabel, now),
+      summary: panelSummary(series, names, now),
+      aria: panelAria(series, phaseLabel, names, now),
     }
   })
 
@@ -317,7 +383,8 @@ export function buildProgress(
     return {
       sessionId: s.sessionId,
       date: s.date,
-      label: `${formatDate(s.date, now)}${partial ? ' · partial' : ''}`,
+      name: nameOf(names, s.sessionId, s.date, now),
+      dateLabel: formatDate(s.date, now),
       title: s.title,
       partial,
       attempts: s.points.length,
@@ -325,22 +392,27 @@ export function buildProgress(
     }
   })
   const attemptCount = cols.reduce((n, c) => n + c.attempts, 0)
-  const partialNotes = cols.filter((c) => c.partial).map((c) => `${formatDate(c.date, now)} has ${c.processed} of ${c.attempts} processed`)
+  const partialNotes = cols.filter((c) => c.partial).map((c) => `${c.name} has ${c.processed} of ${c.attempts} processed`)
 
   return {
     movement,
     cameraView: first?.cameraView ?? null,
     views,
     sessions: cols,
+    names,
     panels,
-    excluded: (first?.excluded ?? []).filter((e) => e.reason !== 'different_movement').map((e) => excludedLine(e, now)),
+    excluded: (first?.excluded ?? []).filter((e) => e.reason !== 'different_movement').map((e) => excludedLine(e, names, now)),
     sessionsNote: [plural(cols.length, 'session'), plural(attemptCount, 'attempt'), ...partialNotes].join(' · '),
     movementSessions: ofMovement.length,
   }
 }
 
-function excludedLine(e: ExcludedSession, now: Date): ExcludedLine {
-  const parts = [e.date ? formatDate(e.date, now) : 'No date', e.cameraView ? VIEW_LABELS[e.cameraView] : null].filter(Boolean)
+function excludedLine(e: ExcludedSession, names: SessionNames, now: Date): ExcludedLine {
+  const parts = [
+    names.get(e.sessionId) ?? null,
+    e.date ? formatDate(e.date, now) : 'No date',
+    e.cameraView ? VIEW_LABELS[e.cameraView] : null,
+  ].filter(Boolean)
   return { sessionId: e.sessionId, what: parts.join(' · '), reason: exclusionText(e.reason) }
 }
 
@@ -362,6 +434,8 @@ export interface TableValue {
 
 export interface TableRow {
   sessionId: string
+  /** 'Session 3', as under the charts. */
+  name: string
   dateLabel: string
   title: string | null
   values: TableValue[]
@@ -369,9 +443,10 @@ export interface TableRow {
   medianText: string
 }
 
-export function tableRows(panel: MetricPanel, now: Date = new Date()): TableRow[] {
+export function tableRows(panel: MetricPanel, names: SessionNames, now: Date = new Date()): TableRow[] {
   return panel.series.sessions.map((s) => ({
     sessionId: s.sessionId,
+    name: nameOf(names, s.sessionId, s.date, now),
     dateLabel: formatDate(s.date, now),
     title: s.title,
     values: s.points.map((p) => ({

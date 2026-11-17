@@ -165,6 +165,25 @@ export async function updatePassword(password: string, opts: { currentPassword?:
   if (now.recovery) authStore.set({ ...now, recovery: false })
 }
 
+/**
+ * Sets the optional name on the user's own profile row (empty clears it). The database
+ * grants updates on `display_name` only, so the role can't change through this.
+ */
+export async function updateDisplayName(name: string): Promise<void> {
+  const uid = authStore.get().user?.id
+  if (!uid) throw new ApiError(401, 'signed_out', 'You are signed out.', 'Sign in again, then try once more.')
+  const display_name = name.trim().slice(0, 60) || null
+  const { data, error } = await client()
+    .from('profiles')
+    .update({ display_name })
+    .eq('id', uid)
+    .select('id, owner_id, display_name, role, created_at')
+    .maybeSingle()
+  if (error || !data) throw new ApiError(0, 'profile_not_saved', 'Your name wasn’t saved.', 'Check your connection and try again.')
+  const now = authStore.get()
+  if (now.user?.id === uid) authStore.set({ ...now, profile: data as ProfileRow })
+}
+
 /** Hides the "link didn't work" message once it has been read. */
 export function clearLinkError(): void {
   const now = authStore.get()

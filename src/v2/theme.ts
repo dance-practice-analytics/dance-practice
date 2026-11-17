@@ -1,5 +1,5 @@
-// Light / dark theme of the v2 app. The preference is 'system' until the user picks
-// one; the resolved theme goes on the `.app` root as the class `dark` (App.tsx) and on
+// Light / dark theme of the v2 app. The preference is 'light' until the user picks
+// another one in Settings or the top bar (a 'system' choice is stored too); the resolved theme goes on the `.app` root as the class `dark` (App.tsx) and on
 // <html> as `v2-dark` so the page behind the root matches.
 
 import { useSyncExternalStore } from 'react'
@@ -14,11 +14,11 @@ const media = typeof matchMedia === 'function' ? matchMedia('(prefers-color-sche
 function load(): ThemePref {
   try {
     const saved = localStorage.getItem(KEY)
-    if (saved === 'light' || saved === 'dark') return saved
+    if (saved === 'light' || saved === 'dark' || saved === 'system') return saved
   } catch {
-    // Storage blocked: follow the system.
+    // Storage blocked: use the default.
   }
-  return 'system'
+  return 'light'
 }
 
 let pref: ThemePref = load()
@@ -40,8 +40,7 @@ media?.addEventListener('change', () => {
 export function setThemePref(next: ThemePref): void {
   pref = next
   try {
-    if (next === 'system') localStorage.removeItem(KEY)
-    else localStorage.setItem(KEY, next)
+    localStorage.setItem(KEY, next)
   } catch {
     // Not persisted; still applies to this tab.
   }

@@ -1,5 +1,6 @@
-// Known-answer synthetic dancer for calibrating the metrics engine (test support only;
-// nothing in the app imports this). Every number is made up: no footage, no participant.
+// Known-answer synthetic dancer for calibrating the metrics engine. Also used by the v2
+// "Try with a sample session" button (src/v2/sample.ts, loaded on demand). Every number
+// is made up: no footage, no participant.
 //
 // The generator places the landmarks the engine reads in MediaPipe's world frame
 // (metres, origin at the hip midpoint, y down, feet pointing to -z) with exact geometry,

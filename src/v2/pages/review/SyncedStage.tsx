@@ -49,12 +49,14 @@ export interface SyncedStageProps {
   /** Told when the browser can't play the file. */
   onVideoError?(): void
   style?: CSSProperties
+  /** Extra content on the stage, above the skeleton (the "Choose the file again" card). */
+  children?: ReactNode
 }
 
 type FrameMeta = { mediaTime: number }
 
 export function SyncedStage(props: SyncedStageProps) {
-  const { clock, series, src, role, ghost, phases, showSkeleton = true, label, view, ariaLabel, placeholder, onVideoError, style } = props
+  const { clock, series, src, role, ghost, phases, showSkeleton = true, label, view, ariaLabel, placeholder, onVideoError, style, children } = props
   const toLocal = props.toLocal ?? identity
   const toClock = props.toClock ?? identity
   const slopeAt = props.slopeAt ?? one
@@ -184,6 +186,8 @@ export function SyncedStage(props: SyncedStageProps) {
       ariaLabel={ariaLabel}
       placeholder={placeholder}
       style={style}
-    />
+    >
+      {children}
+    </VideoStage>
   )
 }

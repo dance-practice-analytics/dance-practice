@@ -5,13 +5,13 @@
 import { useEffect, useMemo, useState } from 'react'
 import { CAMERA_VIEWS, MOVEMENT_TYPES, type CameraView, type MovementType } from '../../data/schema'
 import { useAuth } from '../auth'
-import { EmptyState, ErrorAlert, Icon, PageHeader, PrivacyPill, Skeleton, SkeletonList } from '../components'
+import { AttemptThumb, EmptyState, ErrorAlert, Icon, PageHeader, Skeleton, SkeletonList } from '../components'
 import { latestProcessed, useLibrary } from '../data'
 import { MOVEMENT_LABELS, VIEW_LABELS } from '../format'
 import { href, useRoute } from '../router'
 import { useIsNarrow } from '../useIsNarrow'
 import { AttemptTile, NextFocusCard, TrendCard, TrendCardCompact } from './library/cards'
-import { useLiveStatus, useWho } from './library/hooks'
+import { useLiveStatus } from './library/hooks'
 import './library/library.css'
 import {
   GROUP_PAGE,
@@ -26,6 +26,7 @@ import {
   nextFocus,
   pickFocus,
   plural,
+  sessionTarget,
   showMoreLabel,
   subjectKey,
   type Filters,
@@ -33,6 +34,7 @@ import {
   type StatusFilter,
   type SubjectGroup,
 } from './library/model'
+import { nextStep } from './library/nextStep'
 import { useAccountNotes } from './library/notes'
 
 const MOVEMENT_SHORT: Record<MovementType, string> = { releve_balance: 'Relevé', pirouette: 'Pirouette' }
@@ -41,7 +43,6 @@ const STATUS_CHIPS: StatusFilter[] = ['all', 'done', 'processing', 'queued', 'fa
 export function Library() {
   const lib = useLibrary()
   const { role } = useAuth()
-  const who = useWho()
   const narrow = useIsNarrow()
   const route = useRoute()
   const notes = useAccountNotes()
@@ -60,6 +61,7 @@ export function Library() {
     () => (data && notes.notes ? nextFocus(notes.notes, data.attempts, filters.subject) : null),
     [data, notes.notes, filters.subject],
   )
+  const step = useMemo(() => (data ? nextStep(data.sessions, data.attempts, filters.subject) : null), [data, filters.subject])
 
   const targetId = route.name === 'library' ? route.sessionId : undefined
   const targetKey = useMemo(() => {
@@ -110,16 +112,13 @@ export function Library() {
       <PageHeader
         title="Library"
         mobileTitle="My practice"
-        eyebrow={role === 'researcher' ? 'Study clips' : `Signed in as ${who}`}
+        eyebrow={role === 'researcher' ? 'Study clips' : undefined}
         subtitle={subtitle}
         actions={
-          <>
-            <PrivacyPill>Clips processed on this device, not uploaded</PrivacyPill>
-            <a className="btn btn-primary" href={href({ name: 'import' })}>
-              <Icon name="import" />
-              Import clips
-            </a>
-          </>
+          <a className="btn btn-primary" href={href({ name: 'import' })}>
+            <Icon name="import" />
+            Import clips
+          </a>
         }
         mobileActions={
           <a className="btn btn-ghost btn-icon btn-lg" href={href({ name: 'import' })} aria-label="Import clips">
@@ -127,7 +126,6 @@ export function Library() {
           </a>
         }
       />
-      {narrow && <PrivacyPill style={{ alignSelf: 'flex-start' }} />}
       {lib.error && <ErrorAlert error={lib.error} onRetry={lib.refetch} />}
 
       {lib.loading ? (
@@ -146,7 +144,7 @@ export function Library() {
         </EmptyState>
       ) : narrow ? (
         <>
-          <NextFocusCard focus={next} notes={notes} emptyHref={notesHref} compact showSubject={hasSubjects} />
+          <NextFocusCard focus={next} step={step} notes={notes} emptyHref={notesHref} compact showSubject={hasSubjects} />
           {focus && <TrendCardCompact focus={focus} />}
           <div className="v2-lib-chips" role="group" aria-label="Filter clips">
             <button className={filtered ? 'chip' : 'chip on'} type="button" aria-pressed={!filtered} onClick={clear}>
@@ -189,7 +187,7 @@ export function Library() {
               )}
             </section>
             <aside style={{ flex: '1 1 300px', minWidth: 0, display: 'flex', flexDirection: 'column', gap: 16 }}>
-              <NextFocusCard focus={next} notes={notes} emptyHref={notesHref} showSubject={hasSubjects} />
+              <NextFocusCard focus={next} step={step} notes={notes} emptyHref={notesHref} showSubject={hasSubjects} />
               {focus && <TrendCard focus={focus} showSubject={hasSubjects} />}
             </aside>
           </div>
@@ -322,7 +320,11 @@ function PhoneGroups({ model }: { model: LibraryModel }) {
           <div className="card" style={{ overflow: 'hidden' }}>
             {g.rows.map((r) => (
               <a key={r.block.session.id} className="v2-lib-row" href={href({ name: 'review', attemptId: r.attemptId })}>
-                <div className={r.status.status === 'done' && /low|no tracking/.test(r.status.text) ? 'thumb v2-lib-hatch' : 'thumb'} style={{ width: 56, height: 40, flex: 'none' }} />
+                <AttemptThumb
+                  attempt={sessionTarget(r.block)}
+                  className={r.status.status === 'done' && /low|no tracking/.test(r.status.text) ? 'thumb v2-lib-hatch' : 'thumb'}
+                  style={{ width: 56, height: 40, flex: 'none' }}
+                />
                 <div style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', gap: 2 }}>
                   <span style={{ fontWeight: 500 }}>{r.title}</span>
                   <span className={`status st-${r.status.status}`} style={{ whiteSpace: 'normal' }}>
