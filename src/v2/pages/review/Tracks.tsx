@@ -73,18 +73,24 @@ export function PhaseRibbon(props: PhaseRibbonProps) {
     const share = (end - start) / duration
     const full = !compact && share >= 0.14
     const text = full ? PHASE_LABELS[p.phase] : share >= minLabelShare ? SHORT_PHASE[p.phase] : null
+    // WCAG 2.5.3: the accessible name starts with the visible text ("Hold 1.2s", "Rec.").
+    const name = PHASE_LABELS[p.phase]
+    const ariaLabel = full
+      ? `${name} ${formatNumber(length, 1)}s phase`
+      : `${text && text !== name ? `${text} ` : ''}${name} phase, ${formatNumber(length, 1)} seconds`
     items.push(
       <button
         key={`${p.phase}-${i}`}
         type="button"
         className={on ? 'phase current v2-rev-phase' : 'phase v2-rev-phase'}
         aria-current={on ? 'step' : undefined}
-        aria-label={`${PHASE_LABELS[p.phase]} phase, ${formatNumber(length, 1)} seconds`}
+        aria-label={ariaLabel}
         title={`${PHASE_LABELS[p.phase]} · ${formatTimecode(p.start)}–${formatTimecode(p.end)}`}
         onClick={() => clock.seek(seekTo ? seekTo(p) : p.start)}
         style={{ flex: `${Math.max(end - start, 1e-3)} 1 0`, justifyContent: full ? undefined : 'center', padding: full ? undefined : text ? '0 4px' : 0 }}
       >
         {text}
+        {full && ' '}
         {full && <span className="mono">{formatNumber(length, 1)}s</span>}
       </button>,
     )
@@ -196,6 +202,12 @@ export function TraceTrack({ clock, duration, ariaLabel, height = 52, children, 
 
 // ---------- static layers ----------
 
+const BAND_TITLES: Record<Band['kind'], string> = {
+  gap: 'No tracking',
+  low: 'Low confidence',
+  trimmed: 'Not processed (outside the trim)',
+}
+
 /** Hatched bands: no tracking (also tinted) and low confidence. Never drawn over, never filled in. */
 export const BandLayer = memo(function BandLayer({ bands, duration, mapT }: { bands: readonly Band[]; duration: number; mapT?: (t: number) => number }) {
   const x = mapT ?? ((t: number) => t)
@@ -204,8 +216,8 @@ export const BandLayer = memo(function BandLayer({ bands, duration, mapT }: { ba
       {bands.map((b, i) => (
         <div
           key={i}
-          className={b.kind === 'gap' ? 'band-low v2-rev-band v2-rev-gap' : 'band-low v2-rev-band'}
-          title={`${b.kind === 'gap' ? 'No tracking' : 'Low confidence'} ${formatTimecode(b.start)}–${formatTimecode(b.end)}`}
+          className={b.kind === 'low' ? 'band-low v2-rev-band' : 'band-low v2-rev-band v2-rev-gap'}
+          title={`${BAND_TITLES[b.kind]} ${formatTimecode(b.start)}–${formatTimecode(b.end)}`}
           style={spanStyle(x(b.start), x(b.end), duration)}
         />
       ))}

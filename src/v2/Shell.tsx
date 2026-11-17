@@ -9,6 +9,7 @@
 import type { ReactNode } from 'react'
 import { signOut, useAuth } from './auth'
 import { Icon, Logo, type IconName } from './components/Icon'
+import { useOfflineQueue } from './offline/uploadQueue'
 import { usePipeline } from './pipeline'
 import { href, type Route, type RouteName } from './router'
 import { toggleTheme, useTheme } from './theme'
@@ -60,21 +61,49 @@ function useQueueCount(): number {
 }
 
 function QueueCount({ inline }: { inline?: boolean }) {
-  const n = useQueueCount()
+  const queued = useQueueCount()
+  // The phone has no sidebar status line, so its badge also counts results waiting to upload.
+  const waiting = useOfflineQueue().ids.length
+  const pending = inline ? 0 : waiting
+  const n = queued + pending
   if (n === 0) return null
+  const parts = [
+    queued > 0 ? `${queued} ${queued === 1 ? 'clip' : 'clips'} in the queue` : null,
+    pending > 0 ? `${pending} ${pending === 1 ? 'result' : 'results'} waiting to upload` : null,
+  ].filter(Boolean)
   return (
     <span className={inline ? 'v2-navcount' : 'v2-navcount v2-navcount-dot'}>
       {n}
-      <span className="v2-sr"> {n === 1 ? 'clip' : 'clips'} in the queue</span>
+      <span className="v2-sr"> {parts.join(', ')}</span>
     </span>
+  )
+}
+
+/**
+ * FR-3.8.6: results processed offline that still wait to upload. A quiet status line,
+ * not an error; Processing has the details and "Retry now".
+ */
+function PendingUploads() {
+  const { ids, flushing } = useOfflineQueue()
+  const n = ids.length
+  return (
+    <p className="t-caption" role="status" style={{ display: n > 0 ? 'flex' : 'none', alignItems: 'center', gap: 6, padding: '0 8px' }}>
+      <Icon name={flushing ? 'refresh' : 'upload'} size={14} style={{ flex: 'none' }} />
+      {n > 0 && (
+        <a href={href({ name: 'processing' })}>
+          {flushing ? 'Uploading saved results…' : `${n} ${n === 1 ? 'result' : 'results'} waiting to upload`}
+        </a>
+      )}
+    </p>
   )
 }
 
 /** "Processing" under Import: only while the queue has work, or while it is the open screen. */
 function ProcessingSubItem({ active }: { active: RouteName }) {
   const n = useQueueCount()
+  const pending = useOfflineQueue().ids.length
   const on = active === 'processing'
-  if (n === 0 && !on) return null
+  if (n === 0 && pending === 0 && !on) return null
   return (
     <ul className="v2-subnav">
       <li>
@@ -136,6 +165,8 @@ export function Shell({ active, children }: ShellProps) {
         </ul>
 
         <div style={{ flex: 1 }} />
+
+        <PendingUploads />
 
         <p className="t-caption" style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '0 8px' }}>
           <Icon name="device" size={14} style={{ flex: 'none' }} />

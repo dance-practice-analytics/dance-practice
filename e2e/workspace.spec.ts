@@ -32,11 +32,11 @@ test('B follows A phase by phase in side-by-side compare', async ({ page }) => {
   await page.getByRole('tab', { name: 'Compare A/B' }).click()
   const videos = page.locator('.stage-video')
   await expect(videos).toHaveCount(2)
-  await page.waitForTimeout(800)
-  const [a, b] = await videos.evaluateAll((vs) => vs.map((v) => (v as HTMLVideoElement).currentTime))
   // A is attempt 1 (early in the clip), B attempt 3 (around 20 s): same phase, different source times.
-  expect(a).toBeLessThan(10)
-  expect(b).toBeGreaterThan(18)
+  // B is seeked once its metadata loads, so wait for it instead of a fixed delay.
+  const times = () => videos.evaluateAll((vs) => vs.map((v) => (v as HTMLVideoElement).currentTime))
+  await expect.poll(async () => (await times())[1], { timeout: 10_000 }).toBeGreaterThan(18)
+  expect((await times())[0]).toBeLessThan(10)
 })
 
 test('video and skeleton can be switched off, and the pose still shows without video', async ({ page }) => {

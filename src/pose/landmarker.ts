@@ -15,7 +15,7 @@ import { PoseLandmarker } from '@mediapipe/tasks-vision'
 // worker can cache them for offline use. Nothing is loaded from a CDN.
 import wasmLoaderUrl from '@mediapipe/tasks-vision/vision_wasm_internal.js?url'
 import wasmBinaryUrl from '@mediapipe/tasks-vision/vision_wasm_internal.wasm?url'
-import { planFrames, toPoseFrame } from './frames'
+import { normalizeTrim, planFrames, toPoseFrame, type TrimRange } from './frames'
 import type { PoseFrame, PoseSeries } from './types'
 
 export const WASM_FILESET = { wasmLoaderPath: wasmLoaderUrl, wasmBinaryPath: wasmBinaryUrl }
@@ -47,6 +47,8 @@ export interface EstimatePoseOptions {
   signal?: AbortSignal
   /** Sampling rate; defaults to and is capped at 30 fps (SDD 5.3). */
   targetFps?: number
+  /** FR-3.2.7: process only this part of the clip (seconds of the original clip). */
+  range?: TrimRange | null
 }
 
 let landmarkerPromise: Promise<PoseLandmarker> | null = null
@@ -157,7 +159,7 @@ async function seekTo(video: HTMLVideoElement, timeS: number): Promise<void> {
 const nextTask = () => new Promise<void>((resolve) => setTimeout(resolve, 0))
 
 async function run(source: File | string, opts: EstimatePoseOptions): Promise<PoseSeries> {
-  const { onProgress, signal, targetFps } = opts
+  const { onProgress, signal, targetFps, range } = opts
   signal?.throwIfAborted()
   const landmarker = await getLandmarker()
   signal?.throwIfAborted()
@@ -167,7 +169,8 @@ async function run(source: File | string, opts: EstimatePoseOptions): Promise<Po
   let video: HTMLVideoElement | null = null
   try {
     video = await openVideo(objectUrl ?? (source as string))
-    const plan = planFrames(video.duration, targetFps, nextTimestampMs)
+    const trim = normalizeTrim(range, video.duration)
+    const plan = planFrames(video.duration, targetFps, nextTimestampMs, trim)
     const frames: PoseFrame[] = []
     let lastYield = performance.now()
 
@@ -186,7 +189,7 @@ async function run(source: File | string, opts: EstimatePoseOptions): Promise<Po
       }
     }
 
-    return {
+    const series: PoseSeries = {
       fps: plan.fps,
       durationS: video.duration,
       width: video.videoWidth,
@@ -195,6 +198,8 @@ async function run(source: File | string, opts: EstimatePoseOptions): Promise<Po
       smoothed: false,
       frames,
     }
+    if (trim) series.trim = trim
+    return series
   } finally {
     if (video) {
       video.removeAttribute('src')

@@ -6,15 +6,16 @@
 
 import { useSyncExternalStore } from 'react'
 import { ApiError } from '../api/errors'
-import { saveMetrics, setAttemptStatus, uploadKeypoints } from '../data/repo'
+import { setAttemptStatus } from '../data/repo'
 import type { MovementType } from '../data/schema'
 import { computeMetrics } from '../metrics/engine'
 import { encodeSeries } from '../pose/codec'
 import { currentDelegate, estimatePose, type PoseDelegate } from '../pose/landmarker'
 import { smoothSeries } from '../pose/oneEuro'
 import type { PoseSeries } from '../pose/types'
-import { client } from './auth'
+import { authStore, client } from './auth'
 import { getClip } from './clips'
+import { bindQueue, clearQueue, isRetryableSaveError, onUploaded, saveOrQueue } from './offline/uploadQueue'
 import { processingWakeLock } from './wakeLock'
 
 export type PipelineStatus = 'queued' | 'processing' | 'done' | 'failed' | 'cancelled'
@@ -27,6 +28,8 @@ export interface PipelineJob {
   movement: MovementType
   /** For display only. */
   clipName?: string | null
+  /** FR-3.2.7: process only this part of the clip (attempts.trim_start_s/trim_end_s). */
+  trim?: { startS: number; endS: number } | null
 }
 
 export interface PipelineItem extends PipelineJob {
@@ -43,6 +46,11 @@ export interface PipelineItem extends PipelineJob {
   trackedFrames: number | null
   startedAt: number | null
   finishedAt: number | null
+  /**
+   * FR-3.8.6: processed, but the save failed on the network; the result waits in the
+   * offline queue (IndexedDB) and is uploaded later. Status is 'done' meanwhile.
+   */
+  pendingUpload?: boolean
 }
 
 export interface PipelineState {
@@ -128,6 +136,7 @@ const fresh = (job: PipelineJob): PipelineItem => ({
   trackedFrames: null,
   startedAt: null,
   finishedAt: null,
+  pendingUpload: false,
 })
 
 /**
@@ -184,12 +193,27 @@ export function clearFinished(): void {
   set({ items: state.items.filter((it) => it.status === 'queued' || it.status === 'processing') })
 }
 
-/** Empties the queue; called on sign-out. */
+/** Empties the queue; called on sign-out, delete all and delete account. */
 export function resetPipeline(): void {
   cancel()
   seriesCache.clear()
   set({ items: [], paused: false })
+  // Results kept offline belong to the account that made them (FR-3.8.6).
+  void clearQueue()
 }
+
+// ---------- offline upload queue (FR-3.8.6) ----------
+
+bindQueue(() => {
+  const uid = authStore.get().user?.id
+  return uid ? { db: client(), uid } : null
+})
+
+// A kept result reached Supabase: the item is complete and the data hooks refresh.
+onUploaded((id) => {
+  if (state.items.some((it) => it.attemptId === id)) patch(id, { pendingUpload: false })
+  finishedListeners.forEach((l) => l(id, 'done'))
+})
 
 let pumping = false
 
@@ -268,11 +292,15 @@ async function processOne(job: PipelineItem): Promise<void> {
       return
     }
     const db = client()
-    await setAttemptStatus(db, id, 'processing')
+    // Offline, the clip is still processed on the device and its result kept for later.
+    await setAttemptStatus(db, id, 'processing').catch((e) => {
+      if (!isRetryableSaveError(e)) throw e
+    })
 
     let lastShown = -1
     const raw = await estimatePose(clip.file, {
       signal,
+      range: job.trim ?? null,
       onProgress: (fraction) => {
         // Whole percents only: the store shouldn't notify 30 times a second.
         const shown = Math.floor(fraction * 100)
@@ -297,15 +325,28 @@ async function processOne(job: PipelineItem): Promise<void> {
     }
 
     const blob = await encodeSeries(series)
-    await uploadKeypoints(db, id, blob, series.frames.length, series.model)
     cacheSeries(id, series)
     signal.throwIfAborted()
 
     patch(id, { step: 'metrics' })
     const { movement, algorithm_version, phases, confidence, ...values } = computeMetrics(series, job.movement)
-    await saveMetrics(db, id, { movement, algorithm_version, phases, confidence, ...values })
-    await setAttemptStatus(db, id, 'done')
-    finish('done')
+    patch(id, { step: 'saving_keypoints' })
+    // Keypoints, then metrics, then status done; on a network failure the result is
+    // kept in IndexedDB and uploaded later (FR-3.8.6).
+    const uid = authStore.get().user?.id
+    if (!uid) throw new ApiError(401, 'not_signed_in', 'You’re not signed in.', 'Sign in and try again.')
+    const saved = await saveOrQueue(
+      { db, uid },
+      {
+        attemptId: id,
+        keypoints: blob,
+        frameCount: series.frames.length,
+        model: series.model,
+        metrics: { movement, algorithm_version, phases, confidence, ...values },
+        clipName: job.clipName,
+      },
+    )
+    finish('done', { pendingUpload: saved === 'queued' })
   } catch (e) {
     if (isAbort(e) || signal.aborted) {
       await setAttemptStatus(client(), id, 'queued').catch(() => undefined)

@@ -47,6 +47,33 @@ function seriesOf(specs: Spec[], fps = 10): PoseSeries {
 const ok = (lean = 0): Spec => ({ lean })
 const weak = (lean = 0): Spec => ({ lean, vis: 0.4 })
 
+describe('a trimmed series (FR-3.2.7)', () => {
+  // Frames 1.0–1.9 s of a 3 s clip at 10 fps: the series keeps the clip's own times.
+  const trimmed = (): PoseSeries => {
+    const s = seriesOf(Array.from({ length: 10 }, () => ok()))
+    return { ...s, durationS: 3, trim: { startS: 1, endS: 2 }, frames: s.frames.map((f) => ({ ...f, t: f.t + 1 })) }
+  }
+
+  it('finds the frame by clip time and shows a gap outside the processed part', () => {
+    const s = trimmed()
+    expect(frameAt(s, 1)).toBe(s.frames[0])
+    expect(frameAt(s, 1.55)).toBe(s.frames[5])
+    expect(frameAt(s, 1.95)).toBe(s.frames[9])
+    expect(frameAt(s, 0.5)).toBeNull()
+    expect(frameAt(s, 2.4)).toBeNull()
+  })
+
+  it('marks the unprocessed parts as their own bands, not as tracked and not as frames', () => {
+    const s = trimmed()
+    const bands = trackingBands(s)
+    expect(bands).toEqual([
+      { kind: 'trimmed', start: 0, end: 1, frames: 0 },
+      { kind: 'trimmed', start: 2, end: 3, frames: 0 },
+    ])
+    expect(countBands(s, bands)).toEqual({ gapFrames: 0, lowFrames: 0, totalFrames: 10 })
+  })
+})
+
 describe('trackingBands', () => {
   it('has no bands when every frame is tracked well', () => {
     const s = seriesOf([ok(), ok(), ok()])
@@ -195,6 +222,9 @@ function attemptRow(n: number): AttemptRow {
     fps: 30,
     status: 'done',
     error: null,
+    is_reference: false,
+    trim_start_s: null,
+    trim_end_s: null,
     created_at: `2026-11-04T15:0${n}:00Z`,
   }
 }

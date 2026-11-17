@@ -8,12 +8,16 @@ import type { AttemptView } from '../../data'
 import { isCompactGap, METRICS, metricsFor, type MetricKey } from '../../format'
 import { usePipelineItem } from '../../pipeline'
 import { href } from '../../router'
+import { REFERENCE_HINT, REFERENCE_LABEL } from '../review/ReferenceToggle'
 import { layoutSeries } from './chart'
 import { ONE_SESSION_HINT, TILE_LABEL, buildTrend, firstSentence, hasSingleValue, tileStatus, type Focus, type NextFocus, type TileKind, type Trend } from './model'
 import type { NextStep } from './nextStep'
 import type { AccountNotes } from './notes'
 
 // ---------- attempt tile ----------
+
+/** Read by screen readers, not shown. */
+const SR_ONLY: CSSProperties = { position: 'absolute', width: 1, height: 1, overflow: 'hidden', clip: 'rect(0 0 0 0)', whiteSpace: 'nowrap' }
 
 /** The tile's words; a clip in this tab's queue shows its live percentage. */
 export function useTileLabel(attemptId: string, kind: TileKind): string {
@@ -38,7 +42,6 @@ export function AttemptTile({ attempt, kind, size = 'small' }: AttemptTileProps)
       className="attempt"
       href={href({ name: 'review', attemptId: attempt.id })}
       style={large ? { width: 132, flex: 'none' } : { minWidth: 0, width: 92, padding: 6, gap: 6 }}
-      aria-label={`Attempt ${attempt.number}, ${kind === 'processing' ? `processing ${label}` : TILE_LABEL[kind]}`}
       title={attempt.clip_name ?? undefined}
     >
       <AttemptThumb attempt={attempt} className={hatched ? 'thumb v2-lib-hatch' : 'thumb'} style={{ height: large ? 60 : 40 }}>
@@ -48,15 +51,27 @@ export function AttemptTile({ attempt, kind, size = 'small' }: AttemptTileProps)
           </span>
         )}
       </AttemptThumb>
-      {large && (
+      {/* The accessible name comes from the text (WCAG 2.5.3): "Attempt 2, Done", "Attempt 2, processing 40%". */}
+      {large ? (
         <span className="t-small" style={{ fontWeight: 600 }}>
           Attempt {attempt.number}
+          <span style={SR_ONLY}>,</span>
         </span>
-      )}
+      ) : (
+        <span style={SR_ONLY}>Attempt {attempt.number}, </span>
+      )}{' '}
       <span className={`status st-${tileStatus(kind)}`} style={{ fontSize: 11 }}>
         <span className="dot" style={{ width: 8, height: 8 }} aria-hidden="true" />
+        {label !== TILE_LABEL[kind] && <span style={SR_ONLY}>processing </span>}
         {label}
       </span>
+      {attempt.is_reference && (
+        // FR-3.6.6: a neutral marker of the dancer's own choice, not a grade.
+        <span className="tag" title={REFERENCE_HINT} style={large ? undefined : { height: 18, padding: '0 5px', fontSize: 11 }}>
+          <span style={SR_ONLY}>, </span>
+          {REFERENCE_LABEL}
+        </span>
+      )}
     </a>
   )
 }

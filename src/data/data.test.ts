@@ -20,7 +20,10 @@ import {
   listSubjects,
   revokeConsent,
   saveMetrics,
+  attemptTrim,
   setAttemptStatus,
+  setReferenceAttempt,
+  storedTrim,
   uploadKeypoints,
   type StudyClipInput,
 } from './repo'
@@ -554,6 +557,38 @@ describe('study attempts', () => {
     // A reason only belongs to a failed attempt.
     const done = await setAttemptStatus(client, list[0].id, 'done', 'stale reason')
     expect(done).toMatchObject({ status: 'done', error: null })
+  })
+
+  it('marks and unmarks a reference attempt (FR-3.6.6) with one update of is_reference only', async () => {
+    const { db, client, session } = await setup()
+    const [a] = await createStudyAttempts(client, session.id, [clip(1)])
+    if (a.outcome !== 'created') throw new Error('setup')
+    const on = await setReferenceAttempt(client, a.attempt.id, true)
+    expect(on.is_reference).toBe(true)
+    const write = db.writes.at(-1)!
+    expect(write).toMatchObject({ table: 'attempts', op: 'update', payload: { is_reference: true } })
+    expect(Object.keys(write.payload as Row)).toEqual(['is_reference'])
+    expect((await setReferenceAttempt(client, a.attempt.id, false)).is_reference).toBe(false)
+    db.uid = OTHER_UID
+    expect((await rejection(setReferenceAttempt(client, a.attempt.id, true))).code).toBe('not_found')
+  })
+
+  it('stores a usable trim (FR-3.2.7) and the whole clip otherwise', async () => {
+    const { db, client, session } = await setup()
+    await createStudyAttempts(client, session.id, [
+      clip(1, { trim: { startS: 1.5, endS: 6 } }),
+      clip(2, { trim: { startS: 6, endS: 1.5 } }),
+      clip(3),
+    ])
+    const sent = db.writes.filter((w) => w.table === 'attempts').flatMap((w) => w.payload as Row[])
+    expect(sent.map((r) => [r.trim_start_s, r.trim_end_s])).toEqual([
+      [1.5, 6],
+      [null, null],
+      [null, null],
+    ])
+    expect(storedTrim({ startS: Number.NaN, endS: 2 })).toEqual({ trim_start_s: null, trim_end_s: null })
+    expect(attemptTrim({ trim_start_s: 1.5, trim_end_s: 6 })).toEqual({ startS: 1.5, endS: 6 })
+    expect(attemptTrim({ trim_start_s: null, trim_end_s: null })).toBeNull()
   })
 
   it('treats another account’s attempt as not found', async () => {

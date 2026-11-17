@@ -278,6 +278,13 @@ export function readMetrics(row: AttemptMetricsRow | null | undefined, movement:
 /** The frame shown at time `t` (seconds), or null when the series is empty. */
 export function frameAt(series: PoseSeries | null | undefined, t: number): PoseFrame | null {
   if (!series || series.frames.length === 0) return null
+  if (series.trim) {
+    // FR-3.2.7: a trimmed series starts later on the same frame grid; outside the
+    // processed part there is no pose to show (a gap, never the nearest frame).
+    const first = Math.round(series.frames[0].t * series.fps)
+    const i = Math.floor(t * series.fps + 1e-6) - first
+    return i >= 0 && i < series.frames.length ? series.frames[i] : null
+  }
   const i = Math.min(series.frames.length - 1, Math.max(0, Math.floor(t * series.fps + 1e-6)))
   return series.frames[i]
 }

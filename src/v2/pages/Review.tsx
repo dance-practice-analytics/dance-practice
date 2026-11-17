@@ -31,8 +31,10 @@ import { href, useRoute } from '../router'
 import { useIsNarrow } from '../useIsNarrow'
 import { useViewMode, ViewModeSwitch } from '../viewMode'
 import { AttemptNote } from './review/AttemptNote'
+import { referenceFor } from './compare/pick'
 import { createClock, type Clock } from './review/clock'
 import { attemptName, comparisonInput, describeAttempt, neighbourInSession, sessionName } from './review/labels'
+import { ReferenceTag, ReferenceToggle } from './review/ReferenceToggle'
 import { RelinkOverlay } from './review/Relink'
 import './review/review.css'
 import { SyncedStage } from './review/SyncedStage'
@@ -168,8 +170,19 @@ function Workspace({ attempt, series, attempts }: WorkspaceProps) {
   useTransportKeys(clock, { onPhase: phases.length ? onPhase : undefined })
 
   const src = clip && !videoFailed ? clip.objectUrl : null
-  const compareHref = href(other ? { name: 'compare', a: attempt.id, b: other.id } : { name: 'compare', a: attempt.id })
-  const compareLabel = other ? `Compare with attempt ${other.number}` : 'Compare'
+  // FR-3.6.6: with a reference of this movement (another attempt), Compare opens on it as A.
+  const reference = useMemo(() => {
+    const ref = referenceFor(attempt, attempts.filter((a) => a.status === 'done'))
+    return ref && ref.id !== attempt.id ? ref : null
+  }, [attempt, attempts])
+  const compareHref = href(
+    reference
+      ? { name: 'compare', a: reference.id, b: attempt.id }
+      : other
+        ? { name: 'compare', a: attempt.id, b: other.id }
+        : { name: 'compare', a: attempt.id },
+  )
+  const compareLabel = reference ? 'Compare with reference' : other ? `Compare with attempt ${other.number}` : 'Compare'
   const notesHref = href({ name: 'notes', attemptId: attempt.id })
   const chatHref = href({ name: 'chat', attemptId: attempt.id })
   const view = session.camera_view ? VIEW_LABELS[session.camera_view] : null
@@ -177,6 +190,7 @@ function Workspace({ attempt, series, attempts }: WorkspaceProps) {
   const subtitle = [
     view,
     duration > 0 ? formatSeconds(duration) : null,
+    series?.trim ? `processed ${formatTimecode(series.trim.startS)}–${formatTimecode(series.trim.endS)} (trimmed)` : null,
     fps > 0 ? `${formatNumber(fps, Number.isInteger(fps) ? 0 : 1)} fps` : null,
     attempt.metrics ? `processed ${formatDateTime(attempt.metrics.computed_at)}` : STATUS_LABELS[attempt.status].toLowerCase(),
   ]
@@ -247,6 +261,7 @@ function Workspace({ attempt, series, attempts }: WorkspaceProps) {
               <span className="t-small" style={{ fontWeight: 600 }}>
                 {narrow ? `#${a.number}` : attemptName(a)}
               </span>
+              {a.is_reference && <ReferenceTag compact />}
               {!narrow && <span className="t-caption mono">{a.status === 'done' ? formatTimecode(a.duration_s) : STATUS_LABELS[a.status]}</span>}
             </a>
           )
@@ -291,7 +306,14 @@ function Workspace({ attempt, series, attempts }: WorkspaceProps) {
     </p>
   )
 
-  const note = <AttemptNote attemptId={attempt.id} note={attempt.note} />
+  const note = (
+    <>
+      {attempt.status === 'done' && (
+        <ReferenceToggle attemptId={attempt.id} on={attempt.is_reference} movementLabel={MOVEMENT_LABELS[session.movement_type].toLowerCase()} />
+      )}
+      <AttemptNote attemptId={attempt.id} note={attempt.note} />
+    </>
+  )
 
   const mobileLinks = (
     <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, minmax(0, 1fr))', gap: 8 }}>

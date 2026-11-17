@@ -196,7 +196,8 @@ canvas capture anywhere.
 ## Pipeline (`pipeline.ts`)
 
 ```ts
-enqueue(jobs: { attemptId, movement, clipName? }[])  // clip must be registered first; starts at once
+enqueue(jobs: { attemptId, movement, clipName?, trim? }[])  // clip must be registered first; starts at once
+                          // trim (FR-3.2.7) = attemptTrim(attempt) from src/data/repo.ts; pass it on every re-run
 pause() / resume()        // pause holds the queue after the clip in progress finishes
 cancel(attemptId?)        // one attempt, or everything queued/running; DB status goes back to 'queued'
 clearFinished()
@@ -220,8 +221,34 @@ thread with yields. The queue lives in memory: after a reload, attempts still `q
 in the database need their file again (`relink`) before `enqueue`. An attempt left as
 `processing` in the database by a closed tab is stale — treat it as queued.
 
-A clip in which no person is found finishes as **done** with `trackedFrames === 0` and
-every metric null (reason "No person was found in this clip…"); show that, don't hide it.
+Offline upload queue (FR-3.8.6, `offline/uploadQueue.ts` over the small IndexedDB wrapper
+`offline/idb.ts`): when the save fails on the network (offline, fetch error, 5xx, 429), the
+result — gzipped keypoints bytes, the metrics row, attempt id and owner id, never the video —
+is kept in IndexedDB and the item finishes `done` with `pendingUpload: true`. It is retried
+on the `online` event, when the app opens signed in (`App.tsx`) and from "Retry now" on
+Processing (`pages/processing/OfflineNotice.tsx`); the sidebar shows "n results waiting to
+upload" and the phone's Import badge counts them. Retries use the same repo functions
+(`uploadKeypoints` → `saveMetrics` → `setAttemptStatus('done')`) and only touch entries of
+the signed-in user. Validation / permission / not-found errors are never queued (a kept
+entry that hits one is dropped). `signOut()` and `resetPipeline()` (sign-out, delete all,
+delete account) clear the queue. Hooks: `useOfflineQueue()` → `{ ids, flushing, lastError,
+unavailable }`, `flushQueue()`. Tests: `offline/uploadQueue.test.ts` (fake-indexeddb).
+
+A clip in which no person is found in more than half of the frames (FR-3.3.8,
+`mostlyUntracked`) finishes as **failed** with the reason "No person was found in most of
+this clip…" and nothing is stored; show that reason, don't hide it.
+
+Trim (FR-3.2.7): Import can set a start / end per clip (`pages/import/TrimEditor.tsx`,
+stored in `attempts.trim_start_s/trim_end_s`). Only that part is processed, but frame
+times stay those of the original clip and `series.durationS` stays the whole clip;
+`series.trim` says which part was processed. `frameAt` returns null outside it and the
+Review timeline shows it as a `trimmed` band, so Review and relinking need no offset.
+
+Reference attempt (FR-3.6.6): `attempts.is_reference`, one per movement and subject (a
+trigger clears the previous one). `setReferenceAttempt(client(), id, on)` then
+`invalidate()`. Compare's default A is the reference (`choosePair` in
+`pages/compare/pick.ts`); Review, Library and the Compare pickers show a neutral
+"Reference" tag (`pages/review/ReferenceToggle.tsx`). Never call it "best".
 
 ## Shared components (`components/`, import from `'../components'`)
 
@@ -401,6 +428,23 @@ npx supabase functions deploy mika-chat --use-api
 apply without a redeploy. Logs: `npx supabase functions logs mika-chat` (failure codes,
 provider label and finish reason only). If an old `ANTHROPIC_API_KEY` secret exists it is
 no longer read: `npx supabase secrets unset ANTHROPIC_API_KEY`.
+
+## Testing
+
+- `npx vitest run` — unit tests (`src/**/*.test.ts`).
+- `npm run e2e` — Playwright against the **old** tree on the mock (port 5180, Supabase env
+  blanked). Must stay green.
+- `npm run e2e:v2` — smoke tests of **this** app against the real Supabase project
+  (`playwright.v2.config.ts`, specs in `e2e-v2/`). Builds into `dist-e2e-v2/` and serves it
+  with `vite preview` on port 5190, signs in as `TEST_ACCOUNT_EMAIL` /
+  `TEST_ACCOUNT_PASSWORD` from `.env.local` (read in the test only). Without those or the
+  Supabase env every test is skipped and no server starts. Read-only except the Review
+  note, which is written and then restored; never deletes, never changes the password,
+  never sends to Mika. One worker; desktop 1440×900 plus a 390×844 phone project.
+- `npm run check:rls` — FR-3.1.5 two-user RLS check (`scripts/rls-check.mjs`): the test
+  account and a throwaway account it creates try to read, update, delete and insert each
+  other's rows and keypoint files; prints a PASS/FAIL table and deletes the throwaway
+  account through `delete-account`. Mutating probes only target rows made for the run.
 
 ## CSS rules
 

@@ -36,7 +36,8 @@ export function frameVisibility(frame: PoseFrame | null | undefined): number | n
 
 // ---------- hatched bands ----------
 
-export type BandKind = 'gap' | 'low'
+/** 'trimmed' = outside the part of the clip that was processed (FR-3.2.7); no frames. */
+export type BandKind = 'gap' | 'low' | 'trimmed'
 
 export interface Band {
   /** 'gap' = no pose in these frames; 'low' = a pose with mean visibility under the threshold. */
@@ -78,7 +79,23 @@ export function trackingBands(series: PoseSeries, lowBelow = LOW_VISIBILITY): Ba
     }
   }
   close(frames.length)
-  return bands
+  return [...trimBands(series), ...bands]
+}
+
+/**
+ * The parts of a trimmed clip that were not processed: before the first frame and after
+ * the processed end. Shown as their own band so the timeline never reads as "tracked" there.
+ */
+export function trimBands(series: PoseSeries): Band[] {
+  if (!series.trim) return []
+  const out: Band[] = []
+  const end = seriesEnd(series)
+  const first = series.frames.length ? series.frames[0].t : series.trim.startS
+  if (first > 1e-6) out.push({ kind: 'trimmed', start: 0, end: first, frames: 0 })
+  const step = series.fps > 0 ? 1 / series.fps : 0
+  const last = series.frames.length ? series.frames[series.frames.length - 1].t + step : series.trim.endS
+  if (end - last > 1e-6) out.push({ kind: 'trimmed', start: last, end, frames: 0 })
+  return out
 }
 
 export interface BandCount {
@@ -92,7 +109,7 @@ export function countBands(series: PoseSeries, bands: readonly Band[]): BandCoun
   let lowFrames = 0
   for (const b of bands) {
     if (b.kind === 'gap') gapFrames += b.frames
-    else lowFrames += b.frames
+    else if (b.kind === 'low') lowFrames += b.frames
   }
   return { gapFrames, lowFrames, totalFrames: series.frames.length }
 }

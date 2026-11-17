@@ -10,7 +10,7 @@
 import { useMemo, useState } from 'react'
 import type { ApiError } from '../../api/errors'
 import { exportAll } from '../../data/exportData'
-import { dataError } from '../../data/repo'
+import { attemptTrim, dataError } from '../../data/repo'
 import { CAMERA_VIEWS, type CameraView } from '../../data/schema'
 import { client, useAuth } from '../auth'
 import { hasClip } from '../clips'
@@ -41,6 +41,7 @@ import {
   type StatusGroup,
 } from './dataset/grid'
 import { rerunMetrics } from './dataset/rerun'
+import { SubjectSummary } from './dataset/SubjectSummary'
 import { fileDay, saveText } from './settings/download'
 import './dataset/dataset.css'
 
@@ -457,7 +458,12 @@ export function Dataset() {
       return
     }
     enqueue(
-      ready.map((c) => ({ attemptId: c.cell.attempt.id, movement: c.cell.attempt.session.movement_type, clipName: c.cell.attempt.clip_name })),
+      ready.map((c) => ({
+        attemptId: c.cell.attempt.id,
+        movement: c.cell.attempt.session.movement_type,
+        clipName: c.cell.attempt.clip_name,
+        trim: attemptTrim(c.cell.attempt),
+      })),
     )
     navigate({ name: 'processing' })
   }
@@ -661,6 +667,7 @@ export function Dataset() {
         {openRow ? <SubjectClips row={openRow} /> : <p className="t-caption">Tap a subject code to list its clips.</p>}
         <Legend size={14} />
         {footnote}
+        <SubjectSummary attempts={library.data?.attempts ?? []} onSaved={setNote} />
       </>
     )
   }
@@ -734,11 +741,13 @@ export function Dataset() {
             </p>
             <p className="t-caption">
               One row per study clip. Low-confidence values are exported with their flag, never dropped or set to 0. Rows
-              use subject codes only.
+              use subject codes only. The per-subject summary below has its own CSV.
             </p>
           </section>
         </aside>
       </div>
+
+      <SubjectSummary attempts={library.data?.attempts ?? []} onSaved={setNote} />
     </>
   )
 }

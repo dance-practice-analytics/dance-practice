@@ -363,7 +363,7 @@ export function deleteSession(client: SupabaseClient, sessionId: string): Promis
 // ---------- attempts ----------
 
 export const ATTEMPT_COLS =
-  'id, owner_id, session_id, source, label, clip_name, clip_number, note, video_path, video_sha256, duration_s, fps, status, error, created_at'
+  'id, owner_id, session_id, source, label, clip_name, clip_number, note, video_path, video_sha256, duration_s, fps, status, error, is_reference, trim_start_s, trim_end_s, created_at'
 
 const ATTEMPT_GONE: ErrorCopy = {
   notFound: ['That clip is no longer in your library.', 'Refresh the list and try again.'],
@@ -382,6 +382,8 @@ export interface StudyClipInput {
   /** Unknown until the pose step has decoded the clip. */
   fps?: number | null
   label?: string | null
+  /** FR-3.2.7: process only this part (seconds of the original clip); null = whole clip. */
+  trim?: { startS: number; endS: number } | null
 }
 
 export type StudyAttemptResult =
@@ -391,6 +393,23 @@ export type StudyAttemptResult =
   | { clip: StudyClipInput; outcome: 'failed'; error: ApiError }
 
 const finiteOrNull = (n: number | null | undefined) => (typeof n === 'number' && Number.isFinite(n) && n >= 0 ? n : null)
+
+/**
+ * The trim columns of a clip (FR-3.2.7). Anything unusable is stored as "whole clip"
+ * rather than failing the import; the form validates first (`trimProblem`).
+ */
+export function storedTrim(trim: StudyClipInput['trim']): { trim_start_s: number | null; trim_end_s: number | null } {
+  const start = finiteOrNull(trim?.startS)
+  const end = finiteOrNull(trim?.endS)
+  if (start === null || end === null || end <= start) return { trim_start_s: null, trim_end_s: null }
+  return { trim_start_s: start, trim_end_s: end }
+}
+
+/** The trim of a stored attempt, in the shape the pose step takes; null = whole clip. */
+export function attemptTrim(row: Pick<AttemptRow, 'trim_start_s' | 'trim_end_s'>): { startS: number; endS: number } | null {
+  const { trim_start_s, trim_end_s } = storedTrim({ startS: row.trim_start_s ?? NaN, endS: row.trim_end_s ?? NaN })
+  return trim_start_s === null || trim_end_s === null ? null : { startS: trim_start_s, endS: trim_end_s }
+}
 
 /**
  * Clip name and number as they may be stored (FR-3.2.5): the local file name never
@@ -415,6 +434,7 @@ function studyRow(sessionId: string, clip: StudyClipInput, sha: string): StudyAt
     video_sha256: sha,
     duration_s: finiteOrNull(clip.duration_s),
     fps: finiteOrNull(clip.fps),
+    ...storedTrim(clip.trim),
     status: 'queued',
   }
 }
@@ -554,6 +574,23 @@ export function updateAttemptNote(client: SupabaseClient, attemptId: string, not
     await requireUid(client)
     const row = unwrap<AttemptRow | null>(
       await client.from('attempts').update({ note: normaliseNote(note) }).eq('id', attemptId).select(ATTEMPT_COLS).maybeSingle(),
+      ATTEMPT_GONE,
+    )
+    if (!row) throw dataError({ code: 'PGRST116' }, ATTEMPT_GONE)
+    return row
+  }, ATTEMPT_GONE)
+}
+
+/**
+ * Marks or unmarks an attempt as the dancer's reference (FR-3.6.6). Marking one clears
+ * the previous reference of the same movement and subject in the database (trigger
+ * attempts_single_reference), so callers just refetch afterwards.
+ */
+export function setReferenceAttempt(client: SupabaseClient, attemptId: string, on: boolean): Promise<AttemptRow> {
+  return guard(async () => {
+    await requireUid(client)
+    const row = unwrap<AttemptRow | null>(
+      await client.from('attempts').update({ is_reference: on }).eq('id', attemptId).select(ATTEMPT_COLS).maybeSingle(),
       ATTEMPT_GONE,
     )
     if (!row) throw dataError({ code: 'PGRST116' }, ATTEMPT_GONE)

@@ -87,7 +87,7 @@ function LoadingDashboard({ narrow }: { narrow: boolean }) {
     </div>
   )
   return (
-    <div aria-busy="true" aria-label="Loading dashboard" style={{ display: 'flex', flexDirection: 'column', gap: narrow ? 16 : 24 }}>
+    <div role="status" aria-busy="true" aria-label="Loading dashboard" style={{ display: 'flex', flexDirection: 'column', gap: narrow ? 16 : 24 }}>
       <div style={{ display: 'flex', flexWrap: 'wrap', gap: 16 }}>
         {card('2 1 520px', 2)}
         {card('1 1 300px', 2)}

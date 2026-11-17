@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { decodeSeries, encodeSeries, KEYPOINTS_FORMAT, PRECISION } from './codec'
-import { clampFps, DEFAULT_TARGET_FPS, planFrames, SEEK_OFFSET_S, toPoseFrame } from './frames'
+import { clampFps, DEFAULT_TARGET_FPS, MIN_TRIM_S, normalizeTrim, planFrames, SEEK_OFFSET_S, toPoseFrame, trimProblem } from './frames'
 import { ONE_EURO_DEFAULTS, ONE_EURO_WORLD, OneEuroFilter, smoothSeries } from './oneEuro'
 import { looksSwapped, unswapLeftRight } from './swaps'
 import { LANDMARK_COUNT, LM, type Landmark, type PoseFrame, type PoseSeries } from './types'
@@ -221,6 +221,54 @@ describe('frame planning', () => {
   })
 })
 
+describe('frame planning with a trim (FR-3.2.7)', () => {
+  it('plans only the samples inside [start, end), on the grid of the whole clip', () => {
+    const full = planFrames(10)
+    const plan = planFrames(10, undefined, 0, { startS: 2, endS: 5 })
+    expect(plan.frames).toHaveLength(90)
+    expect(plan.frames[0].t).toBe(2)
+    expect(plan.frames[89].t).toBeCloseTo(149 / 30, 12)
+    // Same instants, seek targets and timestamps as the untrimmed plan: times stay
+    // those of the original clip, so Review lines the keypoints up with the whole video.
+    expect(plan.frames).toEqual(full.frames.slice(60, 150))
+  })
+
+  it('starts at the first sample at or after an off-grid start and stops before the end', () => {
+    const plan = planFrames(10, 30, 0, { startS: 1.01, endS: 3.5 })
+    expect(plan.frames[0].t).toBeCloseTo(31 / 30, 12)
+    expect(plan.frames.at(-1)!.t).toBeLessThan(3.5)
+    expect(plan.frames.at(-1)!.t).toBeCloseTo(104 / 30, 12)
+    plan.frames.slice(1).forEach((f, i) => expect(f.timestampMs).toBeGreaterThan(plan.frames[i].timestampMs))
+  })
+
+  it('keeps the base timestamp offset and lower rates', () => {
+    const plan = planFrames(4, 15, 5000, { startS: 1, endS: 3 })
+    expect(plan.frames).toHaveLength(30)
+    expect(plan.frames[0]).toEqual({ t: 1, seekS: 1 + SEEK_OFFSET_S, timestampMs: 6000 })
+  })
+
+  it('treats no range, or a range over the whole clip, as no trim', () => {
+    expect(planFrames(10, undefined, 0, null).frames).toHaveLength(300)
+    expect(planFrames(10, undefined, 0, { startS: 0, endS: 10 }).frames).toHaveLength(300)
+    expect(normalizeTrim({ startS: 0, endS: 10 }, 10)).toBeNull()
+    expect(normalizeTrim(undefined, 10)).toBeNull()
+  })
+
+  it('accepts an end a little past what the decoder reports as "to the end"', () => {
+    expect(normalizeTrim({ startS: 1, endS: 8.2 }, 8.13)).toEqual({ startS: 1, endS: 8.13 })
+  })
+
+  it('rejects ranges outside the clip, reversed or shorter than the minimum', () => {
+    expect(trimProblem({ startS: -0.5, endS: 4 }, 10)).toMatch(/before the beginning/)
+    expect(trimProblem({ startS: 1, endS: 12 }, 10)).toMatch(/after the end/)
+    expect(trimProblem({ startS: 5, endS: 5 }, 10)).toMatch(/after the start/)
+    expect(trimProblem({ startS: 5, endS: 5 + MIN_TRIM_S - 0.1 }, 10)).toMatch(/at least/)
+    expect(trimProblem({ startS: Number.NaN, endS: 4 }, 10)).toMatch(/seconds/)
+    expect(trimProblem({ startS: 1, endS: 4 }, 10)).toBeNull()
+    expect(() => planFrames(10, undefined, 0, { startS: 6, endS: 2 })).toThrow(RangeError)
+  })
+})
+
 describe('toPoseFrame', () => {
   const raw = (n: number) =>
     Array.from({ length: n }, (_, i) => ({ x: i, y: i + 1, z: i + 2, visibility: 0.8, presence: 0.7 }))
@@ -283,6 +331,18 @@ describe('keypoints codec', () => {
         })
       }
     })
+  })
+
+  it('keeps the trim of a trimmed series and reads files without one as the whole clip', async () => {
+    const base = syntheticSeries(30)
+    const trimmed: PoseSeries = { ...base, durationS: 4, trim: { startS: 1, endS: 2 }, frames: base.frames.map((f) => ({ ...f, t: f.t + 1 })) }
+    const decoded = await decodeSeries(await encodeSeries(trimmed))
+    expect(decoded.trim).toEqual({ startS: 1, endS: 2 })
+    expect(decoded.durationS).toBe(4)
+    expect(decoded.frames[0].t).toBeCloseTo(1, 4)
+    expect((await decodeSeries(await encodeSeries(base))).trim).toBeUndefined()
+    const file = await gunzip(await encodeSeries(trimmed))
+    await expect(decodeSeries(await gzip(JSON.stringify({ ...file, trim: [3, 2] })))).rejects.toThrow(/trim/)
   })
 
   it('is stable: decoding and encoding again gives the same values', async () => {

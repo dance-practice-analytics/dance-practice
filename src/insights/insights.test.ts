@@ -44,6 +44,9 @@ function attempt(id: string, sessionId: string, over: Partial<AttemptRow> = {}):
     fps: 30,
     status: 'done',
     error: null,
+    is_reference: false,
+    trim_start_s: null,
+    trim_end_s: null,
     created_at: '2026-11-01T15:05:00Z',
     ...over,
   }

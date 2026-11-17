@@ -7,7 +7,9 @@ import {
   groupIntoSessions,
   localDate,
   parseTags,
+  rowTrim,
   summaryDetail,
+  trimSummary,
   type ClipDraft,
   type KnownClip,
 } from './model'
@@ -144,7 +146,7 @@ describe('countChecks / summaryDetail', () => {
       ['dup2', knownClip({ attemptId: 'a2' })],
     ])
     const counts = countChecks(checkRows(rows, known, 'study').values())
-    expect(counts).toEqual({ ready: 2, reprocess: 1, duplicates: 1, needsSubject: 1, unusable: 1, reading: 0, toQueue: 3 })
+    expect(counts).toEqual({ ready: 2, reprocess: 1, duplicates: 1, needsSubject: 1, badTrim: 0, unusable: 1, reading: 0, toQueue: 3 })
     expect(summaryDetail(counts)).toBe('1 to process again · 1 already imported · 1 needs a subject code · 1 file can’t be used')
   })
 
@@ -191,5 +193,34 @@ describe('findSession', () => {
     const [otherSubject] = groupIntoSessions([draft({ subject: 'S04' })])
     expect(findSession(sessions, otherDay)).toBeNull()
     expect(findSession(sessions, otherSubject)).toBeNull()
+  })
+})
+
+describe('trim (FR-3.2.7)', () => {
+  it('is the whole clip when nothing is typed or the range covers the clip', () => {
+    expect(rowTrim(draft())).toEqual({ range: null, problem: null })
+    expect(rowTrim(draft({ trimStart: 0, trimEnd: 8.2 }))).toEqual({ range: null, problem: null })
+    expect(trimSummary(draft())).toBeNull()
+  })
+
+  it('fills an open end with the start or the end of the clip', () => {
+    expect(rowTrim(draft({ trimStart: 1.5 })).range).toEqual({ startS: 1.5, endS: 8.2 })
+    expect(rowTrim(draft({ trimEnd: 6 })).range).toEqual({ startS: 0, endS: 6 })
+    expect(trimSummary(draft({ trimStart: 1.5, trimEnd: 6 }))).toBe('00:01.5–00:06.0 of 00:08.2')
+  })
+
+  it('reports a range outside the clip, reversed or too short, and blocks the row', () => {
+    expect(rowTrim(draft({ trimEnd: 9 })).problem).toMatch(/after the end of the clip/)
+    expect(rowTrim(draft({ trimStart: 5, trimEnd: 4 })).problem).toMatch(/after the start/)
+    expect(rowTrim(draft({ trimStart: 2, trimEnd: 3 })).problem).toMatch(/at least/)
+    expect(rowTrim(draft({ trimStart: -1 })).problem).toMatch(/before the beginning/)
+    expect(rowTrim(draft({ durationS: null, trimStart: 1 })).problem).toMatch(/length/)
+    const bad = draft({ trimStart: 5, trimEnd: 4 })
+    const checks = checkRows([bad, draft()], new Map(), 'study')
+    expect(checks.get(bad.id)?.kind).toBe('bad_trim')
+    const counts = countChecks(checks.values())
+    expect(counts.badTrim).toBe(1)
+    expect(counts.toQueue).toBe(1)
+    expect(summaryDetail(counts)).toBe('1 trim to fix')
   })
 })

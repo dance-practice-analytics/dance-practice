@@ -4,8 +4,9 @@
 // this device and only rows (name, fingerprint, length, tags) go to Supabase. The
 // clips are registered in clips.ts and handed to the on-device pipeline.
 
-import { useCallback, useEffect, useMemo, useRef, useState, type DragEvent, type ReactNode } from 'react'
+import { Fragment, useCallback, useEffect, useMemo, useRef, useState, type DragEvent, type ReactNode } from 'react'
 import { baseName, clipNumberOrNull } from '../../data/clipFile'
+import { attemptTrim } from '../../data/repo'
 import { CAMERA_VIEWS, MOVEMENT_TYPES, NOTE_MAX_CHARS, type CameraView, type MovementType } from '../../data/schema'
 import { client } from '../auth'
 import { registerClip } from '../clips'
@@ -23,8 +24,10 @@ import {
   groupIntoSessions,
   localDate,
   parseTags,
+  rowTrim,
   SUBJECT_CODES,
   summaryDetail,
+  trimSummary,
   type Check,
   type ClipDraft,
   type ImportSource,
@@ -33,6 +36,7 @@ import {
 } from './import/model'
 import { probeFile } from './import/probe'
 import { createImport } from './import/submit'
+import { TrimEditor } from './import/TrimEditor'
 
 interface Row extends ClipDraft {
   file: File
@@ -126,6 +130,7 @@ export function Import() {
         subjectCode: a.session.subject_code,
         movement: a.session.movement_type,
         status: a.status,
+        trim: attemptTrim(a),
       })
     }
     return map
@@ -154,7 +159,7 @@ export function Import() {
         const res = outcomes.get(row.id)
         if (res?.ok) {
           registerClip(res.attempt.id, row.file)
-          jobs.push({ attemptId: res.attempt.id, movement: row.movement, clipName: row.name })
+          jobs.push({ attemptId: res.attempt.id, movement: row.movement, clipName: row.name, trim: rowTrim(row).range })
           changes.set(row.id, null)
         } else {
           failed++
@@ -166,7 +171,7 @@ export function Import() {
         const check = checks.get(row.id)
         if (check?.kind !== 'duplicate' || !check.reprocess) continue
         registerClip(check.known.attemptId, row.file)
-        jobs.push({ attemptId: check.known.attemptId, movement: check.known.movement, clipName: row.name })
+        jobs.push({ attemptId: check.known.attemptId, movement: check.known.movement, clipName: row.name, trim: check.known.trim ?? null })
         changes.set(row.id, null)
       }
       setRows((list) =>
@@ -606,7 +611,29 @@ interface TagProps {
 
 /** Tags only matter for rows that can become a new attempt. */
 const taggable = (check: Check | undefined) =>
-  check?.kind === 'ready' || check?.kind === 'needs_subject' || check?.kind === 'reading' || check?.kind === 'failed'
+  check?.kind === 'ready' ||
+  check?.kind === 'needs_subject' ||
+  check?.kind === 'reading' ||
+  check?.kind === 'failed' ||
+  check?.kind === 'bad_trim'
+
+/** FR-3.2.7: opens the trim editor; says the range once one is set. */
+function TrimButton({ row, open, onToggle, disabled, roomy }: { row: Row; open: boolean; onToggle(): void; disabled?: boolean; roomy?: boolean }) {
+  const summary = trimSummary(row)
+  return (
+    <button
+      className={roomy ? 'btn btn-ghost' : 'btn btn-ghost btn-sm'}
+      type="button"
+      aria-expanded={open}
+      disabled={disabled}
+      onClick={onToggle}
+      title={summary ? `Processes ${summary}` : 'Process only part of this clip'}
+    >
+      {summary ? <span className="mono" style={{ fontSize: 12 }}>Trim {summary.split(' of ')[0]}</span> : 'Trim'}
+      <span className="v2-sr">{` ${row.name}`}</span>
+    </button>
+  )
+}
 
 function SubjectSelect(props: { value: string | null; onChange(v: string | null): void; label: string; source: ImportSource; disabled?: boolean; need?: boolean; width?: number | string }) {
   return (
@@ -697,6 +724,7 @@ interface TagTableProps extends TagProps {
 
 function TagTable({ rows, checks, source, selectedCount, patch, remove, onSelectAll, onApply }: TagTableProps) {
   const all = useRef<HTMLInputElement>(null)
+  const [trimOpen, setTrimOpen] = useState<string | null>(null)
   useEffect(() => {
     if (all.current) all.current.indeterminate = selectedCount > 0 && selectedCount < rows.length
   }, [selectedCount, rows.length])
@@ -740,8 +768,10 @@ function TagTable({ rows, checks, source, selectedCount, patch, remove, onSelect
               const check = checks.get(row.id)
               const dup = check?.kind === 'duplicate' || check?.kind === 'duplicate_in_list'
               const editable = taggable(check)
+              const trimming = trimOpen === row.id && editable
               return (
-                <tr key={row.id} className={dup ? 'v2-imp-dup' : undefined} data-check={check?.kind}>
+                <Fragment key={row.id}>
+                <tr className={dup ? 'v2-imp-dup' : undefined} data-check={check?.kind}>
                   <td>
                     <input
                       type="checkbox"
@@ -760,7 +790,12 @@ function TagTable({ rows, checks, source, selectedCount, patch, remove, onSelect
                     </div>
                   </td>
                   <td className="mono subtle" style={{ fontSize: 12 }}>
-                    {formatLength(row.durationS)}
+                    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-start', gap: 2 }}>
+                      {formatLength(row.durationS)}
+                      {editable && (
+                        <TrimButton row={row} open={trimming} disabled={row.durationS === null} onToggle={() => setTrimOpen(trimming ? null : row.id)} />
+                      )}
+                    </div>
                   </td>
                   <td>
                     <ClipNumberInput row={row} patch={patch} disabled={!editable} />
@@ -816,6 +851,21 @@ function TagTable({ rows, checks, source, selectedCount, patch, remove, onSelect
                     </button>
                   </td>
                 </tr>
+                {trimming && (
+                  <tr>
+                    <td colSpan={9}>
+                      <TrimEditor
+                        file={row.file}
+                        name={row.name}
+                        durationS={row.durationS}
+                        value={{ trimStart: row.trimStart ?? null, trimEnd: row.trimEnd ?? null }}
+                        onChange={(v) => patch(row.id, v)}
+                        onClose={() => setTrimOpen(null)}
+                      />
+                    </td>
+                  </tr>
+                )}
+                </Fragment>
               )
             })}
           </tbody>
@@ -845,6 +895,7 @@ function Seg<T extends string>({ label, value, options, onChange }: { label: str
 }
 
 function TagCards({ rows, checks, source, patch, remove, onApplyAll }: TagProps & { onApplyAll: TagTableProps['onApply'] }) {
+  const [trimOpen, setTrimOpen] = useState<string | null>(null)
   return (
     <>
       <p className="t-label">
@@ -907,6 +958,23 @@ function TagCards({ rows, checks, source, patch, remove, onApplyAll }: TagProps 
                   options={CAMERA_VIEWS.map((v) => [v, VIEW_SHORT[v]] as const)}
                   onChange={(view) => patch(row.id, { view })}
                 />
+                <TrimButton
+                  row={row}
+                  roomy
+                  open={trimOpen === row.id}
+                  disabled={row.durationS === null}
+                  onToggle={() => setTrimOpen(trimOpen === row.id ? null : row.id)}
+                />
+                {trimOpen === row.id && (
+                  <TrimEditor
+                    file={row.file}
+                    name={row.name}
+                    durationS={row.durationS}
+                    value={{ trimStart: row.trimStart ?? null, trimEnd: row.trimEnd ?? null }}
+                    onChange={(v) => patch(row.id, v)}
+                    onClose={() => setTrimOpen(null)}
+                  />
+                )}
               </div>
             )}
             <CheckCell row={row} check={check} patch={patch} remove={remove} roomy />
@@ -946,6 +1014,12 @@ function CheckCell({ row, check, patch, remove, roomy }: { row: Row; check: Chec
       )
     case 'needs_subject':
       return <Problem icon="warning" title="Choose a subject code" />
+    case 'bad_trim':
+      return (
+        <Problem icon="warning" title="Check the trim">
+          {check.message}
+        </Problem>
+      )
     case 'empty':
       return (
         <Problem icon="warning" title="This file is empty">

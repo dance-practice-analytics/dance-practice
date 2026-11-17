@@ -10,9 +10,11 @@
 //     t:     number[]                 seconds, rounded to 0.1 ms
 //     image: (number[] | null)[]      per frame: 33 x [x, y, z, visibility] quantized deltas
 //     world: (number[] | null)[]      same layout
-//     relabeled?: number[] }          indices of frames whose left/right labels were
+//     relabeled?: number[]            indices of frames whose left/right labels were
 //                                     exchanged back (src/pose/swaps.ts); optional, so
 //                                     files written before it read as "none"
+//     trim?: [startS, endS] }         FR-3.2.7: only this part of the clip was processed
+//                                     (times of the original clip); absent = whole clip
 
 import { LANDMARK_COUNT, type Landmark, type PoseFrame, type PoseSeries } from './types'
 
@@ -50,6 +52,7 @@ interface KeypointsFile {
   image: (number[] | null)[]
   world: (number[] | null)[]
   relabeled?: number[]
+  trim?: [number, number]
 }
 
 const quantize = (value: number, step: number) => {
@@ -116,6 +119,7 @@ export async function encodeSeries(series: PoseSeries): Promise<Blob> {
   }
   const relabeled = series.frames.flatMap((f, i) => (f.relabeled ? [i] : []))
   if (relabeled.length) file.relabeled = relabeled
+  if (series.trim) file.trim = [series.trim.startS, series.trim.endS]
   const json = new Blob([JSON.stringify(file)])
   const gzipped = json.stream().pipeThrough(new CompressionStream('gzip'))
   return new Blob([await new Response(gzipped).arrayBuffer()], { type: KEYPOINTS_MIME })
@@ -165,6 +169,10 @@ function checkFile(value: unknown): KeypointsFile {
       return fail('"relabeled" must be a list of frame indices.')
     }
   }
+  if (f.trim !== undefined) {
+    const ok = Array.isArray(f.trim) && f.trim.length === 2 && f.trim.every(isNumber) && f.trim[0] >= 0 && f.trim[1] > f.trim[0]
+    if (!ok) return fail('"trim" must be [start, end] in seconds.')
+  }
   return f as unknown as KeypointsFile
 }
 
@@ -186,7 +194,7 @@ export async function decodeSeries(blob: Blob): Promise<PoseSeries> {
   const image = decodeTrack(file.image, PRECISION.image)
   const world = decodeTrack(file.world, PRECISION.world)
   const relabeled = new Set(file.relabeled ?? [])
-  return {
+  const series: PoseSeries = {
     fps: file.fps,
     durationS: file.durationS,
     width: file.width,
@@ -199,4 +207,6 @@ export async function decodeSeries(blob: Blob): Promise<PoseSeries> {
       return frame
     }),
   }
+  if (file.trim) series.trim = { startS: file.trim[0], endS: file.trim[1] }
+  return series
 }

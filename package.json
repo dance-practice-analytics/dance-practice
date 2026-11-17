@@ -14,7 +14,9 @@
     "test:watch": "vitest",
     "clips": "node scripts/make-test-clips.mjs",
     "e2e": "playwright test",
-    "e2e:ui": "playwright test --ui"
+    "e2e:ui": "playwright test --ui",
+    "e2e:v2": "playwright test -c playwright.v2.config.ts",
+    "check:rls": "node scripts/rls-check.mjs"
   },
   "dependencies": {
     "@mediapipe/tasks-vision": "^1.2.3",
@@ -24,10 +26,12 @@
     "recharts": "^3.10.1"
   },
   "devDependencies": {
+    "@axe-core/playwright": "^4.14.0",
     "@playwright/test": "^1.64.1",
     "@types/react": "^19.3.0",
     "@types/react-dom": "^19.3.0",
     "@vitejs/plugin-react": "^6.1.2",
+    "fake-indexeddb": "^6.2.8",
     "mp4-muxer": "^5.2.2",
     "puppeteer-core": "^25.16.0",
     "typescript": "^7.0.2",

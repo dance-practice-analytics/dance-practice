@@ -1,6 +1,7 @@
 // Turns the tagged rows into sessions and attempts (FR-3.2.2–3.2.6). Only rows are
 // written: a de-identified clip name (never the local file name, FR-3.2.5), clip
-// number, fingerprint, length, tags and the optional session note. The clip itself is
+// number, fingerprint, length, tags, the optional trim (FR-3.2.7) and the optional
+// session note. The clip itself is
 // registered in clips.ts (memory of this tab) and never sent anywhere.
 
 import type { SupabaseClient } from '@supabase/supabase-js'
@@ -13,12 +14,13 @@ import {
   deleteSession,
   ensureSubject,
   storedClipFields,
+  storedTrim,
   updateSession,
   type StudyAttemptResult,
   type StudyClipInput,
 } from '../../../data/repo'
 import type { AttemptRow } from '../../../data/schema'
-import { findSession, type ImportSource, type SessionGroup, type SessionLike } from './model'
+import { findSession, rowTrim, type ImportSource, type SessionGroup, type SessionLike } from './model'
 
 export type RowOutcome =
   | { ok: true; attempt: AttemptRow }
@@ -44,6 +46,7 @@ async function createOwnAttempts(db: SupabaseClient, sessionId: string, clips: S
       video_path: null,
       video_sha256: clip.video_sha256,
       duration_s: clip.duration_s,
+      ...storedTrim(clip.trim),
       status: 'queued' as const,
     }
     const res = await db.from('attempts').insert(row).select(ATTEMPT_COLS).single()
@@ -97,6 +100,7 @@ export async function createImport(
         clip_number: r.clipNumber,
         video_sha256: r.sha ?? '',
         duration_s: r.durationS,
+        trim: rowTrim(r).range,
       }))
       const results =
         source === 'study' ? await createStudyAttempts(db, sessionId, clips) : await createOwnAttempts(db, sessionId, clips)

@@ -135,7 +135,8 @@
 .conf-bars i:nth-child(1){height:5px}.conf-bars i:nth-child(2){height:8px}.conf-bars i:nth-child(3){height:11px}
 .conf-high .conf-bars i,.conf-med .conf-bars i:nth-child(-n+2),.conf-low .conf-bars i:nth-child(1){background:var(--text-2)}
 .conf-low,.conf-none{border-style:dashed;background-image:repeating-linear-gradient(135deg,var(--hatch) 0 1.5px,transparent 1.5px 6px)}
-.conf-none{color:var(--text-3)}
+/* text-2, not text-3: over the hatch stripes text-3 drops to 3.9:1 in light (WCAG 1.4.3 needs 4.5). */
+.conf-none{color:var(--text-2)}
 
 /* Privacy */
 .privacy{display:inline-flex;align-items:center;gap:6px;height:28px;padding:0 10px 0 8px;border-radius:999px;background:var(--surface-2);color:var(--text-2);font-size:13px;font-weight:500;white-space:nowrap}

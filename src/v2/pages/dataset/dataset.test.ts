@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 import { buildExportDocument, type ExportRows } from '../../../data/exportData'
 import type { AttemptMetricsRow, AttemptStatus, CameraView, MovementType } from '../../../data/schema'
 import type { AttemptView } from '../../data'
+import { median, subjectAggregates, subjectSummaryColumns, subjectSummaryCsv } from './aggregate'
 import { datasetCsv, datasetCsvColumns } from './csv'
 import { NO_CODE, PLANNED_TOTAL, buildGrid, cellKind, matchesFilter, rowSummary } from './grid'
 
@@ -61,6 +62,9 @@ function attempt(s: Spec): AttemptView {
     fps: 30,
     status: s.status ?? 'done',
     error: s.error ?? null,
+    is_reference: false,
+    trim_start_s: null,
+    trim_end_s: null,
     created_at: '2026-11-15T09:00:00Z',
     number: s.number ?? 1,
     metrics: s.metrics === undefined ? (s.status && s.status !== 'done' ? null : metrics(s.id, ALL_HIGH)) : s.metrics,
@@ -260,5 +264,71 @@ describe('datasetCsv', () => {
     expect(full.length).toBe(lean.length + 10 + 12)
     const csv = datasetCsv(doc, clipOf, { confidence: false, phases: false })
     expect(csv.split('\r\n')[0]).toBe(lean.join(','))
+  })
+})
+
+describe('per-subject summary (FR-3.6.5)', () => {
+  const lvl = (level: string) => ({ ...ALL_HIGH, trunk_inclination_deg: level })
+  const at = (id: string, code: string | null, trunk: number | null, level = 'high', over: Partial<Spec> = {}) =>
+    attempt({ id, code, metrics: metrics(id, lvl(level), { trunk_inclination_deg: trunk }), ...over })
+
+  it('takes the median of a subject’s own values and counts the left-out ones', () => {
+    const list = [
+      at('a1', 'S02', 4),
+      at('a2', 'S02', 6),
+      at('a3', 'S02', 5, 'medium'),
+      at('a4', 'S02', 30, 'low'),
+      at('a5', 'S02', null, 'high'),
+      at('b1', 'S01', 2),
+      at('b2', 'S01', 3),
+      // Not counted: another movement, not processed, a personal clip.
+      at('c1', 'S01', 9, 'high', { movement: 'pirouette' }),
+      attempt({ id: 'q1', code: 'S01', status: 'queued' }),
+      at('p1', 'S01', 50, 'high', { source: 'user_upload' }),
+    ]
+    const aggs = subjectAggregates(list)
+    expect(aggs.map((g) => [g.code, g.movement, g.attempts])).toEqual([
+      ['S01', 'releve_balance', 2],
+      ['S01', 'pirouette', 1],
+      ['S02', 'releve_balance', 5],
+    ])
+    const trunk = aggs[2].metrics.find((m) => m.metric === 'trunk_inclination_deg')!
+    expect(trunk).toEqual({ metric: 'trunk_inclination_deg', median: 5, counted: 3, excludedLow: 1, unavailable: 1 })
+    expect(aggs[0].metrics.find((m) => m.metric === 'trunk_inclination_deg')!.median).toBe(2.5)
+    // Turns are only listed for pirouettes.
+    expect(aggs[0].metrics.some((m) => m.metric === 'turn_count')).toBe(false)
+    expect(aggs[1].metrics.some((m) => m.metric === 'turn_count')).toBe(true)
+  })
+
+  it('gives null, never 0, when every value was left out', () => {
+    const [g] = subjectAggregates([at('a1', 'S03', 4, 'low'), at('a2', 'S03', null)])
+    const trunk = g.metrics.find((m) => m.metric === 'trunk_inclination_deg')!
+    expect(trunk).toMatchObject({ median: null, counted: 0, excludedLow: 1, unavailable: 1 })
+    expect(median([])).toBeNull()
+    expect(median([3, 1, 2])).toBe(2)
+  })
+
+  it('writes one CSV row per subject and movement with empty cells for no value', () => {
+    const csv = subjectSummaryCsv(subjectAggregates([at('a1', 'S02', 4.123456), at('a2', 'S02', null), at('n1', null, 7)]))
+    const lines = csv.trimEnd().split('\r\n')
+    expect(lines[0]).toBe(subjectSummaryColumns().join(','))
+    expect(lines).toHaveLength(3)
+    const cols = subjectSummaryColumns()
+    const row = Object.fromEntries(lines[1].split(',').map((v, i) => [cols[i], v]))
+    expect(row).toMatchObject({
+      subject_code: 'S02',
+      movement: 'releve_balance',
+      attempts_done: '2',
+      trunk_inclination_deg_median: '4.1235',
+      trunk_inclination_deg_unit: 'deg',
+      trunk_inclination_deg_n_counted: '1',
+      trunk_inclination_deg_n_excluded_low_confidence: '0',
+      trunk_inclination_deg_n_unavailable: '1',
+      turn_count_median: '',
+      turn_count_n_counted: '',
+    })
+    // Clips without a subject code come last, with an empty code cell.
+    expect(lines[2].startsWith(',releve_balance,1,')).toBe(true)
+    expect(csv).not.toMatch(/\.mp4|a1|n1/)
   })
 })

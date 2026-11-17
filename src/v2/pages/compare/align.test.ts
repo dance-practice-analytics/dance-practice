@@ -152,4 +152,38 @@ describe('choosePair', () => {
     expect(choosePair(all, 'o1')).toEqual({ a: 'o1', b: null })
     expect(choosePair([])).toEqual({ a: null, b: null })
   })
+  describe('with a reference attempt (FR-3.6.6)', () => {
+    const rel = { movement_type: 'releve_balance', subject_code: 'S01' }
+    const pir = { movement_type: 'pirouette', subject_code: 'S01' }
+    const x = (id: string, session_id: string, number: number, created_at: string, session = rel, is_reference = false) => ({
+      ...at(id, session_id, number, created_at),
+      session,
+      is_reference,
+    })
+    const list = [
+      x('r1', 'old', 1, '2026-11-01T10:00:00Z', rel, true),
+      x('r2', 'old', 2, '2026-11-01T10:01:00Z'),
+      x('n1', 'new', 1, '2026-11-10T10:00:00Z'),
+      x('n2', 'new', 2, '2026-11-10T10:01:00Z'),
+      x('p1', 'pir', 1, '2026-11-09T10:00:00Z', pir),
+    ]
+
+    it('puts the reference in A and the latest attempt of its movement in B', () => {
+      expect(choosePair(list)).toEqual({ a: 'r1', b: 'n2' })
+    })
+
+    it('uses the reference of B’s movement when only B is given', () => {
+      expect(choosePair(list, undefined, 'n1')).toEqual({ a: 'r1', b: 'n1' })
+      // No reference for pirouette: back to the neighbour / latest rule.
+      expect(choosePair(list, undefined, 'p1')).toEqual({ a: 'n2', b: 'p1' })
+      // B is the reference itself: A is its neighbour.
+      expect(choosePair(list, undefined, 'r1')).toEqual({ a: 'r2', b: 'r1' })
+    })
+
+    it('keeps an explicit A, and ignores a reference of another movement or subject', () => {
+      expect(choosePair(list, 'n1')).toEqual({ a: 'n1', b: 'n2' })
+      const other = list.map((p) => (p.id === 'r1' ? { ...p, session: { ...rel, subject_code: 'S02' } } : p))
+      expect(choosePair(other)).toEqual({ a: 'n2', b: 'n1' })
+    })
+  })
 })

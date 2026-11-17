@@ -25,3 +25,6 @@ study-data/
 supabase/.temp/
 supabase/.branches/
 android/app/build/
+
+# v2 smoke e2e build (playwright.v2.config.ts)
+dist-e2e-v2/

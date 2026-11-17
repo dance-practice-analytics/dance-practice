@@ -132,6 +132,19 @@ describe('phase state machine', () => {
     expect(m.phases[4].end).toBeCloseTo(5, 9)
   })
 
+  it('measures a trimmed series (FR-3.2.7) the same and ends it at the trim, in clip time', () => {
+    const plain = releve()
+    // The same 5 s of frames, as if cut from 2–7 s of a 9 s clip.
+    const trimmed = { ...plain, durationS: 9, trim: { startS: 2, endS: 7 }, frames: plain.frames.map((f) => ({ ...f, t: f.t + 2 })) }
+    const a = computeMetrics(plain, 'releve_balance')
+    const b = computeMetrics(trimmed, 'releve_balance')
+    expect(b.trunk_inclination_deg).toBe(a.trunk_inclination_deg)
+    expect(b.balance_duration_s).toBe(a.balance_duration_s)
+    expect(b.phases[0].start).toBeCloseTo(2, 9)
+    expect(b.phases[1].start).toBeCloseTo(2 + frame(34), 9)
+    expect(b.phases.at(-1)!.end).toBeCloseTo(7, 9)
+  })
+
   it('needs 3 consecutive frames above 2% to start a lift', () => {
     expect(detectLift([0, 0.03, 0.03, 0, 0.03, 0.03, 0.03, 0.03, 0])).toEqual({ onset: 4, end: 8 })
     expect(detectLift([0, 0.019, 0.019, 0.019, 0.019])).toBeNull()

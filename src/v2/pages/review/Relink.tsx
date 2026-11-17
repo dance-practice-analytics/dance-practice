@@ -112,7 +112,7 @@ export function RelinkOverlay({ missing, attempts, describe }: RelinkNoteProps) 
         </button>
       ) : (
         <div className="v2-relink-wrap">
-          <div className="v2-relink-card" role="region" aria-label="Video not on this device">
+          <div className="v2-relink-card" role="region" aria-label={`${subject} not on this device`}>
             <button className="btn btn-ghost btn-icon v2-relink-close" type="button" aria-label="Hide this message" onClick={() => setClosed(true)}>
               <Icon name="close" />
             </button>

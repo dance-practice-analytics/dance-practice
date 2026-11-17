@@ -1,5 +1,5 @@
-// Row types for the Supabase schema (supabase/migrations/20261115000000_init.sql and
-// 20261117000000_attempt_notes.sql, SDD 6).
+// Row types for the Supabase schema (supabase/migrations/20261115000000_init.sql,
+// 20261117000000_attempt_notes.sql and 20261117010000_reference_attempt.sql, SDD 6).
 // Column names stay in snake_case so a row can be passed to and from the client as is.
 // Insert types leave out owner_id on purpose: the database fills it with auth.uid(),
 // so the browser never chooses whose row it is writing.
@@ -140,6 +140,12 @@ export interface AttemptRow {
   fps: number | null
   status: AttemptStatus
   error: string | null
+  /** FR-3.6.6: the dancer's reference attempt (one per movement and subject; a trigger
+   *  clears the previous one). A point of comparison, never a grade. */
+  is_reference: boolean
+  /** FR-3.2.7: processed part of the clip, seconds of the original clip; both null = whole clip. */
+  trim_start_s: number | null
+  trim_end_s: number | null
   created_at: Timestamp
 }
 
@@ -156,6 +162,9 @@ export interface AttemptInsert {
   fps?: number | null
   status?: AttemptStatus
   error?: string | null
+  is_reference?: boolean
+  trim_start_s?: number | null
+  trim_end_s?: number | null
 }
 
 /** A study clip can never point at a stored video. */

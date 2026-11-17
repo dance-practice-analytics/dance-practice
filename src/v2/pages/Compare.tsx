@@ -222,7 +222,7 @@ function Pickers({ processed, a, b, narrow, onPick }: PickersProps) {
           >
             {g.map((x) => (
               <option key={x.id} value={x.id} disabled={x.id === taken}>
-                {attemptName(x)}
+                {x.is_reference ? `${attemptName(x)} · Reference` : attemptName(x)}
               </option>
             ))}
           </optgroup>

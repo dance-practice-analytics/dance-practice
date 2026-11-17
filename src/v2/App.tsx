@@ -22,6 +22,7 @@ import { ResetPassword } from './pages/ResetPassword'
 import { Review } from './pages/Review'
 import { Settings } from './pages/Settings'
 import { SignIn } from './pages/SignIn'
+import { flushQueue, refreshPending, startAutoRetry } from './offline/uploadQueue'
 import { resetPipeline } from './pipeline'
 import { navigate, useRoute, type Route } from './router'
 import { Shell } from './Shell'
@@ -88,6 +89,16 @@ function Gate() {
       navigate({ name: 'dashboard' }, { replace: true })
     }
   }, [auth.status, needsConsent, ready, datasetDenied, route.name])
+
+  // FR-3.8.6: results kept offline go up once the account is open, and again whenever
+  // the browser comes back online.
+  const uid = ready ? auth.user?.id : undefined
+  useEffect(() => {
+    if (!uid) return
+    const stop = startAutoRetry()
+    void refreshPending().then(() => flushQueue())
+    return stop
+  }, [uid])
 
   // Local clips and the queue belong to the account that picked them.
   useEffect(() => {

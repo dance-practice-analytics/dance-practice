@@ -169,6 +169,9 @@ export function SyncedStage(props: SyncedStageProps) {
   const shown = fps > 0 ? Math.min(frameIndex(local, fps) / fps, end) : Math.min(local, end)
   const ghostFrame = ghost ? frameAt(ghost.series, (ghost.toLocal ?? identity)(time)) : undefined
   const phase = phaseAt(phases as PhaseSpan[] | null | undefined, local)
+  // FR-3.2.7: outside the processed part of a trimmed clip there is simply no pose.
+  const outsideTrim = !!series?.trim && frame === null && series.frames.length > 0 &&
+    (local < series.frames[0].t || local >= series.frames[series.frames.length - 1].t + 1 / series.fps)
 
   return (
     <VideoStage
@@ -183,6 +186,7 @@ export function SyncedStage(props: SyncedStageProps) {
       view={view}
       timecode={series ? `${formatTimecode(shown)} / ${formatTimecode(end)}` : undefined}
       phase={phase ? PHASE_LABELS[phase.phase] : undefined}
+      noTrackingLabel={outsideTrim ? 'Outside the trim' : undefined}
       ariaLabel={ariaLabel}
       placeholder={placeholder}
       style={style}

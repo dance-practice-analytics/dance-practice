@@ -8,6 +8,7 @@ import { ApiError } from '../api/errors'
 import { authLinkAtLoad, supabase } from '../api/supabase'
 import type { ProfileRow, UserRole } from '../data/schema'
 import { createStore, useStore } from '../state/store'
+import { clearQueue } from './offline/uploadQueue'
 
 export interface AuthState {
   /** 'loading' until the stored session has been read. */
@@ -214,6 +215,8 @@ export async function signUp(email: string, password: string): Promise<void> {
 }
 
 export async function signOut(): Promise<void> {
+  // Results waiting offline must never be uploaded by the next account on this device.
+  await clearQueue()
   try {
     // 'local' ends this browser's session even when the server can't be reached.
     await client().auth.signOut({ scope: 'local' })

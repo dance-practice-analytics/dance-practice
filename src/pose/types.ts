@@ -36,6 +36,12 @@ export interface PoseSeries {
   model: string
   /** True once One-Euro smoothing has been applied. */
   smoothed: boolean
+  /**
+   * FR-3.2.7: set when only part of the clip was processed. Frame times stay those of
+   * the original clip (the first frame is at or after startS) and `durationS` stays the
+   * whole clip, so the series lines up with the untrimmed local video. Absent = whole clip.
+   */
+  trim?: { startS: number; endS: number }
   frames: PoseFrame[]
 }
 

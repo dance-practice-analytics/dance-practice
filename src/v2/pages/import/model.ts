@@ -4,6 +4,7 @@
 
 import { baseName, clipNumberOrNull, parseClipName } from '../../../data/clipFile'
 import type { AttemptStatus, CameraView, MovementType } from '../../../data/schema'
+import { trimProblem, type TrimRange } from '../../../pose/frames'
 
 export type ImportSource = 'study' | 'own'
 
@@ -35,6 +36,9 @@ export interface ClipDraft {
   reprocess: boolean
   /** Set when the server refused the row on an earlier try. */
   failure: string | null
+  /** FR-3.2.7: optional start / end of the part to process, seconds of the clip; null = open end. */
+  trimStart?: number | null
+  trimEnd?: number | null
 }
 
 /** A clip this account imported before, found by its SHA-256. */
@@ -44,6 +48,8 @@ export interface KnownClip {
   subjectCode: string | null
   movement: MovementType
   status: AttemptStatus
+  /** Its stored trim, reused when it is processed again. */
+  trim?: TrimRange | null
 }
 
 export type Check =
@@ -56,6 +62,8 @@ export type Check =
   /** Already in the library: a second row can't be created (unique owner + SHA-256). */
   | { kind: 'duplicate'; known: KnownClip; reprocess: boolean }
   | { kind: 'needs_subject' }
+  /** FR-3.2.7: the start / end typed for the trim can't be used. */
+  | { kind: 'bad_trim'; message: string }
   | { kind: 'ready'; tooLong: boolean }
 
 // ---------- tags from the file name ----------
@@ -163,6 +171,8 @@ function checkOne(
   if (row.failure) return { kind: 'failed', message: row.failure }
   // Study clips are identified by a subject code only; a personal video needs none.
   if (source === 'study' && !row.subject) return { kind: 'needs_subject' }
+  const trim = rowTrim(row)
+  if (trim.problem) return { kind: 'bad_trim', message: trim.problem }
   return { kind: 'ready', tooLong: row.durationS !== null && row.durationS > MAX_CLIP_SECONDS }
 }
 
@@ -174,6 +184,8 @@ export interface ImportCounts {
   /** Duplicates that are skipped (library or same file twice in the list). */
   duplicates: number
   needsSubject: number
+  /** Rows whose trim needs fixing. */
+  badTrim: number
   /** Empty, unreadable or refused by the server. */
   unusable: number
   reading: number
@@ -182,12 +194,13 @@ export interface ImportCounts {
 }
 
 export function countChecks(checks: Iterable<Check>): ImportCounts {
-  const c: ImportCounts = { ready: 0, reprocess: 0, duplicates: 0, needsSubject: 0, unusable: 0, reading: 0, toQueue: 0 }
+  const c: ImportCounts = { ready: 0, reprocess: 0, duplicates: 0, needsSubject: 0, badTrim: 0, unusable: 0, reading: 0, toQueue: 0 }
   for (const check of checks) {
     if (check.kind === 'ready') c.ready++
     else if (check.kind === 'duplicate') check.reprocess ? c.reprocess++ : c.duplicates++
     else if (check.kind === 'duplicate_in_list') c.duplicates++
     else if (check.kind === 'needs_subject') c.needsSubject++
+    else if (check.kind === 'bad_trim') c.badTrim++
     else if (check.kind === 'reading') c.reading++
     else c.unusable++
   }
@@ -203,9 +216,38 @@ export function summaryDetail(c: ImportCounts): string {
   if (c.reprocess) parts.push(`${c.reprocess} to process again`)
   if (c.duplicates) parts.push(`${c.duplicates} already imported`)
   if (c.needsSubject) parts.push(c.needsSubject === 1 ? '1 needs a subject code' : `${c.needsSubject} need a subject code`)
+  if (c.badTrim) parts.push(`${plural(c.badTrim, 'trim', 'trims')} to fix`)
   if (c.unusable) parts.push(`${plural(c.unusable, 'file', 'files')} can’t be used`)
   if (c.reading) parts.push(`reading ${plural(c.reading, 'file', 'files')}…`)
   return parts.join(' · ')
+}
+
+// ---------- trim (FR-3.2.7) ----------
+
+/**
+ * The trim of a row: `range` is null for the whole clip (nothing typed, or start 0 and
+ * end at the clip's length). An open end means the start / the end of the clip.
+ */
+export function rowTrim(row: Pick<ClipDraft, 'trimStart' | 'trimEnd' | 'durationS'>): { range: TrimRange | null; problem: string | null } {
+  const start = row.trimStart ?? null
+  const end = row.trimEnd ?? null
+  if (start === null && end === null) return { range: null, problem: null }
+  const duration = row.durationS
+  if (duration === null || !Number.isFinite(duration) || duration <= 0) {
+    return { range: null, problem: 'The clip’s length isn’t known yet, so it can’t be trimmed.' }
+  }
+  const range = { startS: start ?? 0, endS: end ?? duration }
+  const problem = trimProblem(range, duration)
+  if (problem) return { range: null, problem }
+  if (range.startS <= 0 && range.endS >= duration) return { range: null, problem: null }
+  return { range, problem: null }
+}
+
+/** '00:01.5–00:06.0 of 00:08.2' for a trimmed row; null for the whole clip. */
+export function trimSummary(row: Pick<ClipDraft, 'trimStart' | 'trimEnd' | 'durationS'>): string | null {
+  const { range } = rowTrim(row)
+  if (!range) return null
+  return `${formatLength(range.startS)}–${formatLength(range.endS)} of ${formatLength(row.durationS)}`
 }
 
 // ---------- sessions ----------

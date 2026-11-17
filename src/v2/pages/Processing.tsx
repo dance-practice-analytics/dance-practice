@@ -8,14 +8,17 @@
 
 import { useEffect, useMemo, useRef, useState, useSyncExternalStore, type ReactNode } from 'react'
 import { baseName } from '../../data/clipFile'
+import { attemptTrim } from '../../data/repo'
 import { getClip, hasClip, relink, useClip } from '../clips'
 import { Alert, EmptyState, ErrorAlert, Icon, PageHeader, PrivacyPill, SkeletonList, StatusPill, VideoStage } from '../components'
 import { useAttempts, type AttemptView } from '../data'
 import { MOVEMENT_LABELS, PHASE_LABELS, phaseAt, VIEW_LABELS } from '../format'
 import { cancel, enqueue, getCachedSeries, pause, resume, usePipeline, type PipelineItem, type PipelineJob } from '../pipeline'
 import { href } from '../router'
+import { useOfflineQueue } from '../offline/uploadQueue'
 import { useIsNarrow } from '../useIsNarrow'
 import { useThumb } from './import/probe'
+import { OfflineNotice } from './processing/OfflineNotice'
 import {
   batchCounts,
   batchPercent,
@@ -66,7 +69,7 @@ function useNow(active: boolean): number {
   return now
 }
 
-const jobOf = (a: AttemptView): PipelineJob => ({ attemptId: a.id, movement: a.session.movement_type, clipName: a.clip_name })
+const jobOf = (a: AttemptView): PipelineJob => ({ attemptId: a.id, movement: a.session.movement_type, clipName: a.clip_name, trim: attemptTrim(a) })
 
 function metaOf(attempt: AttemptView | undefined, item?: PipelineItem): string {
   if (!attempt) return item ? MOVEMENT_LABELS[item.movement] : ''
@@ -90,8 +93,13 @@ export function Processing() {
   const items = pipe.items.filter((it) => !isDismissed(it))
   // Waiting in the database but not in this tab's queue: the page was reloaded (or the
   // tab closed mid-clip, which leaves a stale 'processing'). They need their file again.
+  // Results waiting in the offline queue already have everything but the upload.
+  const offline = useOfflineQueue()
   const orphans = (attempts.data ?? []).filter(
-    (a) => (a.status === 'queued' || a.status === 'processing') && !pipe.items.some((it) => it.attemptId === a.id),
+    (a) =>
+      (a.status === 'queued' || a.status === 'processing') &&
+      !pipe.items.some((it) => it.attemptId === a.id) &&
+      !offline.ids.includes(a.id),
   )
 
   const open = items.some((it) => it.status === 'queued' || it.status === 'processing')
@@ -167,6 +175,7 @@ export function Processing() {
     return (
       <>
         {header}
+        <OfflineNotice />
         {attempts.error && <ErrorAlert error={attempts.error} onRetry={attempts.refetch} />}
         {attempts.loading ? (
           <SkeletonList rows={3} label="Loading queue" />
@@ -314,6 +323,7 @@ export function Processing() {
 
   const notices = (
     <>
+      <OfflineNotice />
       {attempts.error && <ErrorAlert error={attempts.error} onRetry={attempts.refetch} />}
       {orphans.length > 0 && (
         <Alert
@@ -400,7 +410,7 @@ function QueueRow({ item, attempt, position, paused, timeLeft, narrow, onChooseA
   const pct = item.status === 'done' ? 100 : item.status === 'processing' ? Math.round(item.fraction * 100) : 0
   const idle = item.status !== 'processing' && item.status !== 'done'
   const hasFile = hasClip(item.attemptId)
-  const job: PipelineJob = { attemptId: item.attemptId, movement: item.movement, clipName: item.clipName }
+  const job: PipelineJob = { attemptId: item.attemptId, movement: item.movement, clipName: item.clipName, trim: item.trim }
 
   let label: string | undefined
   let eta = ''
@@ -410,6 +420,7 @@ function QueueRow({ item, attempt, position, paused, timeLeft, narrow, onChooseA
   } else if (item.status === 'queued') {
     eta = paused ? 'paused' : position === 1 ? 'next' : `#${position}`
   } else if (item.status === 'done') {
+    if (item.pendingUpload) label = 'Done · waiting to upload'
     eta = item.frames !== null && item.trackedFrames !== null ? `${item.trackedFrames} of ${item.frames} frames` : ''
   } else {
     eta = 'stopped'

@@ -256,7 +256,9 @@ export function computeMetrics(series: PoseSeries, movement: Movement): AttemptM
   const seg = segmentPhases(series, movement)
   const { frames } = series
   const n = frames.length
-  const clipEnd = n ? Math.max(series.durationS, frames[n - 1].t) : 0
+  // A trimmed series (FR-3.2.7) ends where the processed part ends, not at the clip's end.
+  const processedEnd = series.trim ? Math.min(series.durationS, series.trim.endS) : series.durationS
+  const clipEnd = n ? Math.max(processedEnd, frames[n - 1].t) : 0
 
   const keys = Object.keys(METRIC_PHASES) as MetricKey[]
   const out = {} as Record<MetricKey, Measured>
