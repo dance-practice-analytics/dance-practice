@@ -8,6 +8,7 @@ import type { SessionSummary } from '../../../data/repo'
 import { href } from '../../router'
 import { useFocusThemes } from '../../focus'
 import { buildPhraseProgress, phraseTiles } from '../progress/phraseModel'
+import { ValueUnit } from '../../components/ValueUnit'
 
 export function PhraseTiles({ sessions, attempts, prefix, narrow }: { sessions: SessionSummary[]; attempts: AttemptView[]; prefix: string; narrow: boolean }) {
   const focus = useFocusThemes()
@@ -36,7 +37,7 @@ export function PhraseTiles({ sessions, attempts, prefix, narrow }: { sessions: 
             </span>
             <span className="metric-value" style={{ fontSize: narrow ? 22 : 26, lineHeight: '30px', whiteSpace: 'nowrap' }}>
               {t.value}
-              {!t.none && <span className="metric-unit">{t.unit}</span>}
+              {!t.none && <ValueUnit unit={t.unit} />}
             </span>
             {/* Pinned to the bottom so the cards of one row line up. */}
             <span className={t.none ? 'reason hatch' : 'metric-delta'} style={{ display: 'block', marginTop: 'auto' }}>

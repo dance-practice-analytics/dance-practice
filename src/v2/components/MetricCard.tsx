@@ -9,6 +9,7 @@ import { Icon } from './Icon'
 import { InfoDisclosure } from './InfoDisclosure'
 import { MetricFigure } from './MetricFigure'
 import { ConfBadge, type Confidence } from './primitives'
+import { ValueUnit } from './ValueUnit'
 
 export interface MetricCardProps {
   name: string
@@ -55,7 +56,7 @@ export function MetricCard(props: MetricCardProps) {
       </div>
       <div className="metric-value">
         {none ? NO_VALUE : formatNumber(value, decimals)}
-        {!none && unit && <span className="metric-unit">{unit}</span>}
+        {!none && unit && <ValueUnit unit={unit} />}
       </div>
       {(phase || meta) && (
         <div className="metric-meta">

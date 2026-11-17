@@ -148,6 +148,24 @@ export function formatMetric(key: MetricKey, value: number | null | undefined): 
 /** Value with its compact unit, e.g. '4.2°', '3.4 s', '0.06'; null → '—'. Same as insights `formatValue`. */
 export const formatMetricWithUnit = formatValue
 
+/**
+ * Splits a display unit for a big value: a degree sign is part of the number
+ * ('20.3°', same run, no space); the rest stays the small unit label after it.
+ * '° from upright' → { glyph: '°', label: 'from upright' }; '% of leg length' →
+ * { glyph: '', label: '% of leg length' }; '°/s' → { glyph: '°/s', label: '' }.
+ */
+export function splitUnit(unit: string | null | undefined): { glyph: string; label: string } {
+  const u = (unit ?? '').trim()
+  const m = /^(°\S*)\s*(.*)$/.exec(u)
+  return m ? { glyph: m[1], label: m[2] } : { glyph: '', label: u }
+}
+
+/** Value text and unit as one string: '20.3°', '20.3° from upright', '3.4 s', '12 % of leg length'. */
+export function withUnit(text: string, unit: string | null | undefined): string {
+  const { glyph, label } = splitUnit(unit)
+  return `${text}${glyph}${label ? ` ${label}` : ''}`
+}
+
 /** '8.4 s'; null → '—'. */
 export function formatSeconds(seconds: number | null | undefined, decimals = 1): string {
   return isNum(seconds) ? `${formatNumber(seconds, decimals)} s` : NO_VALUE

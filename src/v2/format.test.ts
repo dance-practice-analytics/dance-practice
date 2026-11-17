@@ -1,6 +1,8 @@
 import { describe, expect, it } from 'vitest'
 import type { AttemptMetricsRow } from '../data/schema'
 import {
+  splitUnit,
+  withUnit,
   chosenName,
   differenceText,
   greeting,
@@ -102,5 +104,24 @@ describe('v2 greeting', () => {
     expect(chosenName('demo.dancer.1843c8', 'demo.dancer.1843C8@example.org')).toBeNull()
     expect(chosenName(null, 'a@b.c')).toBeNull()
     expect(chosenName(' Ana ', 'demo.dancer@example.org')).toBe('Ana')
+  })
+})
+
+describe('degree sign joins the number', () => {
+  it('splits a unit into the attached glyph and the small label', () => {
+    expect(splitUnit('°')).toEqual({ glyph: '°', label: '' })
+    expect(splitUnit('° from upright')).toEqual({ glyph: '°', label: 'from upright' })
+    expect(splitUnit('° · median')).toEqual({ glyph: '°', label: '· median' })
+    expect(splitUnit('°/s')).toEqual({ glyph: '°/s', label: '' })
+    expect(splitUnit(' s')).toEqual({ glyph: '', label: 's' })
+    expect(splitUnit('% of leg length')).toEqual({ glyph: '', label: '% of leg length' })
+    expect(splitUnit(undefined)).toEqual({ glyph: '', label: '' })
+  })
+
+  it('writes value and unit as one string', () => {
+    expect(withUnit('20.3', '°')).toBe('20.3°')
+    expect(withUnit('51.0', '° from upright')).toBe('51.0° from upright')
+    expect(withUnit('3.4', 's')).toBe('3.4 s')
+    expect(withUnit('12', '% of leg length')).toBe('12 % of leg length')
   })
 })

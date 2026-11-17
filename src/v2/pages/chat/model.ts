@@ -6,7 +6,7 @@ import { buildPhrasePayload } from '../../../../supabase/functions/_shared/phras
 import { median } from '../../../insights'
 import type { Confidence } from '../../components'
 import type { AttemptView } from '../../data'
-import { formatMetricWithUnit, formatNumber, PHASE_LABELS, readMetrics, type MetricReading } from '../../format'
+import { formatMetricWithUnit, formatNumber, PHASE_LABELS, readMetrics, withUnit, type MetricReading } from '../../format'
 import { earlierAttempts, focusLine, phraseContextFor, phraseShare, progressLine, type PhraseShare } from '../notes/model'
 import { orderThemes, phraseOf, readTheme, THEMES, type ThemeKey, type ThemeReading } from '../phrase/model'
 
@@ -53,7 +53,7 @@ function phraseChatContext(attempt: AttemptView, all: readonly AttemptView[], sc
   const order = orderThemes(focus)
   const mine = phraseOf(attempt.metrics)
   const extras = phraseExtras(attempt, all, focus)
-  const unit = (r: ThemeReading, text: string) => `${text}${r.info.unit.startsWith('°') ? '' : ' '}${r.info.unit}`
+  const unit = (r: ThemeReading, text: string) => withUnit(text, r.info.unit)
 
   if (scope === 'attempt') {
     const prev = previousAttempt(attempt, all)

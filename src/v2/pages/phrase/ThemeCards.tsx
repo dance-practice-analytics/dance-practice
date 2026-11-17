@@ -9,6 +9,7 @@ import { CompactGap, ConfBadge, Icon, InfoDisclosure } from '../../components'
 import { NO_VALUE } from '../../format'
 import { COMPACT_REASONS, COMPACT_TEXT, orderThemes, readTheme, themeDifference, type ThemeKey, type ThemeReading } from './model'
 import './phrase.css'
+import { ValueUnit } from '../../components/ValueUnit'
 
 export interface ThemeCardsProps {
   phrase: PhraseResult | null
@@ -85,7 +86,7 @@ export function ThemeCard({ reading: r, focused, focusFull, focusBusy, onToggleF
       </div>
       <div className="metric-value">
         {none ? NO_VALUE : r.text}
-        {!none && <span className="metric-unit">{r.info.unit}</span>}
+        {!none && <ValueUnit unit={r.info.unit} />}
       </div>
       {r.signText && <p className="v2-phr-sign">{r.signText}</p>}
       {!none && delta && <p className="metric-delta">{delta}</p>}

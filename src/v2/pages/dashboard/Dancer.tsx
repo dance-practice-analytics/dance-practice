@@ -26,6 +26,7 @@ import {
 } from './model'
 import { Welcome } from './Welcome'
 import { PhraseTiles } from './PhraseTiles'
+import { ValueUnit } from '../../components/ValueUnit'
 
 const CARD = { padding: 20, display: 'flex', flexDirection: 'column' as const, gap: 12, minWidth: 0 }
 const HEAD = { display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', gap: 8 }
@@ -259,7 +260,7 @@ function MetricTileWide({ tile }: { tile: MetricTile }) {
         <>
           <span className="metric-value" style={{ fontSize: 32, lineHeight: '40px', whiteSpace: 'nowrap' }}>
             {tile.value}
-            {!tile.none && <span className="metric-unit">{tile.unit}</span>}
+            {!tile.none && <ValueUnit unit={tile.unit} />}
           </span>
           <span className="t-small muted">{tile.about}</span>
         </>
@@ -267,7 +268,7 @@ function MetricTileWide({ tile }: { tile: MetricTile }) {
         <span style={{ display: 'flex', alignItems: 'flex-end', gap: 12, minHeight: 40 }}>
           <span className="metric-value" style={{ fontSize: 26, lineHeight: '30px', whiteSpace: 'nowrap' }}>
             {tile.value}
-            {!tile.none && <span className="metric-unit">{tile.unit}</span>}
+            {!tile.none && <ValueUnit unit={tile.unit} />}
           </span>
           <Spark tile={tile} height={40} />
         </span>
@@ -294,11 +295,7 @@ function MetricTilePhone({ tile }: { tile: MetricTile }) {
       </span>
       <span className="metric-value" style={tile.single ? { fontSize: 26, lineHeight: '32px' } : { fontSize: 22, lineHeight: '26px' }}>
         {tile.value}
-        {!tile.none && (
-          <span className="metric-unit" style={{ fontSize: 12 }}>
-            {tile.unit}
-          </span>
-        )}
+        {!tile.none && <ValueUnit unit={tile.unit} style={{ fontSize: 12 }} />}
       </span>
       {tile.single ? (
         // Fewer than two sessions with a value: no one-dot chart, a plain line instead.
@@ -437,7 +434,7 @@ function MovementCardView({ card, prefix }: { card: MovementCard; prefix: string
         <>
           <span className="metric-value" style={{ fontSize: 26, lineHeight: '30px', color: none ? 'var(--text-3)' : undefined }}>
             {card.value}
-            <span className="metric-unit">{card.unit}</span>
+            {!none && <ValueUnit unit={card.unit} />}
           </span>
           <p className="metric-delta">{card.sentence}</p>
           {card.reason && <p className="reason hatch">{card.reason} Not shown as 0.</p>}

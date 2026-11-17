@@ -19,7 +19,7 @@ import { client, signOut } from '../auth'
 import { Alert, ConfBadge, EmptyState, ErrorAlert, Icon, NoteBox, PageHeader, Skeleton, SkeletonList, Spinner } from '../components'
 import { setConsent, useConsents } from '../consents'
 import { latestProcessed, useAttempts, type AttemptView } from '../data'
-import { formatDate, formatDateTime, formatMetricWithUnit, MOVEMENT_LABELS, PHASE_LABELS, readMetric, readMetrics } from '../format'
+import { formatDate, formatDateTime, formatMetricWithUnit, MOVEMENT_LABELS, PHASE_LABELS, readMetric, readMetrics, withUnit } from '../format'
 import { href, navigate, useRoute } from '../router'
 import { useIsNarrow } from '../useIsNarrow'
 import { useFocusThemes } from '../focus'
@@ -624,7 +624,7 @@ function NoteArticle({ attempt, note, latest, narrow }: NoteArticleProps) {
           // A phrase note is about themes: their value comes from attempt_metrics.phrase.
           const theme = isThemeTopic(topic) ? readTheme(phraseOf(attempt.metrics), topic) : null
           const reading = isThemeTopic(topic) ? null : readMetric(attempt.metrics, topic)
-          const valueText = theme ? (theme.value === null ? '—' : `${theme.text}${theme.info.unit.startsWith('°') ? '' : ' '}${theme.info.unit}`) : formatMetricWithUnit(topic as Parameters<typeof formatMetricWithUnit>[0], reading!.value)
+          const valueText = theme ? (theme.value === null ? '—' : withUnit(theme.text, theme.info.unit)) : formatMetricWithUnit(topic as Parameters<typeof formatMetricWithUnit>[0], reading!.value)
           return (
             <div key={`${o.metric}-${i}`} className="well v2-notes-obs">
               <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>

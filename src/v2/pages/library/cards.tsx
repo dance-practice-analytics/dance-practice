@@ -13,6 +13,7 @@ import { layoutSeries } from './chart'
 import { ONE_SESSION_HINT, TILE_LABEL, buildTrend, firstSentence, hasSingleValue, tileStatus, type Focus, type NextFocus, type TileKind, type Trend } from './model'
 import type { NextStep } from './nextStep'
 import type { AccountNotes } from './notes'
+import { ValueUnit } from '../../components/ValueUnit'
 
 // ---------- attempt tile ----------
 
@@ -255,7 +256,7 @@ function SingleValue({ trend, metric }: { trend: Trend; metric: MetricKey }) {
     <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
       <span className="metric-value" style={{ fontSize: 32, lineHeight: '40px', color: point ? undefined : 'var(--text-3)' }}>
         {point ? point.text.slice(0, point.text.length - unit.length) : '—'}
-        {point && unit.trim() && <span className="metric-unit">{unit.trim()}</span>}
+        {point && <ValueUnit unit={unit} />}
       </span>
       {point && <span className="t-caption">Median of {point.label}</span>}
       <span className="t-small muted">{firstSentence(METRICS[metric].description)}</span>
@@ -360,7 +361,7 @@ export function TrendCardCompact({ focus }: TrendCardProps) {
         <div style={{ display: 'flex', flexDirection: 'column' }}>
           <span className="metric-value" style={{ fontSize: 26, color: has ? undefined : 'var(--text-3)' }}>
             {has ? latest.text.slice(0, latest.text.length - unit.length) : '—'}
-            {has && unit.trim() && <span className="metric-unit">{unit.trim()}</span>}
+            {has && <ValueUnit unit={unit} />}
           </span>
           <span className="t-caption">{latest ? latest.label : 'No sessions'}</span>
         </div>
