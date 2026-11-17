@@ -1,6 +1,7 @@
 // On-device processing queue (FR-3.3.x, FR-3.4.x). One clip at a time:
 //   status 'processing' → estimatePose → smoothSeries → encodeSeries → uploadKeypoints
-//   → computeMetrics → saveMetrics → status 'done'   (or 'failed' with a reason).
+//   → computeAttempt → saveMetrics → status 'done'   (or 'failed' with a reason).
+// computeAttempt runs the relevé engine, or the phrase engine for movement 'phrase'.
 // The clip itself is only read locally; what leaves the device is the gzipped
 // keypoints and the metrics row.
 
@@ -8,7 +9,7 @@ import { useSyncExternalStore } from 'react'
 import { ApiError } from '../api/errors'
 import { setAttemptStatus } from '../data/repo'
 import type { MovementType } from '../data/schema'
-import { computeMetrics } from '../metrics/engine'
+import { computeAttempt } from '../metrics/attempt'
 import { encodeSeries } from '../pose/codec'
 import { currentDelegate, estimatePose, type PoseDelegate } from '../pose/landmarker'
 import { smoothSeries } from '../pose/oneEuro'
@@ -329,7 +330,7 @@ async function processOne(job: PipelineItem): Promise<void> {
     signal.throwIfAborted()
 
     patch(id, { step: 'metrics' })
-    const { movement, algorithm_version, phases, confidence, ...values } = computeMetrics(series, job.movement)
+    const { movement, algorithm_version, phases, confidence, phrase, ...values } = computeAttempt(series, job.movement)
     patch(id, { step: 'saving_keypoints' })
     // Keypoints, then metrics, then status done; on a network failure the result is
     // kept in IndexedDB and uploaded later (FR-3.8.6).
@@ -342,7 +343,7 @@ async function processOne(job: PipelineItem): Promise<void> {
         keypoints: blob,
         frameCount: series.frames.length,
         model: series.model,
-        metrics: { movement, algorithm_version, phases, confidence, ...values },
+        metrics: { movement, algorithm_version, phases, confidence, phrase, ...values },
         clipName: job.clipName,
       },
     )

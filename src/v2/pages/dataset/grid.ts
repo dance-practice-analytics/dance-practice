@@ -5,13 +5,15 @@
 
 import { SUBJECT_CODE_RE, type CameraView, type MovementType } from '../../../data/schema'
 import type { AttemptView } from '../../data'
+import { isPhraseResult, THEME_KEYS } from '../../../metrics/phrase'
 import { MOVEMENT_LABELS, readMetrics } from '../../format'
 
 /** The study plan: 12 subjects, 10 relevé balances and 5 pirouettes each. */
 export const PLANNED_SUBJECTS = 12
-export const PLANNED_CLIPS: Record<MovementType, number> = { releve_balance: 10, pirouette: 5 }
+/** Phrase clips are not part of the original plan: their columns appear only when clips exist. */
+export const PLANNED_CLIPS: Record<MovementType, number> = { releve_balance: 10, pirouette: 5, phrase: 0 }
 export const PLANNED_TOTAL = PLANNED_SUBJECTS * (PLANNED_CLIPS.releve_balance + PLANNED_CLIPS.pirouette)
-export const MOVEMENT_ORDER: MovementType[] = ['releve_balance', 'pirouette']
+export const MOVEMENT_ORDER: MovementType[] = ['releve_balance', 'pirouette', 'phrase']
 /** Row for study clips whose session has no subject code. */
 export const NO_CODE = 'No code'
 
@@ -60,13 +62,22 @@ export const groupOf = (kind: CellKind): StatusGroup => (kind.startsWith('done')
  * A row still marked 'processing' that this tab isn't working on was left by a closed
  * tab, so it counts as queued.
  */
+function phraseLevels(phrase: unknown): string[] {
+  if (!isPhraseResult(phrase)) return []
+  return THEME_KEYS.map((k) => phrase.themes[k]).filter((t) => t && t.value !== null).map((t) => t.confidence.level)
+}
+
 export function cellKind(attempt: AttemptView, live: ReadonlySet<string> = new Set()): CellKind {
   if (attempt.status === 'failed') return 'failed'
   if (attempt.status === 'processing') return live.has(attempt.id) ? 'processing' : 'queued'
   if (attempt.status === 'queued') return live.has(attempt.id) ? 'processing' : 'queued'
-  const levels = readMetrics(attempt.metrics, attempt.session.movement_type)
-    .filter((m) => m.value !== null)
-    .map((m) => m.confidence)
+  // A phrase attempt has theme measures instead of the relevé columns.
+  const levels =
+    attempt.session.movement_type === 'phrase'
+      ? phraseLevels(attempt.metrics?.phrase)
+      : readMetrics(attempt.metrics, attempt.session.movement_type)
+          .filter((m) => m.value !== null)
+          .map((m) => m.confidence)
   if (levels.length === 0) return 'done-none'
   if (levels.includes('low')) return 'done-low'
   return levels.includes('medium') ? 'done-med' : 'done-high'
@@ -118,7 +129,7 @@ export function buildGrid(attempts: readonly AttemptView[], live: ReadonlySet<st
       a.session.created_at.localeCompare(b.session.created_at) || a.session_id.localeCompare(b.session_id) || a.number - b.number,
   )
   for (const a of ordered) {
-    const lists = bySubject.get(codeOf(a)) ?? { releve_balance: [], pirouette: [] }
+    const lists = bySubject.get(codeOf(a)) ?? { releve_balance: [], pirouette: [], phrase: [] }
     lists[a.session.movement_type].push(a)
     bySubject.set(codeOf(a), lists)
   }
@@ -129,6 +140,7 @@ export function buildGrid(attempts: readonly AttemptView[], live: ReadonlySet<st
   for (const movement of MOVEMENT_ORDER) {
     let count = PLANNED_CLIPS[movement]
     for (const lists of bySubject.values()) count = Math.max(count, lists[movement].length)
+    if (count === 0) continue
     groups.push({ movement, label: MOVEMENT_LABELS[movement], first, count })
     first += count
   }

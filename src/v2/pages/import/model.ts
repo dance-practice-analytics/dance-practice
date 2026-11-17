@@ -70,6 +70,13 @@ export type Check =
 
 const VIEW_WORDS: Record<string, CameraView> = { front: 'front', side: 'side', diag: 'diagonal', diagonal: 'diagonal' }
 const SHORT_MOVEMENTS: Record<string, MovementType> = { pir: 'pirouette', rel: 'releve_balance' }
+/**
+ * The phrase study names its clips `<dancer code>_att<N>_<view letter>`, e.g. `D01_att3_d.mp4`
+ * (f front, s side, d diagonal). Only this exact shape reads a single letter as a view, and
+ * it is the phrase study's own pattern, so it also tags the movement as a phrase.
+ */
+const DATASET_CLIP = /^[a-z]\d{2}_att(\d{1,3})_([fsd])$/
+const VIEW_LETTERS: Record<string, CameraView> = { f: 'front', s: 'side', d: 'diagonal' }
 
 export interface ParsedTags {
   subject: string | null
@@ -109,6 +116,15 @@ export function parseTags(name: string): ParsedTags {
     .filter(Boolean)
   const views = new Set(tokens.map((t) => VIEW_WORDS[t]).filter(Boolean))
   const short = new Set(tokens.map((t) => SHORT_MOVEMENTS[t]).filter(Boolean))
+  const dataset = DATASET_CLIP.exec(tokens.join('_'))
+  if (dataset) {
+    return {
+      subject: parsed.subjectCode,
+      movement: parsed.movement ?? 'phrase',
+      view: VIEW_LETTERS[dataset[2]],
+      clipNumber: clipNumberOrNull(Number(dataset[1])),
+    }
+  }
   return {
     subject: parsed.subjectCode,
     movement: parsed.movement ?? (short.size === 1 ? [...short][0] : null),

@@ -37,7 +37,7 @@ import {
 import { nextStep } from './library/nextStep'
 import { useAccountNotes } from './library/notes'
 
-const MOVEMENT_SHORT: Record<MovementType, string> = { releve_balance: 'Relevé', pirouette: 'Pirouette' }
+const MOVEMENT_SHORT: Record<MovementType, string> = { releve_balance: 'Relevé', pirouette: 'Pirouette', phrase: 'Phrase' }
 const STATUS_CHIPS: StatusFilter[] = ['all', 'done', 'processing', 'queued', 'failed']
 
 export function Library() {

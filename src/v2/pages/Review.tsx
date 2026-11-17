@@ -42,6 +42,11 @@ import { buildTrace, countBands, niceMax, seriesEnd, traceMax, trackingBands, tr
 import { BandLayer, PhaseRibbon, ScrubTrack, TimeAxis, TraceLayer, TraceTrack, TrackingReadout, TrunkReadout } from './review/Tracks'
 import { Switch, Transport } from './review/Transport'
 import { countRender, useClockValue, useTransportKeys } from './review/useClock'
+import type { PhraseResult } from '../../metrics/phrase'
+import { saveFocus, useFocusThemes } from '../focus'
+import { eventSummary, labelDoubtText, phraseOf, toggleFocus } from './phrase/model'
+import { PhraseTimeline } from './phrase/PhraseTimeline'
+import { ThemeCards } from './phrase/ThemeCards'
 
 const NO_PHASES: readonly PhaseSpan[] = []
 const NARROW_UNIT: Record<MetricKey, string> = {
@@ -150,6 +155,10 @@ function Workspace({ attempt, series, attempts }: WorkspaceProps) {
   const other = useMemo(() => neighbourInSession(attempt, inSession), [attempt, inSession])
   const phases = attempt.metrics?.phases?.length ? attempt.metrics.phases : NO_PHASES
   const readings = readMetrics(attempt.metrics, session.movement_type)
+  // Phrase attempts (movement 'phrase') show events and theme measures instead of phases and the relevé measures.
+  const isPhrase = session.movement_type === 'phrase'
+  const phrase = isPhrase ? phraseOf(attempt.metrics) : null
+  const focus = useFocusThemes()
   const otherName = other ? `attempt ${other.number}` : ''
   // This attempt against its neighbour: `b − a` = this − the other.
   const rows = useMemo(() => {
@@ -285,7 +294,34 @@ function Workspace({ attempt, series, attempts }: WorkspaceProps) {
     return <MetricCard key={r.key} {...props} phase={simple ? undefined : props.phase} unit={narrow ? NARROW_UNIT[r.key] : r.def.unit} delta={delta ?? undefined} />
   })
 
-  const metrics = (
+  const doubt = phrase ? labelDoubtText(phrase) : null
+  const metrics = isPhrase ? (
+    <>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', gap: 8 }}>
+        <h2 className="t-h3" id="rev-metrics">
+          Themes
+        </h2>
+        <ViewModeSwitch />
+      </div>
+      <p className="t-caption">
+        {focus.themes.length ? 'Your focus themes come first. ' : 'Tick “My focus” on up to three themes to see them first. '}
+        {other ? `Each one next to attempt ${other.number}.` : ''}
+      </p>
+      {focus.error && <p className="t-caption">Your focus couldn’t be saved: {focus.error.message}</p>}
+      {doubt && <p className="t-caption">{doubt}</p>}
+      <ThemeCards
+        phrase={phrase}
+        view={session.camera_view}
+        focus={focus.themes}
+        focusBusy={focus.saving || focus.status === 'loading'}
+        onToggleFocus={(k) => void saveFocus(toggleFocus(focus.themes, k))}
+        other={other ? { phrase: phraseOf(other.metrics), name: `Attempt ${other.number}` } : null}
+        detail={!simple}
+        narrow={narrow}
+      />
+      <p className="t-caption">Values describe this clip only; they are not scores.</p>
+    </>
+  ) : (
     <>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', gap: 8 }}>
         <h2 className="t-h3" id="rev-metrics">
@@ -295,7 +331,7 @@ function Workspace({ attempt, series, attempts }: WorkspaceProps) {
       </div>
       {other && <p className="t-caption">Each one next to attempt {other.number}.</p>}
       {narrow ? <div className="v2-rev-mgrid">{cards}</div> : cards}
-      {session.movement_type !== 'pirouette' && <p className="t-caption">Turns are counted for pirouettes only.</p>}
+      {session.movement_type === 'releve_balance' && <p className="t-caption">Turns are counted for pirouettes only.</p>}
     </>
   )
 
@@ -393,7 +429,18 @@ function Workspace({ attempt, series, attempts }: WorkspaceProps) {
     </Transport>
   )
 
-  const timelines = <Timelines clock={clock} series={series} phases={phases} duration={duration} narrow={narrow} noPhaseReason={noPhaseReason(readings)} detail={!simple} />
+  const timelines = (
+    <Timelines
+      clock={clock}
+      series={series}
+      phases={phases}
+      duration={duration}
+      narrow={narrow}
+      noPhaseReason={noPhaseReason(readings)}
+      detail={!simple}
+      phrase={isPhrase ? phrase : undefined}
+    />
+  )
 
   return (
     <>
@@ -461,9 +508,11 @@ interface TimelinesProps {
   noPhaseReason: string | null
   /** Detail view: the tracking and torso-lean traces under the phases. */
   detail: boolean
+  /** Phrase attempt: the events strip replaces the phase ribbon (null = not processed as a phrase yet). */
+  phrase?: PhraseResult | null
 }
 
-function Timelines({ clock, series, phases, duration, narrow, noPhaseReason, detail }: TimelinesProps) {
+function Timelines({ clock, series, phases, duration, narrow, noPhaseReason, detail, phrase }: TimelinesProps) {
   const bands = useMemo(() => trackingBands(series), [series])
   const count = useMemo(() => countBands(series, bands), [series, bands])
   const visibility = useMemo(() => buildTrace(series, visibilityAt), [series])
@@ -488,7 +537,16 @@ function Timelines({ clock, series, phases, duration, narrow, noPhaseReason, det
         .join('; ') + (bands.length > 6 ? `; and ${bands.length - 6} more stretches` : '')
     : 'tracked throughout'
 
-  const ribbon = (
+  const ribbon = phrase !== undefined ? (
+    phrase ? (
+      <>
+        <PhraseTimeline clock={clock} phrase={phrase} duration={duration} label="Events of this attempt" compact={narrow} />
+        <p className="t-caption">{eventSummary(phrase)}. Click an event to jump to it; the thick border marks the main leg extension.</p>
+      </>
+    ) : (
+      <p className="t-caption">This attempt hasn’t been processed as a phrase yet, so no events are listed. Process it again on this device.</p>
+    )
+  ) : (
     <>
       <PhaseRibbon clock={clock} phases={phases} duration={duration} compact={narrow} minLabelShare={narrow ? 0.11 : undefined} style={narrow ? { height: 44 } : undefined} />
       {phases.length === 0 && (
@@ -572,7 +630,7 @@ function Timelines({ clock, series, phases, duration, narrow, noPhaseReason, det
   return (
     <div className="card" style={{ padding: '14px 16px', display: 'flex', flexDirection: 'column', gap: 12 }}>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
-        <h2 className="t-label">{phases.length ? 'Phases · click to jump' : 'Phases'}</h2>
+        <h2 className="t-label">{phrase !== undefined ? 'Events · click to jump' : phases.length ? 'Phases · click to jump' : 'Phases'}</h2>
         <span className="t-caption">
           <span className="kbd">Space</span> play · <span className="kbd">←</span>
           <span className="kbd">→</span> frame

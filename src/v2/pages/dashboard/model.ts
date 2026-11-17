@@ -195,7 +195,8 @@ export function metricTiles(focus: Focus, now: Date = new Date()): MetricTiles {
 
 // ---------- the other movement ----------
 
-const HEADLINE: Record<MovementType, MetricKey> = { releve_balance: 'balance_duration_s', pirouette: 'turn_count' }
+/** Phrase attempts have theme measures instead (phrase cards), so they have no headline metric. */
+const HEADLINE: Record<'releve_balance' | 'pirouette', MetricKey> = { releve_balance: 'balance_duration_s', pirouette: 'turn_count' }
 
 export interface MovementCard {
   movement: MovementType
@@ -212,7 +213,7 @@ export interface MovementCard {
 
 /** The movement the tiles are not about, for the same subject. */
 export function otherMovement(focus: Focus, now: Date = new Date()): MovementCard {
-  const movement: MovementType = focus.movement === 'pirouette' ? 'releve_balance' : 'pirouette'
+  const movement: 'releve_balance' | 'pirouette' = focus.movement === 'pirouette' ? 'releve_balance' : 'pirouette'
   const metric = HEADLINE[movement]
   const own = focus.sessions.filter((s) => s.movement_type === movement)
   const trend = buildTrend({ ...focus, movement }, metric, 6, now)

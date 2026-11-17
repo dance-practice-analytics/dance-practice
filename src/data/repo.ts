@@ -704,7 +704,7 @@ export function downloadKeypoints(client: SupabaseClient, attemptId: string): Pr
 
 const METRIC_COLS =
   'attempt_id, owner_id, movement, trunk_inclination_deg, pelvis_ankle_offset_norm, balance_duration_s, ' +
-  'knee_tracking_dev_deg, turn_count, phases, confidence, algorithm_version, computed_at'
+  'knee_tracking_dev_deg, turn_count, phases, confidence, algorithm_version, computed_at, phrase'
 
 /** A value that could not be measured is stored as null, never as zero. */
 const measured = (n: number | null | undefined) => (typeof n === 'number' && Number.isFinite(n) ? n : null)
@@ -728,6 +728,8 @@ export function saveMetrics(client: SupabaseClient, attemptId: string, metrics: 
       algorithm_version: metrics.algorithm_version,
       // The column default only applies to the first insert.
       computed_at: new Date().toISOString(),
+      // Phrase attempts only; a re-run as another movement clears it.
+      phrase: metrics.phrase ?? null,
     }
     return unwrap<AttemptMetricsRow>(
       await client.from('attempt_metrics').upsert(row, { onConflict: 'attempt_id' }).select(METRIC_COLS).single(),

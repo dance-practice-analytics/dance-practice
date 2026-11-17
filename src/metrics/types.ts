@@ -1,7 +1,7 @@
 // Output contract of the metrics engine (FR-3.4.x, SDD 5.2). `AttemptMetrics` is the
 // row written to the `attempt_metrics` table: values only, never a score or a grade.
 
-export type Movement = 'releve_balance' | 'pirouette'
+export type Movement = 'releve_balance' | 'pirouette' | 'phrase'
 
 export type Phase = 'prep' | 'rise' | 'hold' | 'turn' | 'finish' | 'recovery'
 

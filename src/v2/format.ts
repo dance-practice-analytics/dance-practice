@@ -43,6 +43,14 @@ export const metricsFor = metricsForMovement
 export const MOVEMENT_LABELS: Record<MovementType, string> = {
   releve_balance: 'Relevé balance',
   pirouette: 'Pirouette',
+  phrase: 'Phrase',
+}
+
+/** Longer names where the movement is chosen (Import). */
+export const MOVEMENT_CHOICE_LABELS: Record<MovementType, string> = {
+  releve_balance: 'Relevé balance',
+  pirouette: 'Pirouette',
+  phrase: 'Phrase (contemporary combination)',
 }
 
 export const VIEW_LABELS: Record<CameraView, string> = {

@@ -28,6 +28,7 @@ error patterns; `Main.dc.html` shows every component class.
 | `pipeline.ts` | On-device processing queue: `enqueue`, `pause`, `resume`, `cancel`, `usePipeline`, … |
 | `format.ts` | Metric catalogue, labels, number / time formatting, `readMetric`, `frameAt`, `phaseAt`. |
 | `useIsNarrow.ts` | `useIsNarrow()` — true under 900px. |
+| `focus.ts` | `useFocusThemes()`, `saveFocus(themes)`: the dancer's up to three phrase focus themes (table `user_preferences`, owner-only RLS). |
 | `components/` | Shared presentational components (import from `../components`). |
 | `pages/` | One file per route. Also, outside the router: `ResetPassword` (set a new password after a reset link), `AccountDeleted` (after Settings → Delete account) and `PasswordFields` (shared new-password inputs). |
 | `studio.css` | The design stylesheet. Components verbatim; the tokens at the top follow the brand palette of the landing page (navy, cloud, lime). Change colours only through the tokens. |
@@ -249,6 +250,27 @@ trigger clears the previous one). `setReferenceAttempt(client(), id, on)` then
 `invalidate()`. Compare's default A is the reference (`choosePair` in
 `pages/compare/pick.ts`); Review, Library and the Compare pickers show a neutral
 "Reference" tag (`pages/review/ReferenceToggle.tsx`). Never call it "best".
+
+## Phrase attempts (movement `phrase`)
+
+A phrase is a longer combination (folds, leg gestures, turns, arm circles). The pipeline
+calls `computeAttempt` (`src/metrics/attempt.ts`): for `phrase` it stores the five relevé
+columns as null (`not_applicable`) and the versioned result of `computePhrase`
+(`src/metrics/phrase.ts`, `mt2-phrase-x.y.z`) in `attempt_metrics.phrase` (jsonb,
+migration `20261117020000_phrase.sql`): an events timeline (leg gestures with side, height,
+direction and knees; folds; turns; rises; pliés) and six theme measures, each a value +
+confidence or null + reason. Swapped left/right labels lower the confidence of side-dependent
+themes (`left_right_labels_uncertain`) and mark events `side_uncertain`.
+
+- `pages/phrase/model.ts`: theme catalogue (names, units, "What is this?", best views),
+  `readTheme`, neutral `themeDifference` / `compareThemes`, event labels and lanes, focus order.
+- `pages/phrase/PhraseTimeline.tsx`: the event strip (Review under the stage, Compare for A and B);
+  a click seeks the clock. `ThemeCards.tsx` (Review), `PhraseDifferences.tsx` (Compare).
+- Compare lines two phrase attempts up on matched events (`alignPhrases` in
+  `src/metrics/phraseAlign.ts` → `buildEventTimeMap` in `compare/align.ts`).
+- Progress (`progress/phraseModel.ts`, `PhraseProgress.tsx`) and the Dashboard
+  (`dashboard/PhraseTiles.tsx`) chart phrase themes only against phrase attempts.
+- Import reads `D01_att3_d.mp4`-style names (view letter f/s/d) as a phrase.
 
 ## Shared components (`components/`, import from `'../components'`)
 

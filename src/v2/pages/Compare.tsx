@@ -18,7 +18,13 @@ import { compactGapReason, formatTimecode, isCompactGap, MOVEMENT_LABELS, PHASE_
 import { href, navigate, useRoute } from '../router'
 import { useIsNarrow } from '../useIsNarrow'
 import { useViewMode, ViewModeSwitch } from '../viewMode'
-import { alignmentText, buildTimeMap, type AlignMode, type TimeMap } from './compare/align'
+import { alignmentText, buildEventTimeMap, buildTimeMap, type AlignMode, type TimeMap } from './compare/align'
+import { alignPhrases, type PhraseAlignment } from '../../metrics/phraseAlign'
+import type { PhraseResult } from '../../metrics/phrase'
+import { useFocusThemes } from '../focus'
+import { phraseOf } from './phrase/model'
+import { PhraseDifferences } from './phrase/PhraseDifferences'
+import { PhraseTimeline } from './phrase/PhraseTimeline'
 import { choosePair } from './compare/pick'
 import { createClock, type Clock } from './review/clock'
 import { attemptName, comparisonInput, describeAttempt, sessionName } from './review/labels'
@@ -308,7 +314,19 @@ function Workspace({ a, b, seriesA, seriesB, attempts, pickers, eyebrow, backHre
   useEffect(() => () => clock.pause(), [clock])
   useTransportKeys(clock)
 
-  const map = useMemo(() => buildTimeMap({ duration: durA, phases: phasesA }, { duration: durB, phases: phasesB }, asked), [durA, durB, phasesA, phasesB, asked])
+  // Two phrase attempts are lined up on their matched events instead of phases.
+  const phrasePair = a.session.movement_type === 'phrase' && b.session.movement_type === 'phrase'
+  const phraseA = phrasePair ? phraseOf(a.metrics) : null
+  const phraseB = phrasePair ? phraseOf(b.metrics) : null
+  const alignment = useMemo(() => (phraseA && phraseB ? alignPhrases(phraseA, phraseB) : null), [phraseA, phraseB])
+  const focus = useFocusThemes()
+  const map = useMemo(
+    () =>
+      phrasePair
+        ? buildEventTimeMap(durA, durB, alignment?.anchors ?? [], asked)
+        : buildTimeMap({ duration: durA, phases: phasesA }, { duration: durB, phases: phasesB }, asked),
+    [phrasePair, alignment, durA, durB, phasesA, phasesB, asked],
+  )
   const comparison = useMemo(() => compareAttempts(comparisonInput(a), comparisonInput(b), LABELS), [a, b])
 
   const srcA = clipA && !failed.a ? clipA.objectUrl : null
@@ -372,14 +390,14 @@ function Workspace({ a, b, seriesA, seriesB, attempts, pickers, eyebrow, backHre
       <div className="seg" role="group" aria-labelledby="cmp-align">
         <button
           type="button"
-          className={map.mode === 'phases' ? 'on' : undefined}
-          aria-pressed={map.mode === 'phases'}
+          className={map.mode === 'phases' || map.mode === 'events' ? 'on' : undefined}
+          aria-pressed={map.mode === 'phases' || map.mode === 'events'}
           disabled={map.unavailable !== null}
-          title={map.unavailable ? 'Needs phases in both attempts' : undefined}
+          title={map.unavailable ? (phrasePair ? 'Needs events found in both attempts' : 'Needs phases in both attempts') : undefined}
           style={map.unavailable ? { opacity: 0.5, cursor: 'not-allowed' } : undefined}
           onClick={() => setAsked('phases')}
         >
-          Each phase
+          {phrasePair ? 'Each event' : 'Each phase'}
         </button>
         <button type="button" className={map.mode === 'proportional' ? 'on' : undefined} aria-pressed={map.mode === 'proportional'} onClick={() => setAsked('proportional')}>
           Clip length
@@ -394,7 +412,13 @@ function Workspace({ a, b, seriesA, seriesB, attempts, pickers, eyebrow, backHre
         title="Compare attempts"
         mobileTitle="Compare"
         backHref={backHref}
-        eyebrow={narrow ? `${MOVEMENT_LABELS[a.session.movement_type]} · ${map.mode === 'phases' ? 'aligned phase by phase' : 'matched by clip length'}` : <span>{eyebrow}</span>}
+        eyebrow={
+          narrow ? (
+            `${MOVEMENT_LABELS[a.session.movement_type]} · ${map.mode === 'phases' ? 'aligned phase by phase' : map.mode === 'events' ? 'aligned event by event' : 'matched by clip length'}`
+          ) : (
+            <span>{eyebrow}</span>
+          )
+        }
         actions={
           <>
             {pickers}
@@ -442,9 +466,36 @@ function Workspace({ a, b, seriesA, seriesB, attempts, pickers, eyebrow, backHre
         <NoteBox title="This browser can’t play one of the video files.">Its skeleton is shown on its own.</NoteBox>
       )}
 
-      <Timelines clock={clock} a={a} b={b} sA={sA} sB={sB} durA={durA} phasesA={phasesA} phasesB={phasesB} map={map} asked={asked} narrow={narrow} alignControl={narrow ? alignControl : null} detail={!simple} />
+      <Timelines
+        clock={clock}
+        a={a}
+        b={b}
+        sA={sA}
+        sB={sB}
+        durA={durA}
+        phasesA={phasesA}
+        phasesB={phasesB}
+        map={map}
+        asked={asked}
+        narrow={narrow}
+        alignControl={narrow ? alignControl : null}
+        detail={!simple}
+        phrase={phrasePair ? { a: phraseA, b: phraseB, alignment } : null}
+      />
 
-      <Differences comparison={comparison} a={a} b={b} narrow={narrow} simple={simple} />
+      {phrasePair ? (
+        <PhraseDifferences
+          a={phraseA}
+          b={phraseB}
+          viewA={a.session.camera_view}
+          viewB={b.session.camera_view}
+          alignment={alignment}
+          focus={focus.themes}
+          simple={simple}
+        />
+      ) : (
+        <Differences comparison={comparison} a={a} b={b} narrow={narrow} simple={simple} />
+      )}
     </>
   )
 }
@@ -478,9 +529,11 @@ interface TimelinesProps {
   alignControl: ReactNode
   /** Detail view: the torso-lean traces of both attempts. */
   detail: boolean
+  /** Two phrase attempts: event strips instead of phase ribbons. */
+  phrase?: { a: PhraseResult | null; b: PhraseResult | null; alignment: PhraseAlignment | null } | null
 }
 
-function Timelines({ clock, a, b, sA, sB, durA, phasesA, phasesB, map, asked, narrow, alignControl, detail }: TimelinesProps) {
+function Timelines({ clock, a, b, sA, sB, durA, phasesA, phasesB, map, asked, narrow, alignControl, detail, phrase }: TimelinesProps) {
   const bandsA = useMemo(() => (sA ? trackingBands(sA) : []), [sA])
   const bandsB = useMemo(() => (sB ? trackingBands(sB) : []), [sB])
   const trunkA = useMemo(() => (sA ? buildTrace(sA, trunkAt) : []), [sA])
@@ -502,9 +555,12 @@ function Timelines({ clock, a, b, sA, sB, durA, phasesA, phasesB, map, asked, na
         <SpeedControl clock={clock} dense={narrow} />
       </div>
       {alignControl}
-      <p className="t-caption">{alignmentText(map, asked)}</p>
+      <p className="t-caption">{phrase ? phraseAlignmentText(map, asked) : alignmentText(map, asked)}</p>
 
+      {phrase && <PhraseRows clock={clock} durA={durA} map={map} phrase={phrase} narrow={narrow} />}
       <div className="v2-cmp-rows">
+        {!phrase && (
+          <>
         <div className="v2-cmp-row">
           <span className="v2-cmp-rowlabel">
             <AttemptChip side="a" />
@@ -528,6 +584,8 @@ function Timelines({ clock, a, b, sA, sB, durA, phasesA, phasesB, map, asked, na
             emptyText="No phases found in B"
           />
         </div>
+          </>
+        )}
         <ScrubTrack clock={clock} duration={durA} label="Playhead of both attempts" height={32}>
           <div style={{ ...half, top: 0 }}>
             <BandLayer bands={bandsA} duration={durA} />
@@ -583,13 +641,42 @@ function Timelines({ clock, a, b, sA, sB, durA, phasesA, phasesB, map, asked, na
   )
 }
 
+// ---------- phrase attempts ----------
+
+function phraseAlignmentText(map: TimeMap, asked: AlignMode): string {
+  if (map.mode === 'events') return alignmentText(map, asked)
+  const rule = 'Matched by share of clip length: both clips start and end together.'
+  return map.unavailable ? `No events were found in both attempts, so the clips can’t be aligned by event. ${rule}` : rule
+}
+
+function PhraseRows({ clock, durA, map, phrase, narrow }: { clock: Clock; durA: number; map: TimeMap; phrase: NonNullable<TimelinesProps['phrase']>; narrow: boolean }) {
+  const matchedA = useMemo(() => new Set(phrase.alignment?.pairs.map((p) => p.a) ?? []), [phrase.alignment])
+  const matchedB = useMemo(() => new Set(phrase.alignment?.pairs.map((p) => p.b) ?? []), [phrase.alignment])
+  const empty = (name: string) => <p className="t-caption">{name} hasn’t been processed as a phrase yet, so its events aren’t listed.</p>
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+      <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+        <AttemptChip side="a" />
+        <span className="t-small">Events of A</span>
+      </div>
+      {phrase.a ? <PhraseTimeline clock={clock} phrase={phrase.a} duration={durA} label="Events of A" matched={matchedA} axis={false} compact={narrow} /> : empty('A')}
+      <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+        <AttemptChip side="b" />
+        <span className="t-small">Events of B, placed on A’s time</span>
+      </div>
+      {phrase.b ? <PhraseTimeline clock={clock} phrase={phrase.b} duration={durA} mapT={map.toA} label="Events of B, placed on A’s time" matched={matchedB} compact={narrow} /> : empty('B')}
+      <p className="t-caption">Underlined events were matched with the other attempt. Click an event to jump to it.</p>
+    </div>
+  )
+}
+
 // ---------- differences ----------
 
 function pairExplanation(comparison: AttemptComparison): ReactNode {
   if (comparison.reason?.code === 'different_movement') {
     return (
       <NoteBox title="These are different movements.">
-        Their measurements aren’t compared: a relevé balance and a pirouette are measured in different phases. Pick two attempts of the same movement to see differences.
+        Their measurements aren’t compared: each movement is measured in its own way. Pick two attempts of the same movement to see differences.
       </NoteBox>
     )
   }

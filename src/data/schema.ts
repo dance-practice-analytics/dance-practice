@@ -1,13 +1,16 @@
 // Row types for the Supabase schema (supabase/migrations/20261115000000_init.sql,
-// 20261117000000_attempt_notes.sql and 20261117010000_reference_attempt.sql, SDD 6).
+// 20261117000000_attempt_notes.sql, 20261117010000_reference_attempt.sql and
+// 20261117020000_phrase.sql, SDD 6).
 // Column names stay in snake_case so a row can be passed to and from the client as is.
 // Insert types leave out owner_id on purpose: the database fills it with auth.uid(),
 // so the browser never chooses whose row it is writing.
 
+import type { PhraseResult, ThemeKey } from '../metrics/phrase'
+
 export const USER_ROLES = ['dancer', 'researcher'] as const
 export type UserRole = (typeof USER_ROLES)[number]
 
-export const MOVEMENT_TYPES = ['releve_balance', 'pirouette'] as const
+export const MOVEMENT_TYPES = ['releve_balance', 'pirouette', 'phrase'] as const
 export type MovementType = (typeof MOVEMENT_TYPES)[number]
 
 export const ATTEMPT_SOURCES = ['study_dataset', 'user_upload'] as const
@@ -194,7 +197,7 @@ export interface AttemptKeypointsInsert {
 }
 
 // ---------- attempt_metrics ----------
-// The jsonb shapes follow SDD 5.2.
+// The jsonb shapes follow SDD 5.2; `phrase` follows src/metrics/phrase.ts.
 export type Phase = 'prep' | 'rise' | 'hold' | 'turn' | 'finish' | 'recovery'
 export type ConfidenceLevel = 'high' | 'medium' | 'low'
 
@@ -222,6 +225,8 @@ export interface AttemptMetricsRow {
   confidence: MetricConfidence
   algorithm_version: string
   computed_at: Timestamp
+  /** Phrase attempts only (movement 'phrase'): events and theme measures; null otherwise. */
+  phrase?: PhraseResult | null
 }
 
 export interface AttemptMetricsInsert {
@@ -236,6 +241,7 @@ export interface AttemptMetricsInsert {
   confidence?: MetricConfidence
   algorithm_version: string
   computed_at?: Timestamp
+  phrase?: PhraseResult | null
 }
 
 // ---------- feedback ----------
@@ -257,3 +263,17 @@ export interface FeedbackInsert {
   input_hash: string
   response: unknown
 }
+
+// ---------- user_preferences (migration 20261117020000) ----------
+/** One row per account; owner-only RLS. Display preferences only, never practice data. */
+export interface UserPreferencesRow {
+  owner_id: string
+  /** Up to MAX_FOCUS_THEMES phrase themes the dancer chose to see first. */
+  focus_themes: ThemeKey[]
+  updated_at: Timestamp
+}
+
+/** CHECK on user_preferences.focus_themes. */
+export const MAX_FOCUS_THEMES = 3
+/** CHECK on attempt_metrics.phrase (octet length of its text form). */
+export const PHRASE_MAX_BYTES = 262_144

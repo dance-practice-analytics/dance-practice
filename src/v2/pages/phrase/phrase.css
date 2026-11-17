@@ -1,0 +1,28 @@
+/* Phrase attempts: event timeline, theme cards, focus picker. Tokens only; no colour
+   carries a judgement (lanes differ by position and words, the anchor by a border). */
+
+.v2-phr-lanes{display:flex;flex-direction:column;gap:4px}
+.v2-phr-lane{display:grid;grid-template-columns:72px minmax(0,1fr);gap:8px;align-items:center}
+.v2-phr-lane-label{font-size:12px;color:var(--text-2);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.v2-phr-track{position:relative;height:28px;border-radius:6px;background:var(--surface-2)}
+.v2-phr-ev{position:absolute;top:2px;bottom:2px;min-width:6px;padding:0 4px;border-radius:4px;border:1px solid var(--line-strong);background:var(--surface);color:var(--text);font:inherit;font-size:11px;font-weight:500;line-height:22px;text-align:left;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;cursor:pointer}
+.v2-phr-ev:hover{background:var(--surface-3)}
+.v2-phr-ev:focus-visible{outline:2px solid var(--focus);outline-offset:1px;z-index:2}
+.v2-phr-ev.is-anchor{border:2px solid var(--series);line-height:20px}
+.v2-phr-ev.is-uncertain{border-style:dashed}
+.v2-phr-ev.is-matched{box-shadow:inset 0 -3px 0 var(--accent-line)}
+.v2-phr-ev.is-now{background:var(--accent-soft)}
+.v2-phr-playhead{position:absolute;top:0;bottom:0;width:2px;margin-left:-1px;background:var(--text);pointer-events:none;z-index:1}
+.v2-phr-axis{display:grid;grid-template-columns:72px minmax(0,1fr);gap:8px}
+
+.v2-phr-cards{display:flex;flex-direction:column;gap:10px}
+.v2-phr-cards.is-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr))}
+.v2-phr-cards.is-grid .metric:has(details[open]){grid-column:1/-1}
+.v2-phr-card .metric-top{flex-wrap:wrap;gap:6px}
+.v2-phr-sign{font-size:13px;color:var(--text-2);margin:0}
+.v2-phr-view{font-size:12px;color:var(--text-2);margin:0}
+.v2-phr-pin{display:inline-flex;align-items:center;gap:6px;font-size:12px;color:var(--text-2);cursor:pointer}
+.v2-phr-pin input{width:16px;height:16px;margin:0}
+.v2-phr-details{margin:0;padding-left:16px;font-size:12px;color:var(--text-2)}
+.v2-phr-diff{display:flex;flex-direction:column;gap:6px;padding:12px 14px;border:1px solid var(--line);border-radius:10px;background:var(--surface)}
+.v2-phr-diff-vals{display:flex;gap:16px;flex-wrap:wrap;font-size:13px}

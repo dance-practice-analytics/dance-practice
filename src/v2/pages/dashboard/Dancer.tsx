@@ -25,6 +25,7 @@ import {
   type MovementCard,
 } from './model'
 import { Welcome } from './Welcome'
+import { PhraseTiles } from './PhraseTiles'
 
 const CARD = { padding: 20, display: 'flex', flexDirection: 'column' as const, gap: 12, minWidth: 0 }
 const HEAD = { display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', gap: 8 }
@@ -40,7 +41,9 @@ export function DancerDashboard({ data, notes, live, narrow }: DancerProps) {
   const { sessions, attempts } = data
   const latest = useMemo(() => latestSession(sessions, attempts, live), [sessions, attempts, live])
   const focus = useMemo(() => pickFocus(sessions, attempts), [sessions, attempts])
-  const tiles = useMemo(() => (focus ? metricTiles(focus) : null), [focus])
+  // A phrase focus shows theme tiles instead of the relevé measures.
+  const phraseFocus = focus?.movement === 'phrase' ? focus : null
+  const tiles = useMemo(() => (focus && focus.movement !== 'phrase' ? metricTiles(focus) : null), [focus])
   const other = useMemo(() => (focus ? otherMovement(focus) : null), [focus])
   const next = useMemo(() => (notes.notes ? nextFocus(notes.notes, attempts) : null), [notes.notes, attempts])
   const step = useMemo(() => nextStep(sessions, attempts), [sessions, attempts])
@@ -57,6 +60,7 @@ export function DancerDashboard({ data, notes, live, narrow }: DancerProps) {
       <>
         {latest && <LatestCardPhone latest={latest} />}
         <NextFocusCard focus={next} step={step} notes={notes} emptyHref={notesHref} compact showSubject={hasSubjects} />
+        {phraseFocus && <PhraseTiles sessions={phraseFocus.sessions} attempts={phraseFocus.attempts} prefix={prefix} narrow />}
         {tiles && (
           <>
             <div style={HEAD}>
@@ -94,6 +98,7 @@ export function DancerDashboard({ data, notes, live, narrow }: DancerProps) {
         <NextFocusCard focus={next} step={step} notes={notes} emptyHref={notesHref} showSubject={hasSubjects} style={{ flex: '1 1 300px' }} />
       </div>
 
+      {phraseFocus && <PhraseTiles sessions={phraseFocus.sessions} attempts={phraseFocus.attempts} prefix={prefix} narrow={false} />}
       {tiles && (
         <section style={{ display: 'flex', flexDirection: 'column', gap: 12 }} aria-labelledby="mt-h">
           <div style={{ ...HEAD, flexWrap: 'wrap' }}>

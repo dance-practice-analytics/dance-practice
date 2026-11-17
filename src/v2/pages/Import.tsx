@@ -12,7 +12,7 @@ import { client } from '../auth'
 import { registerClip } from '../clips'
 import { Alert, ErrorAlert, Icon, NoteBox, PageHeader, PrivacyPill, StatusPill } from '../components'
 import { invalidate, useLibrary } from '../data'
-import { formatDate, MOVEMENT_LABELS } from '../format'
+import { formatDate, MOVEMENT_CHOICE_LABELS, MOVEMENT_LABELS } from '../format'
 import { enqueue, type PipelineJob } from '../pipeline'
 import { href, navigate } from '../router'
 import { useIsNarrow } from '../useIsNarrow'
@@ -48,7 +48,7 @@ interface Row extends ClipDraft {
 }
 
 const VIEW_SHORT: Record<CameraView, string> = { front: 'Front', side: 'Side', diagonal: 'Diagonal' }
-const MOVEMENT_SHORT: Record<MovementType, string> = { releve_balance: 'Relevé', pirouette: 'Pirouette' }
+const MOVEMENT_SHORT: Record<MovementType, string> = { releve_balance: 'Relevé', pirouette: 'Pirouette', phrase: 'Phrase' }
 
 let nextRowId = 0
 
@@ -686,7 +686,7 @@ function BulkApply({ label, source, disabled, onApply }: { label: string; source
         <option value="">Movement…</option>
         {MOVEMENT_TYPES.map((m) => (
           <option key={m} value={m}>
-            {MOVEMENT_LABELS[m]}
+            {MOVEMENT_CHOICE_LABELS[m]}
           </option>
         ))}
       </select>
@@ -821,7 +821,7 @@ function TagTable({ rows, checks, source, selectedCount, patch, remove, onSelect
                     >
                       {MOVEMENT_TYPES.map((m) => (
                         <option key={m} value={m}>
-                          {MOVEMENT_LABELS[m]}
+                          {MOVEMENT_CHOICE_LABELS[m]}
                         </option>
                       ))}
                     </select>

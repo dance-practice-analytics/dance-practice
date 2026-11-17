@@ -23,8 +23,8 @@ export interface ClipTiming {
 }
 
 export interface TimeMap {
-  /** The alignment in use. */
-  mode: AlignMode
+  /** The alignment in use ('events': phrase attempts lined up on matched events). */
+  mode: AlignMode | 'events'
   /** Set when 'phases' was not possible (whatever was asked for). */
   unavailable: NoPhaseReason | null
   /** [time in A, time in B] pairs, strictly increasing in both. */
@@ -135,8 +135,59 @@ export function buildTimeMap(a: ClipTiming, b: ClipTiming, prefer: AlignMode = '
   }
 }
 
+/**
+ * Phrase attempts: the map runs through the matched event peaks (src/metrics/phraseAlign.ts).
+ * Before the first match and after the last, time runs at the same speed in both clips
+ * (B waits at its start or end rather than being squeezed). `prefer: 'proportional'`, or
+ * no matched event, falls back to clip length.
+ */
+export function buildEventTimeMap(durationA: number, durationB: number, matches: readonly (readonly [number, number])[], prefer: AlignMode = 'phases'): TimeMap {
+  const durA = durationA > 0 ? durationA : 0
+  const durB = durationB > 0 ? durationB : 0
+  const inside: [number, number][] = []
+  for (const [tA, tB] of matches) {
+    if (!(tA > 0 && tB > 0 && tA < durA && tB < durB)) continue
+    const last = inside[inside.length - 1]
+    if (!last || (tA - last[0] >= MIN_GAP && tB - last[1] >= MIN_GAP)) inside.push([tA, tB])
+  }
+  if (prefer !== 'phases' || !inside.length) {
+    const map = buildTimeMap({ duration: durA, phases: [] }, { duration: durB, phases: [] }, 'proportional')
+    return { ...map, unavailable: inside.length ? null : 'none_in_common' }
+  }
+  const [fa, fb] = inside[0]
+  const [la, lb] = inside[inside.length - 1]
+  const head = Math.min(fa, fb)
+  const tail = Math.min(durA - la, durB - lb)
+  const anchors: [number, number][] = []
+  if (head >= MIN_GAP) anchors.push([fa - head, fb - head])
+  anchors.push(...inside)
+  if (tail >= MIN_GAP) anchors.push([la + tail, lb + tail])
+  const single = anchors.length < 2
+  const one = anchors[0]
+  return {
+    mode: 'events',
+    unavailable: null,
+    anchors,
+    matched: [],
+    toB: (tA) => (single ? Math.max(0, Math.min(durB, tA - one[0] + one[1])) : interpolate(anchors, tA, 0)),
+    toA: (tB) => (single ? Math.max(0, Math.min(durA, tB - one[1] + one[0])) : interpolate(anchors, tB, 1)),
+    slopeAt(tA) {
+      if (single || tA < anchors[0][0] || tA > anchors[anchors.length - 1][0]) return single ? 1 : 0
+      for (let i = 1; i < anchors.length; i++) {
+        const p = anchors[i - 1]
+        const q = anchors[i]
+        if (tA < q[0] || i === anchors.length - 1) return (q[1] - p[1]) / (q[0] - p[0])
+      }
+      return 1
+    },
+  }
+}
+
 /** The sentence under the Compare transport: which rule is lining the clips up, and why. */
 export function alignmentText(map: TimeMap, asked: AlignMode): string {
+  if (map.mode === 'events') {
+    return 'Aligned event by event: the steps found in both attempts (leg gestures, folds, turns…) happen together; between them time runs evenly.'
+  }
   if (map.mode === 'phases') {
     return 'Aligned phase by phase: each shared phase starts and ends together, so A and B are at the same point of the same phase.'
   }

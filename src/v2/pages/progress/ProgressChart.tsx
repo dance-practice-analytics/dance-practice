@@ -7,7 +7,7 @@
 import { CHART, type MetricPanel, type SessionColumn } from './model'
 
 export interface ProgressChartProps {
-  panel: MetricPanel
+  panel: Pick<MetricPanel, 'geometry' | 'aria' | 'maxLabel' | 'minLabel'>
   sessions: readonly SessionColumn[]
 }
 

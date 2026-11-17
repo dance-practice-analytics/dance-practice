@@ -23,8 +23,9 @@ const MOVEMENT_WORDS: Record<string, MovementType> = {
   balance: 'releve_balance',
   pirouette: 'pirouette',
   pirouettes: 'pirouette',
+  phrase: 'phrase',
 }
-const TAKE_JOINED = /^(?:take|clip|attempt|trial|t)(\d{1,3})$/
+const TAKE_JOINED = /^(?:take|clip|attempt|trial|att|t)(\d{1,3})$/
 const TAKE_WORDS = new Set(['take', 'clip', 'attempt', 'trial'])
 
 /**

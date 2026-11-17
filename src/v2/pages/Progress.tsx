@@ -14,8 +14,11 @@ import { useIsNarrow } from '../useIsNarrow'
 import { ProgressChart, ProgressLegend } from './progress/ProgressChart'
 import { buildProgress, DATE_RANGES, defaultMovement, tableRows, type DateRange, type MetricPanel, type ProgressView } from './progress/model'
 import './progress/progress.css'
+import { useFocusThemes } from '../focus'
+import { PhraseProgress } from './progress/PhraseProgress'
+import { buildPhraseProgress } from './progress/phraseModel'
 
-const MOVEMENTS: MovementType[] = ['releve_balance', 'pirouette']
+const MOVEMENTS: MovementType[] = ['releve_balance', 'pirouette', 'phrase']
 
 export function Progress() {
   const library = useLibrary()
@@ -31,9 +34,15 @@ export function Progress() {
   const data = library.data
   const movement = pickedMovement ?? defaultMovement(data?.sessions ?? [])
   const view = useMemo(
-    () => (data ? buildProgress(data.sessions, data.attempts, { movement, cameraView, range, from, to }) : null),
+    () => (data && movement !== 'phrase' ? buildProgress(data.sessions, data.attempts, { movement, cameraView, range, from, to }) : null),
     [data, movement, cameraView, range, from, to],
   )
+  // Phrase themes have their own charts: never on one scale with relevé or pirouette values.
+  const phraseView = useMemo(
+    () => (data && movement === 'phrase' ? buildPhraseProgress(data.sessions, data.attempts, { cameraView, range, from, to }) : null),
+    [data, movement, cameraView, range, from, to],
+  )
+  const focus = useFocusThemes()
 
   const pickMovement = (m: MovementType) => {
     setMovement(m)
@@ -74,6 +83,13 @@ export function Progress() {
 
       {library.loading ? (
         <ProgressSkeleton />
+      ) : phraseView ? (
+        <PhraseProgress
+          view={phraseView}
+          focus={focus.themes}
+          setCameraView={setCameraView}
+          dateControl={<DateControl range={range} setRange={setRange} from={from} to={to} setFrom={setFrom} setTo={setTo} />}
+        />
       ) : view && data ? (
         <ProgressBody
           view={view}
@@ -379,6 +395,37 @@ function notesOf(values: readonly { note: string | null }[]): string[] {
   const counts = new Map<string, number>()
   for (const v of values) if (v.note) counts.set(v.note, (counts.get(v.note) ?? 0) + 1)
   return [...counts].map(([note, n]) => (n === values.length ? `${note}.` : `${n} of ${values.length}: ${note}.`))
+}
+
+function DateControl({ range, setRange, from, to, setFrom, setTo }: Pick<BodyProps, 'range' | 'setRange' | 'from' | 'to' | 'setFrom' | 'setTo'>) {
+  return (
+    <>
+      <div className="field" style={{ flex: '0 1 auto' }}>
+        <span className="field-label" id="prog-phr-range">
+          Dates
+        </span>
+        <div className="seg" role="radiogroup" aria-labelledby="prog-phr-range">
+          {DATE_RANGES.map((r) => (
+            <button key={r.key} type="button" role="radio" aria-checked={r.key === range} className={r.key === range ? 'on' : undefined} onClick={() => setRange(r.key)}>
+              {r.label}
+            </button>
+          ))}
+        </div>
+      </div>
+      {range === 'custom' && (
+        <>
+          <label className="field">
+            <span className="field-label">From</span>
+            <input className="input input-sm" type="date" value={from} max={to || undefined} onChange={(e) => setFrom(e.target.value)} />
+          </label>
+          <label className="field">
+            <span className="field-label">To</span>
+            <input className="input input-sm" type="date" value={to} min={from || undefined} onChange={(e) => setTo(e.target.value)} />
+          </label>
+        </>
+      )}
+    </>
+  )
 }
 
 function ProgressSkeleton() {
