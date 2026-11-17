@@ -50,14 +50,16 @@ const JOINTS: readonly number[] = [
   LM.rightFootIndex,
 ]
 
-const BONE = '#F3F1EC'
-const STAGE_ACCENT = '#A9BCF2'
+// Stage colours come from the .app tokens (studio.css); the fallbacks are the same values.
+const BONE = 'var(--bone, #F5F7FB)'
+const STAGE_ACCENT = 'var(--stage-accent, #C8F54A)'
+const GHOST = 'var(--stage-ghost, #8A96B8)'
 const PILL: CSSProperties = {
   display: 'inline-flex',
   alignItems: 'center',
   height: 28,
   padding: '0 10px',
-  background: 'rgba(13,13,12,.72)',
+  background: 'var(--stage-pill, rgba(7,14,36,.72))',
   fontSize: 12,
   fontWeight: 500,
   color: BONE,
@@ -71,7 +73,7 @@ export interface VideoStageProps {
    * landmarks, shows the "No tracking" pill and no skeleton. `undefined` = no overlay.
    */
   frame?: PoseFrame | null
-  /** A second pose drawn dashed in the stage accent (attempt A behind B in Compare). */
+  /** A second pose drawn dashed in neutral grey (attempt A behind B in Compare); never the trunk lime. */
   ghostFrame?: PoseFrame | null
   /** Source size in pixels (`series.width/height`); sets the aspect ratio and the overlay scale. Default 16:9. */
   width?: number
@@ -139,7 +141,7 @@ export function VideoStage(props: VideoStageProps) {
         position: 'relative',
         width: '100%',
         aspectRatio: `${w} / ${h}`,
-        background: 'var(--stage, #1E1D1B)',
+        background: 'var(--stage, #070E24)',
         borderRadius: 12,
         overflow: 'hidden',
         color: BONE,
@@ -154,13 +156,13 @@ export function VideoStage(props: VideoStageProps) {
           muted
           playsInline
           preload="auto"
-          style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'contain', background: '#000' }}
+          style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'contain', background: 'var(--stage, #070E24)' }}
         />
       ) : (
         // The studio floor of the design, behind a skeleton shown without its video.
         <>
-          <div aria-hidden="true" style={{ position: 'absolute', left: 0, right: 0, bottom: 0, height: '24%', background: 'var(--stage-2, #2A2825)' }} />
-          <div aria-hidden="true" style={{ position: 'absolute', left: 0, right: 0, top: '47%', height: 3, background: '#34312D' }} />
+          <div aria-hidden="true" style={{ position: 'absolute', left: 0, right: 0, bottom: 0, height: '24%', background: 'var(--stage-2, #101B3F)' }} />
+          <div aria-hidden="true" style={{ position: 'absolute', left: 0, right: 0, top: '47%', height: 3, background: 'var(--stage-line, #22316A)' }} />
         </>
       )}
 
@@ -201,7 +203,7 @@ export function VideoStage(props: VideoStageProps) {
           )}
           <span style={{ flex: 1 }} />
           {noTracking && (
-            <span role="status" style={{ ...PILL, borderRadius: 6, border: '1px dashed rgba(243,241,236,.6)' }}>
+            <span role="status" style={{ ...PILL, borderRadius: 6, border: '1px dashed rgba(245,247,251,.6)' }}>
               {noTrackingLabel}
             </span>
           )}
@@ -245,7 +247,7 @@ function Skeleton({ landmarks, w, h, ghost }: SkeletonProps) {
 
   if (ghost) {
     return (
-      <g fill="none" stroke={STAGE_ACCENT} strokeWidth={2} strokeDasharray="4 3" strokeLinecap="round" strokeLinejoin="round" opacity={0.9}>
+      <g fill="none" stroke={GHOST} strokeWidth={2} strokeDasharray="4 3" strokeLinecap="round" strokeLinejoin="round" opacity={0.9}>
         <circle cx={nose.x} cy={nose.y} r={headR} {...fixed} />
         <line x1={neck.x} y1={neck.y} x2={pelvis.x} y2={pelvis.y} {...fixed} />
         {SEGMENTS.map(([a, b]) => {

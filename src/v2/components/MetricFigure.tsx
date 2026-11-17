@@ -1,13 +1,13 @@
 // Small drawings that show what each measurement looks at, for the "What is this?"
 // panel of a metric card. A plain stick figure in the text colour; the part being
-// measured in the accent colour, with a dashed reference line. Illustrations only,
+// measured in the measure colour (navy on light, lime on dark), with a dashed reference line. Illustrations only,
 // never pose data, and hidden from assistive tech (the sentence beside it says it).
 
 import type { MetricKey } from '../format'
 
 const LINE = { fill: 'none', stroke: 'currentColor', strokeWidth: 2.4, strokeLinecap: 'round', strokeLinejoin: 'round' } as const
-const MEASURED = { ...LINE, stroke: 'var(--accent)', strokeWidth: 2.8 } as const
-const GUIDE = { fill: 'none', stroke: 'var(--accent)', strokeWidth: 1.4, strokeDasharray: '3 3', strokeLinecap: 'round' } as const
+const MEASURED = { ...LINE, stroke: 'var(--measure)', strokeWidth: 2.8 } as const
+const GUIDE = { fill: 'none', stroke: 'var(--measure)', strokeWidth: 1.4, strokeDasharray: '3 3', strokeLinecap: 'round' } as const
 
 function Drawing({ metric }: { metric: MetricKey }) {
   switch (metric) {
@@ -28,7 +28,7 @@ function Drawing({ metric }: { metric: MetricKey }) {
         <>
           <circle cx="36" cy="9" r="4.5" {...LINE} />
           <path d="M36 14V32M36 20L26 28M36 20L46 28M36 32L30 46L29 58M36 32L40 46L44 56" {...LINE} />
-          <circle cx="36" cy="32" r="2.6" fill="var(--accent)" />
+          <circle cx="36" cy="32" r="2.6" fill="var(--measure)" />
           <path d="M36 34V60" {...GUIDE} />
           <path d="M29 60H36" {...MEASURED} />
           <path d="M27 60H23" {...LINE} strokeWidth={1.6} />
@@ -52,7 +52,7 @@ function Drawing({ metric }: { metric: MetricKey }) {
           <path d="M32 56L40 58" {...LINE} />
           <path d="M32 56V14" {...GUIDE} />
           <path d="M32 56L20 26" {...MEASURED} strokeWidth={2} strokeDasharray="none" />
-          <circle cx="22" cy="32" r="3" fill="var(--accent)" />
+          <circle cx="22" cy="32" r="3" fill="var(--measure)" />
           <path d="M28 40A16 16 0 0 1 32 39.5" {...GUIDE} strokeDasharray="none" />
         </>
       )

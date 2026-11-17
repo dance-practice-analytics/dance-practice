@@ -30,7 +30,7 @@ error patterns; `Main.dc.html` shows every component class.
 | `useIsNarrow.ts` | `useIsNarrow()` — true under 900px. |
 | `components/` | Shared presentational components (import from `../components`). |
 | `pages/` | One file per route. Also, outside the router: `ResetPassword` (set a new password after a reset link), `AccountDeleted` (after Settings → Delete account) and `PasswordFields` (shared new-password inputs). |
-| `studio.css` | The design stylesheet, verbatim. **Do not edit.** |
+| `studio.css` | The design stylesheet. Components verbatim; the tokens at the top follow the brand palette of the landing page (navy, cloud, lime). Change colours only through the tokens. |
 | `v2.css` | Shell grid and a few helpers (`v2-` prefix). |
 
 ## Replacing a stub page
@@ -317,6 +317,50 @@ rule: differences are computed on the rounded values that are on screen.
 - PWA: `public/sw.js` + `register-sw.js` are wired in `index.html`; a page may listen
   for the `dpa:update-ready` window event. Leave those files and `vite.config.ts` alone.
 
+## Mika (AI practice chat)
+
+`pages/Chat.tsx` talks to the Edge Function `supabase/functions/mika-chat` through
+`pages/chat/mikaClient.ts`:
+
+```ts
+mikaStatus(client()): Promise<boolean>          // GET: deployed and has its API key? No question sent.
+askMika(client(), { attemptId, compareAttemptId?, scope?, messages }): Promise<string>
+isNotConnected(e)                                // 404 (not deployed) or missing/rejected key
+// throws MikaError (an ApiError): message + recovery are dancer-safe (copy in contract.ts)
+```
+
+- The function verifies the caller's JWT and queries with it (RLS applies), checks the
+  `ai_metrics_only` consent, loads the attempt's `attempt_metrics` row (plus the
+  comparison attempt, or every attempt of the session for scope `session`) and sends
+  Claude (`claude-sonnet-5-5`, low effort) metric values, units, confidence and null
+  reasons only, labelled "Attempt N". Never keypoints, frames, video, titles, file names
+  or subject codes. The system prompt is in `mika-chat/prompt.ts` (answers only from
+  the numbers, neutral differences, never grades, no medical advice, short).
+- The screen sends the last 12 messages (questions ≤ 1000 characters); in scope
+  `attempt` it compares with the previous analyzed attempt of the session. Nothing is
+  stored: the conversation lives in the page and is gone on reload or "New conversation".
+- Before the function is deployed (404) or while `ANTHROPIC_API_KEY` is unset, the
+  screen shows "Mika isn't connected yet" and sending stays off. Without the consent,
+  it points to Settings.
+- Rate limit: 30 questions per user per hour, counted **in the memory of each function
+  instance** (no table fits and the schema is unchanged). A cold start resets it and two
+  instances count separately; it stops a runaway client, it is not a hard quota.
+- Tests: `pages/chat/mika.test.ts` (validation, context, prompt, rate limit, handler with
+  fakes, client). `index.ts` is the Deno wiring and is not run by Vitest.
+
+### Deploy
+
+Run these yourself (never paste the key into a chat or a file in the repo):
+
+```
+npx supabase secrets set ANTHROPIC_API_KEY=sk-ant-...
+npx supabase functions deploy mika-chat --use-api
+```
+
+`--use-api` bundles on Supabase's side (no Docker). Keep JWT verification on (no
+`--no-verify-jwt`). Logs: `npx supabase functions logs mika-chat` (failure codes only).
+Optional secrets shared with `generate-feedback`: `ALLOWED_ORIGINS`, `REFUSAL_FALLBACK=off`.
+
 ## CSS rules
 
 - Use the design classes (`.btn .btn-primary`, `.card`, `.seg`, `.field`, `.input`,
@@ -324,14 +368,14 @@ rule: differences are computed on the rounded values that are on screen.
   `.cell`, `.attempt`, `.choice`, `.drop`, `.dialog`, `.hatch`, `.t-*`, `.mono`, `.muted`,
   `.subtle`, …) and tokens (`var(--surface)`, `var(--line)`, `var(--text-2)`,
   `var(--accent)`, …). Inline styles copied from the design markup are fine.
-- No hex colours outside the video stage; no new tokens; never edit `studio.css`.
+- No hex colours outside the video stage; use the tokens in `studio.css` (`--series`, `--series-a/-b`, `--measure`, `--focus`, `--stage-*`, `--lime`/`--navy` for the logo only). Lime is never text or a thin line on white, and never means "good" or "better".
 - A new global class needs the `v2-` prefix and goes in a CSS file of your own screen
   (e.g. `pages/review.css`, imported by the page), not in `v2.css`.
 - Helpers already in `v2.css`: `v2-clip` (ellipsis), `v2-sr` (screen-reader only),
   `v2-only-wide` / `v2-only-narrow`.
 - Links styled as buttons (`<a class="btn btn-primary">`) are supported; `v2.css`
   restores their colours over `.app a`.
-- Charts: SVG by hand or Recharts, in tokens; one neutral series colour plus the accent.
+- Charts: SVG by hand or Recharts, in tokens; one neutral colour plus `--series` (Compare: `--series-a` dashed, `--series-b` solid).
 
 ## Hard rules (from CLAUDE.md — they apply to every screen)
 
@@ -344,7 +388,7 @@ rule: differences are computed on the rounded values that are on screen.
 - **Video never leaves the device.** Study clips are local files (blob URLs); nothing in
   v2 sends video, frames or canvas captures anywhere. Only the publishable key is in the
   browser; no service-role key; no new env vars. Claude is called only from the Edge
-  Function `generate-feedback`, with metrics JSON only.
+  Functions `generate-feedback` and `mika-chat`, with metrics JSON only.
 - **No real people.** Subjects are codes S01–S12; no names, no real footage, no
   participant data in the repo, in fixtures or in screenshots.
 - UI copy in English, taken from the designs where it exists. Sample values in the

@@ -8,8 +8,8 @@ import { mkdir, writeFile } from 'node:fs/promises'
 import { existsSync } from 'node:fs'
 import puppeteer from 'puppeteer-core'
 
-const ACCENT = '#3B57A3'
-const INK = '#FFFFFF'
+const ACCENT = '#C8F54A' // electric lime tile (landing page logo)
+const INK = '#0B1533' // midnight navy figure
 
 const CHROME_CANDIDATES = [
   process.env.CHROME_PATH,

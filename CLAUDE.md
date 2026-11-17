@@ -16,7 +16,7 @@ A dancer uploads a practice video of one movement. MovAI (proprietary markerless
 - Out of scope: multiple dancers, live processing, training a pose model.
 - **NDA/IRB:** no real footage, MovAI exports, participant data or interview content in this repo. Everything here is synthetic. Participants are identified by codes only. Don't write MovAI's URL anywhere.
 - Missing or low-quality tracking is shown as a gap or a hatched band, never filled in or zeroed. Unavailable summaries say why.
-- The browser only holds the Supabase publishable key (RLS protects data). Claude is called **only from the Supabase Edge Function `generate-feedback`**, with metrics JSON only, never frames or video. `ANTHROPIC_API_KEY` lives only in Supabase secrets.
+- The browser only holds the Supabase publishable key (RLS protects data). Claude is called **only from the Supabase Edge Functions `generate-feedback` and `mika-chat`**, with metrics JSON only, never keypoints, frames or video. `ANTHROPIC_API_KEY` lives only in Supabase secrets.
 - Study clips (source `study_dataset`) are opened as local files (blob URLs), processed on device and never uploaded anywhere (DB CHECK `study_no_video` enforces it). Don't paste or read real footage in Claude Code either.
 - Keep measurement-accuracy evaluation separate from usability evaluation.
 

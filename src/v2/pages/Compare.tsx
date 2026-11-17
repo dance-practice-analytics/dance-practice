@@ -240,7 +240,7 @@ function Pickers({ processed, a, b, narrow, onPick }: PickersProps) {
           </label>
           {select('a')}
         </div>
-        <div className="card v2-cmp-pick" style={{ borderColor: 'var(--accent)' }}>
+        <div className="card v2-cmp-pick" style={{ borderColor: 'var(--series-b)' }}>
           <label className="t-caption" htmlFor="cmp-b" aria-label="Attempt B">
             <AttemptChip side="b" />
           </label>
@@ -573,8 +573,8 @@ function Timelines({ clock, a, b, sA, sB, durA, phasesA, phasesB, map, asked, na
             height={narrow ? 80 : 96}
             ariaLabel={`Torso lean of A (dashed line) and B (solid line) in each frame, from 0 to ${top} degrees, on A’s time; B is placed ${map.mode === 'phases' ? 'phase by phase' : 'by share of clip length'}.`}
           >
-            <TraceLayer segments={trunkA} duration={durA} max={top} height={96} dash="5 4" lowDash="1 4" />
-            <TraceLayer segments={trunkB} duration={durA} max={top} height={96} stroke="var(--accent)" strokeWidth={2.25} lowDash="1 4" mapT={map.toA} />
+            <TraceLayer segments={trunkA} duration={durA} max={top} height={96} stroke="var(--series-a)" dash="5 4" lowDash="1 4" />
+            <TraceLayer segments={trunkB} duration={durA} max={top} height={96} stroke="var(--series-b)" strokeWidth={2.25} lowDash="1 4" mapT={map.toA} />
           </TraceTrack>
           <TimeAxis duration={durA} />
         </div>

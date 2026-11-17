@@ -26,7 +26,7 @@ const POINTS: { icon: IconName; text: string }[] = [
  * the real VideoStage only ever draws tracked landmarks.
  */
 // A relevé in passé seen from the front: arms in high fifth, the working foot at the
-// supporting knee, the trunk (what the app measures) in the accent colour and the
+// supporting knee, the trunk (what the app measures) in the stage lime and the
 // plumb line through the supporting foot. Joints follow the MediaPipe topology.
 const J = {
   head: [100, 40], neck: [100, 60],
@@ -42,11 +42,12 @@ const ARM_R = 'M118,63 C142,52 140,20 115,11'
 const DOTS: (keyof typeof J)[] = ['ls', 'rs', 'le', 're', 'lw', 'rw', 'lh', 'rh', 'lk', 'la', 'lt', 'rk', 'ra']
 
 function StageArt() {
-  const bone = '#F3F1EC'
+  const bone = 'var(--bone)'
+  const lime = 'var(--stage-accent)'
   return (
     <div
       aria-hidden="true"
-      style={{ position: 'relative', width: '100%', aspectRatio: '4 / 3', background: 'linear-gradient(#1E1D1B, #252320 76%)', borderRadius: 12, overflow: 'hidden' }}
+      style={{ position: 'relative', width: '100%', aspectRatio: '4 / 3', background: 'radial-gradient(120% 70% at 50% 100%, rgba(200,245,74,.10), transparent 60%), linear-gradient(var(--stage), var(--stage-2) 76%)', borderRadius: 12, overflow: 'hidden' }}
     >
       <style>{`
         @media (prefers-reduced-motion: no-preference) {
@@ -54,12 +55,12 @@ function StageArt() {
         }
         @keyframes stage-art-sway { 0%, 100% { transform: rotate(-0.8deg); } 50% { transform: rotate(1.2deg); } }
       `}</style>
-      <div style={{ position: 'absolute', left: 0, right: 0, bottom: 0, height: '24%', background: '#2A2825' }} />
-      <div style={{ position: 'absolute', left: 0, right: 0, top: '76%', height: 1, background: '#3A3732' }} />
+      <div style={{ position: 'absolute', left: 0, right: 0, bottom: 0, height: '24%', background: 'var(--stage-2)' }} />
+      <div style={{ position: 'absolute', left: 0, right: 0, top: '76%', height: 1, background: 'var(--stage-line)' }} />
       <svg viewBox="0 0 200 300" style={{ position: 'absolute', top: '5%', height: '90%', left: '50%', transform: 'translateX(-50%)', overflow: 'visible' }}>
-        <ellipse cx="98" cy="248" rx="18" ry="3" fill="#000" opacity=".35" />
-        <line x1="98" y1="248" x2="98" y2="6" stroke="rgba(243,241,236,.3)" strokeWidth="1" strokeDasharray="2 4" />
-        <g className="stage-art-figure" style={{ filter: 'drop-shadow(0 0 5px rgba(243,241,236,.16))' }}>
+        <ellipse cx="98" cy="248" rx="26" ry="4" fill="rgba(200,245,74,.22)" />
+        <line x1="98" y1="248" x2="98" y2="6" stroke="rgba(245,247,251,.3)" strokeWidth="1" strokeDasharray="2 4" />
+        <g className="stage-art-figure" style={{ filter: 'drop-shadow(0 0 5px rgba(245,247,251,.16))' }}>
           {/* A faint body under the skeleton, so it reads as a dancer being tracked. */}
           <g fill="none" stroke={bone} strokeOpacity=".09" strokeLinecap="round" strokeLinejoin="round" strokeWidth="13">
             <path d={ARM_L} />
@@ -77,14 +78,14 @@ function StageArt() {
             <polyline points={pts('lh', 'rh')} />
             <polyline points={pts('lh', 'lk', 'la', 'lt')} />
             <polyline points={pts('rh', 'rk', 'ra', 'rt')} />
-            <polyline points={pts('mh', 'neck')} stroke="#A9BCF2" strokeWidth="3.6" />
+            <polyline points={pts('mh', 'neck')} stroke={lime} strokeWidth="3.6" />
           </g>
           <g fill={bone}>
             {DOTS.map((k) => (
               <circle key={k} cx={J[k][0]} cy={J[k][1]} r="3" />
             ))}
-            <circle cx={J.mh[0]} cy={J.mh[1]} r="3.4" fill="#A9BCF2" />
-            <circle cx={J.neck[0]} cy={J.neck[1]} r="3.4" fill="#A9BCF2" />
+            <circle cx={J.mh[0]} cy={J.mh[1]} r="3.4" fill={lime} />
+            <circle cx={J.neck[0]} cy={J.neck[1]} r="3.4" fill={lime} />
           </g>
         </g>
       </svg>
@@ -318,7 +319,7 @@ export function SignIn() {
           </div>
           <div style={{ display: 'flex', flexDirection: 'column', gap: 16, maxWidth: 480 }}>
             <h2 className="t-h2" style={{ color: 'var(--bone)' }}>
-              Your video stays with you.
+              Your video <span style={{ color: 'var(--lime)' }}>stays with you.</span>
             </h2>
             <ul style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
               {POINTS.map((p) => (

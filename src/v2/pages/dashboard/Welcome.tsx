@@ -63,7 +63,7 @@ export function Welcome({ narrow }: { narrow: boolean }) {
                 display: 'grid',
                 placeItems: 'center',
                 background: 'var(--accent-soft)',
-                color: 'var(--accent-ink)',
+                color: 'var(--text)',
                 border: '1px solid var(--accent-line)',
                 fontSize: 13,
                 fontWeight: 600,

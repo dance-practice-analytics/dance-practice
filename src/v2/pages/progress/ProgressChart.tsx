@@ -1,7 +1,7 @@
 // One small multiple of the Progress screen, drawn by hand like Progress.dc.html:
 // attempts as dots, low-confidence values hollow and dashed, missing values as a cross
 // (never a point at 0), the session median as a tick, and a thin line joining the
-// medians of neighbouring sessions. One neutral colour plus the accent; no hue carries
+// medians of neighbouring sessions. One neutral colour plus the series colour; no hue carries
 // meaning.
 
 import { CHART, type MetricPanel, type SessionColumn } from './model'
@@ -38,7 +38,7 @@ export function ProgressChart({ panel, sessions }: ProgressChartProps) {
           </text>
         )}
         {g.medianPaths.map((d) => (
-          <path key={d} d={d} fill="none" stroke="var(--accent)" strokeWidth="1.5" opacity=".7" />
+          <path key={d} d={d} fill="none" stroke="var(--series)" strokeWidth="1.5" opacity=".7" />
         ))}
         {g.columns.map(
           (c) =>
@@ -49,7 +49,7 @@ export function ProgressChart({ panel, sessions }: ProgressChartProps) {
                 x2={c.tick.x2}
                 y1={c.tick.y}
                 y2={c.tick.y}
-                stroke="var(--accent)"
+                stroke="var(--series)"
                 strokeWidth="3"
                 strokeLinecap={c.partial ? 'butt' : 'round'}
                 // A session that is only partly processed has a provisional median.
@@ -120,7 +120,7 @@ export function ProgressLegend({ compact }: { compact?: boolean }) {
       </span>
       <span style={item}>
         <svg width="20" height="12" aria-hidden="true">
-          <path d="M0 6h20" stroke="var(--accent)" strokeWidth="2" />
+          <path d="M0 6h20" stroke="var(--series)" strokeWidth="2" />
         </svg>
         Session median
       </span>

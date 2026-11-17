@@ -110,15 +110,15 @@ export function markWeight(px: number): { stroke: number; scale: number } {
   return { stroke: 2.7, scale: 0.78 }
 }
 
-/** The app mark (accent tile with the figure), 28px in the designs. */
+/** The app mark (lime tile with the navy figure, as on the landing page), 28px in the designs. Same in both themes. */
 export function Logo({ size = 28 }: { size?: number }) {
   const { stroke, scale } = markWeight(size)
   return (
     <svg width={size} height={size} viewBox="0 0 64 64" fill="none" aria-hidden="true" style={{ flex: 'none' }}>
-      <rect width="64" height="64" rx="16" fill="var(--accent)" />
+      <rect width="64" height="64" rx="16" fill="var(--lime, #C8F54A)" />
       <g transform={`translate(32 32) scale(${scale}) translate(-32 -32)`}>
-        <path d={MARK_FILL} fill="var(--accent-ink)" />
-        <path d={MARK_LINE} stroke="var(--accent-ink)" strokeWidth={stroke} strokeLinecap="round" strokeLinejoin="round" />
+        <path d={MARK_FILL} fill="var(--navy, #0B1533)" />
+        <path d={MARK_LINE} stroke="var(--navy, #0B1533)" strokeWidth={stroke} strokeLinecap="round" strokeLinejoin="round" />
       </g>
     </svg>
   )

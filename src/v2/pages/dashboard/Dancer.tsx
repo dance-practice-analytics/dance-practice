@@ -226,13 +226,13 @@ function Spark({ tile, height }: { tile: MetricTile; height: number }) {
   return (
     <svg viewBox="0 0 120 40" role="img" aria-label={aria} style={{ flex: 1, width: '100%', height, minWidth: 0 }}>
       {layout.lines.map((pts) => (
-        <polyline key={pts} points={pts} fill="none" stroke="var(--accent)" strokeWidth="2" />
+        <polyline key={pts} points={pts} fill="none" stroke="var(--series)" strokeWidth="2" />
       ))}
       {/* Sessions without a value: a dashed tick where the point would be. */}
       {layout.dots.map((d) =>
         d.y === null ? <line key={d.index} x1={d.x} y1="6" x2={d.x} y2="36" stroke="var(--line-strong)" strokeDasharray="2 4" /> : null,
       )}
-      {last && <circle cx={last.x} cy={last.y!} r="3.5" fill="var(--surface)" stroke="var(--accent)" strokeWidth="2" />}
+      {last && <circle cx={last.x} cy={last.y!} r="3.5" fill="var(--surface)" stroke="var(--series)" strokeWidth="2" />}
     </svg>
   )
 }

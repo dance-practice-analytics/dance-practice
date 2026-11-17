@@ -200,7 +200,7 @@ function TrendChart({ trend, metric }: { trend: Trend; metric: MetricKey }) {
         0{unit}
       </text>
       {layout.lines.map((pts) => (
-        <polyline key={pts} points={pts} fill="none" stroke="var(--accent)" strokeWidth="2" />
+        <polyline key={pts} points={pts} fill="none" stroke="var(--series)" strokeWidth="2" />
       ))}
       {layout.dots.map((d) => {
         const p = points[d.index]
@@ -218,9 +218,9 @@ function TrendChart({ trend, metric }: { trend: Trend; metric: MetricKey }) {
         return (
           <g key={p.sessionId}>
             {p.partial ? (
-              <circle cx={d.x} cy={d.y} r="4.5" fill="var(--surface)" stroke="var(--accent)" strokeWidth="2" strokeDasharray="2 2" />
+              <circle cx={d.x} cy={d.y} r="4.5" fill="var(--surface)" stroke="var(--series)" strokeWidth="2" strokeDasharray="2 2" />
             ) : (
-              <circle cx={d.x} cy={d.y} r="4" fill="var(--accent)" />
+              <circle cx={d.x} cy={d.y} r="4" fill="var(--series)" />
             )}
             <text x={d.x} y={d.y - 10} fontSize="11" textAnchor="middle" fill={p.partial ? 'var(--text-2)' : 'var(--text)'} fontFamily={SANS}>
               {p.text}
@@ -352,15 +352,15 @@ export function TrendCardCompact({ focus }: TrendCardProps) {
         <svg viewBox="0 0 160 56" role="img" aria-label={trend.aria} style={{ flex: 1, height: 56, minWidth: 0 }}>
           <line x1="0" y1="48" x2="160" y2="48" stroke="var(--line)" />
           {layout.lines.map((pts) => (
-            <polyline key={pts} points={pts} fill="none" stroke="var(--accent)" strokeWidth="2" />
+            <polyline key={pts} points={pts} fill="none" stroke="var(--series)" strokeWidth="2" />
           ))}
           {layout.dots.map((d) => {
             const p = trend.points[d.index]
             if (d.y === null) return <line key={p.sessionId} x1={d.x} y1="12" x2={d.x} y2="48" stroke="var(--line-strong)" strokeDasharray="2 4" />
             return p.partial ? (
-              <circle key={p.sessionId} cx={d.x} cy={d.y} r="4" fill="var(--surface)" stroke="var(--accent)" strokeWidth="2" strokeDasharray="2 2" />
+              <circle key={p.sessionId} cx={d.x} cy={d.y} r="4" fill="var(--surface)" stroke="var(--series)" strokeWidth="2" strokeDasharray="2 2" />
             ) : (
-              <circle key={p.sessionId} cx={d.x} cy={d.y} r="3.5" fill="var(--accent)" />
+              <circle key={p.sessionId} cx={d.x} cy={d.y} r="3.5" fill="var(--series)" />
             )
           })}
         </svg>

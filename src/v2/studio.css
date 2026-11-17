@@ -1,38 +1,52 @@
 /* Dance Practice Analytics — studio.css
-   Tokens (light + dark) and shared components. Calm "rehearsal studio":
-   warm neutral greys, one accent (studio blue), Geist + Geist Mono. */
+   Tokens (light + dark) and shared components. Brand palette (landing page): midnight
+   navy, cloud white and one electric lime used like a spotlight. Geist + Geist Mono.
+   Lime is never text or a thin line on white (it fails contrast there): on white it is a
+   filled background under navy text, a focus halo or a stage colour. It never means
+   "good" or "better": no colour-coded deltas, no red/green. */
 
 .app{
-  --bg:#F6F5F2; --surface:#FFFFFF; --surface-2:#EFEEEA; --surface-3:#E4E2DC;
-  --line:#E0DED8; --line-strong:#C4C0B8;
-  --text:#1C1B19; --text-2:#4F4B45; --text-3:#625E57; /* text-3 ≥ 4.5:1 on bg, surface, surface-2 and surface-3 */
-  --accent:#3B57A3; --accent-hover:#2F4888; --accent-ink:#FFFFFF; --accent-soft:#E7EBF6; --accent-line:#A9B7DD;
-  --hatch:rgba(28,27,25,.18);
-  --scrim:rgba(28,27,25,.45);
-  --shadow:0 1px 2px rgba(28,27,25,.05),0 6px 20px rgba(28,27,25,.06);
-  --stage:#1E1D1B; --stage-2:#2A2825; --bone:#F3F1EC; --bone-2:#B9B5AD; --stage-accent:#A9BCF2;
+  /* Brand constants (same in both themes): logo tile, stage art */
+  --navy:#0B1533; --navy-deep:#070E24; --lime:#C8F54A; --lime-deep:#9ED61F;
+  --bg:#F5F7FB; --surface:#FFFFFF; --surface-2:#EEF1F7; --surface-3:#E3E8F2;
+  --line:#E3E8F2; --line-strong:#B9C2D8; --line-input:#7E8AAA; /* line-input ≥ 3:1 on surface and bg (form fields, switch track) */
+  --text:#0B1533; --text-2:#3A4566; --text-3:#5B6685; /* text-3 ≥ 4.5:1 on bg, surface, surface-2 and surface-3 */
+  --accent:#0B1533; --accent-hover:#22316A; --accent-ink:#F5F7FB; --accent-soft:#ECFBC0; --accent-line:#0B1533;
+  --focus:#0B1533; --focus-halo:#C8F54A; /* navy ring with a lime halo inside it */
+  /* Series: one neutral line per chart; A/B in Compare (A grey dashed, B navy solid). Neither means better. */
+  --series:#0B1533; --series-a:#5B6685; --series-b:#0B1533; --series-b-ink:#F5F7FB;
+  --measure:#0B1533; /* the measured part in the metric drawings (lime would fail on white) */
+  --hatch:rgba(11,21,51,.18);
+  --scrim:rgba(7,14,36,.5);
+  --shadow:0 1px 2px rgba(11,21,51,.06),0 6px 20px rgba(11,21,51,.08);
+  /* Stage (video + skeleton): always navy-deep; cloud bones, the measured trunk in lime */
+  --stage:#070E24; --stage-2:#101B3F; --stage-line:#22316A; --stage-pill:rgba(7,14,36,.72);
+  --bone:#F5F7FB; --bone-2:#A9B3CF; --stage-accent:#C8F54A; --stage-ghost:#8A96B8;
   background:var(--bg); color:var(--text);
   font-family:"Geist",ui-sans-serif,system-ui,-apple-system,"Segoe UI",sans-serif;
   font-size:14px; line-height:22px; -webkit-font-smoothing:antialiased;
   box-sizing:border-box;
 }
 .app.dark{
-  --bg:#121211; --surface:#1B1A19; --surface-2:#242321; --surface-3:#2E2C2A;
-  --line:#33312E; --line-strong:#4A4743;
-  --text:#EDEBE7; --text-2:#C2BEB7; --text-3:#A6A199;
-  --accent:#93A9EC; --accent-hover:#ABBDF2; --accent-ink:#121211; --accent-soft:#232A3D; --accent-line:#4B5B8C;
-  --hatch:rgba(237,235,231,.16);
-  --scrim:rgba(0,0,0,.6);
+  --bg:#0B1533; --surface:#16224A; --surface-2:#1C2A57; --surface-3:#22316A;
+  --line:#2A3A72; --line-strong:#46558C; --line-input:#6A79AD;
+  --text:#F5F7FB; --text-2:#C9D0E3; --text-3:#A9B3CF;
+  --accent:#C8F54A; --accent-hover:#D7F97A; --accent-ink:#0B1533; --accent-soft:#32444A; --accent-line:#9ED61F;
+  --focus:#C8F54A; --focus-halo:transparent;
+  --series:#F5F7FB; --series-a:#8A96B8; --series-b:#F5F7FB; --series-b-ink:#0B1533;
+  --measure:#C8F54A;
+  --hatch:rgba(245,247,251,.16);
+  --scrim:rgba(3,7,20,.65);
   --shadow:0 1px 2px rgba(0,0,0,.4),0 8px 24px rgba(0,0,0,.35);
-  --stage:#0D0D0C; --stage-2:#1C1B19;
+  --stage:#070E24; --stage-2:#0E1838;
   color-scheme:dark;
 }
 .app *,.app *::before,.app *::after{box-sizing:border-box}
 .app h1,.app h2,.app h3,.app h4,.app p,.app ul,.app ol,.app figure{margin:0}
 .app ul,.app ol{padding:0;list-style:none}
 .app a{color:var(--accent)}
-.app :focus-visible{outline:2px solid var(--accent);outline-offset:2px}
-.is-focus{outline:2px solid var(--accent);outline-offset:2px}
+.app :focus-visible{outline:2px solid var(--focus);outline-offset:2px;box-shadow:0 0 0 2px var(--focus-halo)}
+.is-focus{outline:2px solid var(--focus);outline-offset:2px;box-shadow:0 0 0 2px var(--focus-halo)}
 
 /* Type */
 .t-display{font-size:40px;line-height:48px;font-weight:600;letter-spacing:-.025em}
@@ -76,9 +90,9 @@
 /* Inputs */
 .field{display:flex;flex-direction:column;gap:6px;min-width:0}
 .field-label{font-size:13px;line-height:18px;font-weight:500;color:var(--text)}
-.input{height:44px;width:100%;padding:0 12px;border-radius:8px;border:1px solid var(--line-strong);background:var(--surface);color:var(--text);font:inherit;font-size:14px}
+.input{height:44px;width:100%;padding:0 12px;border-radius:8px;border:1px solid var(--line-input);background:var(--surface);color:var(--text);font:inherit;font-size:14px}
 .input::placeholder{color:var(--text-3)}
-.input:focus,.input.is-focus{outline:2px solid var(--accent);outline-offset:-1px;border-color:var(--accent)}
+.input:focus,.input.is-focus{outline:2px solid var(--focus);outline-offset:-1px;border-color:var(--focus);box-shadow:0 0 0 3px var(--focus-halo)}
 .input-sm{height:36px;font-size:13px}
 .hint{font-size:13px;line-height:19px;color:var(--text-3)}
 .has-error .input{border:2px solid var(--text)}
@@ -86,7 +100,7 @@
 .err-msg svg{width:14px;height:14px;flex:none}
 .check{display:flex;gap:12px;align-items:flex-start;cursor:pointer}
 .check input{width:20px;height:20px;margin:1px 0 0;accent-color:var(--accent);flex:none}
-.switch{appearance:none;-webkit-appearance:none;position:relative;width:40px;height:24px;margin:0;border-radius:999px;background:var(--line-strong);cursor:pointer;flex:none;transition:background-color .15s}
+.switch{appearance:none;-webkit-appearance:none;position:relative;width:40px;height:24px;margin:0;border-radius:999px;background:var(--line-input);cursor:pointer;flex:none;transition:background-color .15s}
 .switch::after{content:"";position:absolute;top:3px;left:3px;width:18px;height:18px;border-radius:50%;background:#fff;transition:transform .15s}
 .switch:checked{background:var(--accent)}
 .switch:checked::after{transform:translateX(16px)}
@@ -126,7 +140,7 @@
 /* Privacy */
 .privacy{display:inline-flex;align-items:center;gap:6px;height:28px;padding:0 10px 0 8px;border-radius:999px;background:var(--surface-2);color:var(--text-2);font-size:13px;font-weight:500;white-space:nowrap}
 .privacy svg{width:14px;height:14px;flex:none}
-.privacy-stage{background:rgba(13,13,12,.72);color:var(--bone)}
+.privacy-stage{background:var(--stage-pill);color:var(--bone)}
 .disclaimer{display:flex;gap:8px;align-items:flex-start;font-size:13px;line-height:20px;color:var(--text-3)}
 .disclaimer svg{width:14px;height:14px;flex:none;margin-top:2px}
 
@@ -196,8 +210,8 @@
 .attempt:hover{border-color:var(--line-strong)}
 .attempt.on{border-color:var(--accent);box-shadow:0 0 0 1px var(--accent)}
 .thumb{position:relative;border-radius:6px;background:var(--stage);overflow:hidden}
-.sw-a{display:inline-block;width:20px;height:0;border-top:2px dashed var(--text-2);vertical-align:middle}
-.sw-b{display:inline-block;width:20px;height:0;border-top:2px solid var(--accent);vertical-align:middle}
+.sw-a{display:inline-block;width:20px;height:0;border-top:2px dashed var(--series-a);vertical-align:middle}
+.sw-b{display:inline-block;width:20px;height:0;border-top:2px solid var(--series-b);vertical-align:middle}
 
 /* Choice cards, dropzone, dialog */
 .choice{display:flex;gap:14px;padding:18px;border:1px solid var(--line-strong);border-radius:12px;background:var(--surface);cursor:pointer;align-items:flex-start}
