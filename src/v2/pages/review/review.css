@@ -22,7 +22,7 @@
 .v2-rev-key.v2-rev-gap{background-color:var(--surface-3)}
 
 /* Phone: two metric cards per row. The badge drops under a long name instead of
-   squeezing it to one word per line, and an open "What is this?" takes the full row. */
+   squeezing it to one word per line, and an open "What does this mean?" takes the full row. */
 .v2-rev-mgrid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}
 .v2-rev-mgrid .metric{padding:14px}
 .v2-rev-mgrid .metric-top{flex-wrap:wrap;gap:6px}
@@ -73,6 +73,18 @@
 /* Sample session: a small label on the stage, nothing to choose. */
 .v2-relink-wrap .v2-relink-sample{max-width:min(520px,100%);padding:8px 12px;opacity:.95}
 .v2-relink-wrap .v2-relink-sample .v2-relink-title{display:flex;font-size:13px;font-weight:400}
+
+/* Under the stage (StageInfo.tsx): where the camera stood, and why only the skeleton shows. */
+.v2-rev-stageinfo{display:flex;flex-direction:column;gap:4px;margin-top:-4px}
+.v2-rev-stageinfo-line{display:flex;align-items:center;gap:8px;margin:0;font-size:13px;line-height:1.4;color:var(--text-2)}
+.v2-rev-stageinfo-line>svg{color:var(--text-3)}
+.v2-rev-stageinfo-line strong{color:var(--text);font-weight:600}
+.v2-rev-stageinfo-btn{height:32px;padding:0 10px;font-size:13px;flex:none}
+.v2-rev-stageinfo-edit{display:flex;flex-wrap:wrap;align-items:center;gap:8px;padding:8px 0 4px}
+@media (max-width:899.98px){
+  .v2-rev-stageinfo-btn{height:44px}
+  .v2-rev-stageinfo-edit .seg button{height:40px}
+}
 
 /* Attempt strip */
 .v2-rev-strip{display:flex;gap:10px;overflow-x:auto;padding:2px 2px 6px}

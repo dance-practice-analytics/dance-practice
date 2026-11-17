@@ -3,6 +3,7 @@
 
 export { AttemptThumb, type AttemptThumbProps } from './AttemptThumb'
 export { CompactGap, type CompactGapProps } from './CompactGap'
+export { InfoDisclosure, type InfoDisclosureProps } from './InfoDisclosure'
 export { Icon, Logo, ICON_NAMES, type IconName, type IconProps } from './Icon'
 export { MetricCard, metricCardProps, type MetricCardProps } from './MetricCard'
 export { VideoStage, LOW_VISIBILITY, type VideoStageProps } from './VideoStage'

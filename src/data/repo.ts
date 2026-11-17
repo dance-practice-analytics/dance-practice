@@ -10,6 +10,7 @@ import { ApiError } from '../api/errors'
 import { clipNumberOrNull, deidentifiedClipName, parseClipName } from './clipFile'
 import {
   ATTEMPT_STATUSES,
+  CAMERA_VIEWS,
   CONSENT_SCOPES,
   CONSENT_VERSION,
   DEFAULT_POSE_MODEL,
@@ -23,6 +24,7 @@ import {
   type AttemptMetricsRow,
   type AttemptRow,
   type AttemptStatus,
+  type CameraView,
   type ConsentRow,
   type ConsentScope,
   type SessionInsert,
@@ -327,17 +329,27 @@ export function listSessions(client: SupabaseClient): Promise<SessionSummary[]> 
   })
 }
 
-/** Changes the session's note and / or date (FR-3.2.2). Only the fields given are sent. */
+/**
+ * Changes the session's note, date (FR-3.2.2) and / or camera position (a correction of what
+ * was set at import; the measurements don't depend on it). Only the fields given are sent.
+ */
 export function updateSession(
   client: SupabaseClient,
   sessionId: string,
-  change: { note?: string | null; recorded_on?: string | null },
+  change: { note?: string | null; recorded_on?: string | null; camera_view?: CameraView | null },
 ): Promise<SessionRow> {
   return guard(async () => {
     await requireUid(client)
-    const row: Partial<Pick<SessionRow, 'note' | 'recorded_on'>> = {}
+    const row: Partial<Pick<SessionRow, 'note' | 'recorded_on' | 'camera_view'>> = {}
     if ('note' in change) row.note = normaliseNote(change.note)
     if ('recorded_on' in change) row.recorded_on = validDate(change.recorded_on)
+    if ('camera_view' in change) {
+      const v = change.camera_view ?? null
+      if (v !== null && !(CAMERA_VIEWS as readonly string[]).includes(v)) {
+        throw invalid('invalid_camera_view', 'That camera position isn’t one of front, side or diagonal.', 'Pick one of the three.')
+      }
+      row.camera_view = v
+    }
     const saved = unwrap<SessionRow | null>(
       await client.from('sessions').update(row).eq('id', sessionId).select(SESSION_COLS).maybeSingle(),
       SESSION_GONE,

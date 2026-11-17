@@ -140,6 +140,16 @@ describe('notes', () => {
     await expect(updateSession(client, 'gone', { note: 'x' })).rejects.toMatchObject({ code: 'not_found' })
   })
 
+  it('updateSession corrects the camera position and refuses an unknown one without sending it', async () => {
+    const { client, sent } = fakeClient({ sessions: [{ id: 's1', note: null, recorded_on: null, camera_view: 'diagonal' }] })
+    const saved = await updateSession(client, 's1', { camera_view: 'side' })
+    expect(sent.at(-1)?.payload).toEqual({ camera_view: 'side' })
+    expect(saved).toMatchObject({ camera_view: 'side' })
+    const before = sent.length
+    await expect(updateSession(client, 's1', { camera_view: 'top' as never })).rejects.toMatchObject({ code: 'invalid_camera_view' })
+    expect(sent).toHaveLength(before)
+  })
+
   it('updateAttemptNote saves, clears and refuses a note that is too long without sending it', async () => {
     const { client, sent } = fakeClient({ attempts: [{ id: 'a1', note: null }] })
     expect((await updateAttemptNote(client, 'a1', ' heel came down early ')).note).toBe('heel came down early')

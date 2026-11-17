@@ -117,14 +117,24 @@ html.v2-dark,html.v2-dark body{background:#0B1533;color-scheme:dark}
 }
 @keyframes v2-entrance-out{to{opacity:0;visibility:hidden}}
 
-/* "What is this?" on a metric card (MetricCard info) */
+/* "What does this mean?" on a metric / theme card (components/InfoDisclosure). A real pill
+   (border, help icon, chevron) so it reads as something to open; 36 px tall, 44 px on phones. */
 .v2-metric-info{margin-top:2px}
-.v2-metric-info summary{cursor:pointer;font-size:13px;color:var(--accent);width:max-content;max-width:100%;list-style:none;display:flex;align-items:center;min-height:40px;margin:-8px 0}
+.v2-metric-info summary{cursor:pointer;list-style:none;display:inline-flex;align-items:center;gap:6px;width:max-content;max-width:100%;min-height:36px;padding:0 12px 0 8px;border:1px solid var(--line-strong);border-radius:999px;background:var(--surface);color:var(--text);font-size:13px;font-weight:500;line-height:1.2;transition:background .15s,border-color .15s}
 .v2-metric-info summary::-webkit-details-marker{display:none}
-.v2-metric-info summary::before{content:'?';display:inline-grid;place-items:center;flex:none;width:16px;height:16px;margin-right:6px;border-radius:50%;border:1px solid currentColor;font-size:11px;font-weight:600}
-.v2-metric-info-body{display:flex;gap:12px;align-items:center;margin-top:8px;padding:10px;border-radius:10px;background:var(--surface-2)}
-.v2-metric-info-body p{color:var(--text-2);margin:0;flex:1;min-width:0}
+.v2-metric-info summary:hover{background:var(--surface-2);border-color:var(--line-input)}
+.v2-metric-info summary:focus-visible{outline:2px solid var(--focus);outline-offset:2px;box-shadow:0 0 0 2px var(--focus-halo)}
+.v2-metric-info summary > svg:first-child{color:var(--accent)}
+.v2-metric-info-chev{color:var(--text-3);transition:transform .15s}
+.v2-metric-info[open] .v2-metric-info-chev{transform:rotate(180deg)}
+.v2-metric-info[open] summary{background:var(--surface-2)}
+@media (max-width:899.98px){.v2-metric-info summary{min-height:44px;padding:0 14px 0 10px}}
+@media (prefers-reduced-motion:reduce){.v2-metric-info summary,.v2-metric-info-chev{transition:none}}
+.v2-metric-info-body{display:flex;flex-wrap:wrap;gap:8px 12px;align-items:center;margin-top:8px;padding:10px;border-radius:10px;background:var(--surface-2)}
+.v2-metric-info-body p{color:var(--text-2);margin:0;flex:1 1 160px;min-width:0}
 .v2-metric-info-body svg{flex:none}
+.v2-metric-info-ask{display:inline-flex;align-items:center;gap:6px;min-height:36px;font-size:13px;font-weight:500;flex-basis:100%}
+@media (max-width:899.98px){.v2-metric-info-ask{min-height:44px}}
 
 /* AttemptThumb while its keypoints download: a slow shimmer in the stage tones. */
 .thumb.v2-thumb-loading{background-image:linear-gradient(90deg,transparent 0%,color-mix(in srgb,var(--bone) 10%,transparent) 50%,transparent 100%);background-size:200% 100%;animation:dpa-shimmer 1.6s ease-in-out infinite}

@@ -25,7 +25,6 @@ import {
   MOVEMENT_LABELS,
   readMetrics,
   STATUS_LABELS,
-  VIEW_LABELS,
 } from '../format'
 import { href, useRoute } from '../router'
 import { useIsNarrow } from '../useIsNarrow'
@@ -36,6 +35,8 @@ import { createClock, type Clock } from './review/clock'
 import { attemptName, comparisonInput, describeAttempt, neighbourInSession, sessionName } from './review/labels'
 import { ReferenceTag, ReferenceToggle } from './review/ReferenceToggle'
 import { RelinkOverlay } from './review/Relink'
+import { CAMERA_WORDS, filmedFromLabel, StageInfo } from './review/StageInfo'
+import { isSampleAttempt } from '../sampleMarkers'
 import './review/review.css'
 import { SyncedStage } from './review/SyncedStage'
 import { buildTrace, countBands, niceMax, seriesEnd, traceMax, trackingBands, trunkAt, visibilityAt } from './review/timeline'
@@ -194,7 +195,8 @@ function Workspace({ attempt, series, attempts }: WorkspaceProps) {
   const compareLabel = reference ? 'Compare with reference' : other ? `Compare with attempt ${other.number}` : 'Compare'
   const notesHref = href({ name: 'notes', attemptId: attempt.id })
   const chatHref = href({ name: 'chat', attemptId: attempt.id })
-  const view = session.camera_view ? VIEW_LABELS[session.camera_view] : null
+  // Where the camera stood (set at import), not a view the dancer can switch to.
+  const view = session.camera_view ? `${CAMERA_WORDS[session.camera_view]} camera` : null
 
   const subtitle = [
     view,
@@ -212,7 +214,7 @@ function Workspace({ attempt, series, attempts }: WorkspaceProps) {
       backHref={href({ name: 'library', sessionId: attempt.session_id })}
       eyebrow={
         narrow ? (
-          [MOVEMENT_LABELS[session.movement_type], sessionName(session), view?.replace(' view', '').toLowerCase()].filter(Boolean).join(' · ')
+          [MOVEMENT_LABELS[session.movement_type], sessionName(session), view?.toLowerCase()].filter(Boolean).join(' · ')
         ) : (
           <nav aria-label="Breadcrumb" style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
             <a href={href({ name: 'library', sessionId: attempt.session_id })}>Library</a>
@@ -291,7 +293,7 @@ function Workspace({ attempt, series, attempts }: WorkspaceProps) {
     // The phone cards are half as wide: short units, and "vs attempt n" is said once above them.
     const props = metricCardProps(r)
     // The simple view leaves out which phases a value comes from.
-    return <MetricCard key={r.key} {...props} phase={simple ? undefined : props.phase} unit={narrow ? NARROW_UNIT[r.key] : r.def.unit} delta={delta ?? undefined} />
+    return <MetricCard key={r.key} {...props} phase={simple ? undefined : props.phase} unit={narrow ? NARROW_UNIT[r.key] : r.def.unit} delta={delta ?? undefined} askHref={chatHref} />
   })
 
   const doubt = phrase ? labelDoubtText(phrase) : null
@@ -318,6 +320,7 @@ function Workspace({ attempt, series, attempts }: WorkspaceProps) {
         other={other ? { phrase: phraseOf(other.metrics), name: `Attempt ${other.number}` } : null}
         detail={!simple}
         narrow={narrow}
+        askHref={chatHref}
       />
       <p className="t-caption">Values describe this clip only; they are not scores.</p>
     </>
@@ -400,13 +403,24 @@ function Workspace({ attempt, series, attempts }: WorkspaceProps) {
       role="lead"
       phases={phases}
       showSkeleton={skeletonOn}
-      view={view ? (narrow ? view.replace(' view', '') : view) : undefined}
+      view={filmedFromLabel(session.camera_view, narrow)}
       ariaLabel={`Tracked pose skeleton of ${attemptName(attempt).toLowerCase()}${src ? ', drawn over the video' : ', shown without the video'}`}
       onVideoError={() => setVideoFailed(true)}
       style={{ maxHeight: narrow ? '56vh' : 'min(64vh, 640px)' }}
     >
       {!clip && !videoFailed && <RelinkOverlay missing={[{ attempt, name: 'this attempt' }]} attempts={attempts} describe={describeAttempt} />}
     </SyncedStage>
+  )
+
+  const sample = isSampleAttempt(attempt)
+  const stageInfo = (
+    <StageInfo
+      sessionId={session.id}
+      view={session.camera_view}
+      attemptCount={inSession.length}
+      videoMissing={!clip && !videoFailed && !sample}
+      readOnly={sample}
+    />
   )
 
   const relink = videoFailed && (
@@ -449,6 +463,7 @@ function Workspace({ attempt, series, attempts }: WorkspaceProps) {
       {narrow ? (
         <>
           {stage}
+          {stageInfo}
           {relink}
           {transport}
           {timelines}
@@ -464,6 +479,7 @@ function Workspace({ attempt, series, attempts }: WorkspaceProps) {
         <div className="v2-rev-cols">
           <section className="v2-rev-main" aria-label="Video and timelines">
             {stage}
+            {stageInfo}
             {relink}
             {transport}
             {timelines}

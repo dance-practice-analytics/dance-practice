@@ -245,6 +245,13 @@ times stay those of the original clip and `series.durationS` stays the whole cli
 `series.trim` says which part was processed. `frameAt` returns null outside it and the
 Review timeline shows it as a `trimmed` band, so Review and relinking need no offset.
 
+Camera position (`sessions.camera_view`): where the one camera stood, set at import. The stage
+pill says "Filmed from: Diagonal" (`filmedFromLabel` in `pages/review/StageInfo.tsx`); under
+the Review stage `StageInfo` explains it can't be turned and lets the dancer correct it
+(`updateSession(client(), id, { camera_view })`, the whole session). Metrics don't depend on
+it; Compare, Progress and Mika's phrase progress group by it. The same block says why only
+the skeleton shows when the video isn't on this device.
+
 Reference attempt (FR-3.6.6): `attempts.is_reference`, one per movement and subject (a
 trigger clears the previous one). `setReferenceAttempt(client(), id, on)` then
 `invalidate()`. Compare's default A is the reference (`choosePair` in
@@ -262,7 +269,7 @@ direction and knees; folds; turns; rises; pliés) and six theme measures, each a
 confidence or null + reason. Swapped left/right labels lower the confidence of side-dependent
 themes (`left_right_labels_uncertain`) and mark events `side_uncertain`.
 
-- `pages/phrase/model.ts`: theme catalogue (names, units, "What is this?", best views),
+- `pages/phrase/model.ts`: theme catalogue (names, units, "What does this mean?", best views),
   `readTheme`, neutral `themeDifference` / `compareThemes`, event labels and lanes, focus order.
 - `pages/phrase/PhraseTimeline.tsx`: the event strip (Review under the stage, Compare for A and B);
   a click seeks the clock. `ThemeCards.tsx` (Review), `PhraseDifferences.tsx` (Compare).
@@ -284,14 +291,18 @@ No component fetches data. All copy is passed in.
 
 - **`Icon`** `{ name: IconName; size?: number; label?: string; style?; className? }` —
   stroke icons of the designs. Names: `home library import processing review compare
-  progress notes chat dataset settings device lock warning info clock filter search plus
+  progress notes chat dataset settings device lock warning info help clock filter search plus
   close check trash copy refresh download upload mail camera sign-out sun moon
   chevron-left chevron-right chevron-down arrow-right play pause step-forward step-back`.
   Inside `.btn`, `.privacy`, `.chip`, `.tag`, `.alert`, `.note-box`, `.sidenav` the CSS
   sizes it; elsewhere pass `size`. `label` makes it non-decorative.
 - **`Logo`** `{ size?: number }` — the app mark.
 - **`MetricFigure`** `{ metric; size? }` — the small drawing of what a metric measures;
-  `MetricCard` shows it under "What is this?" when given `info` (`metricCardProps` sets it).
+  `MetricCard` shows it under "What does this mean?" when given `info` (`metricCardProps` sets it).
+- **`InfoDisclosure`** `{ children; label?; about? }` — the "What does this mean?" pill (help
+  icon, chevron, 44 px on phones) that opens a short explanation in place. Used by
+  `MetricCard` and the phrase `ThemeCard`; both take `askHref` (Review passes the chat route)
+  for an "Ask Mika about this" link under the explanation.
 - **Simple / Detail** (`viewMode.tsx`: `useViewMode()`, `<ViewModeSwitch />`) — Simple is
   the default for dancers; Detail adds frame-by-frame traces, phase tags and B − A arithmetic
   on Review and Compare. Metric names and units for dancers live in `src/insights/catalog.ts`

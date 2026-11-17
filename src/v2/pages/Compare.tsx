@@ -12,9 +12,9 @@ import { compareAttempts, type AttemptComparison, type MetricComparison } from '
 import type { PhaseSpan } from '../../metrics/types'
 import type { PoseSeries } from '../../pose/types'
 import { useClip } from '../clips'
-import { CompactGap, ConfBadge, EmptyState, ErrorAlert, NoteBox, PageHeader, SkeletonWorkspace } from '../components'
+import { CompactGap, ConfBadge, EmptyState, Icon, ErrorAlert, NoteBox, PageHeader, SkeletonWorkspace } from '../components'
 import { useAttempt, useAttempts, type AttemptView } from '../data'
-import { compactGapReason, formatSeconds, formatTimecode, isCompactGap, MOVEMENT_LABELS, PHASE_LABELS, readMetric, VIEW_LABELS } from '../format'
+import { compactGapReason, formatSeconds, formatTimecode, isCompactGap, MOVEMENT_LABELS, PHASE_LABELS, readMetric } from '../format'
 import { href, navigate, useRoute } from '../router'
 import { useIsNarrow } from '../useIsNarrow'
 import { useViewMode, ViewModeSwitch } from '../viewMode'
@@ -29,6 +29,8 @@ import { choosePair } from './compare/pick'
 import { createClock, type Clock } from './review/clock'
 import { attemptName, comparisonInput, describeAttempt, sessionName } from './review/labels'
 import { RelinkOverlay } from './review/Relink'
+import { CAMERA_WORDS, filmedFromLabel } from './review/StageInfo'
+import { isSampleAttempt } from '../sampleMarkers'
 import './review/review.css'
 import { SyncedStage } from './review/SyncedStage'
 import { buildTrace, niceMax, seriesEnd, traceMax, trackingBands, trunkAt } from './review/timeline'
@@ -184,7 +186,7 @@ export function Compare() {
 /** 'S01 · Relevé balance · Session · Nov 4 · side view', or both when the sessions differ. */
 function pairContext(a: AttemptView | null, b: AttemptView | null): string {
   const one = (x: AttemptView) =>
-    [x.session.subject_code, MOVEMENT_LABELS[x.session.movement_type], sessionName(x.session), x.session.camera_view && VIEW_LABELS[x.session.camera_view].toLowerCase()]
+    [x.session.subject_code, MOVEMENT_LABELS[x.session.movement_type], sessionName(x.session), x.session.camera_view && `${CAMERA_WORDS[x.session.camera_view].toLowerCase()} camera`]
       .filter(Boolean)
       .join(' · ')
   if (!a) return 'Two of your own attempts'
@@ -336,7 +338,8 @@ function Workspace({ a, b, seriesA, seriesB, attempts, pickers, eyebrow, backHre
   const ghostOnB = !narrow || mode === 'overlay'
   // One video keeps time: A's when it is on screen, otherwise B's.
   const aLeads = showA && srcA !== null
-  const view = (x: AttemptView) => (x.session.camera_view ? (narrow ? VIEW_LABELS[x.session.camera_view].replace(' view', '') : VIEW_LABELS[x.session.camera_view]) : undefined)
+  // Where the camera stood (set at import), not an angle to switch to.
+  const view = (x: AttemptView) => filmedFromLabel(x.session.camera_view, narrow)
   const stageStyle = { maxHeight: narrow ? '50vh' : 'min(56vh, 520px)' }
   // "Choose the file again" sits on each stage; when A's stage is hidden (phone, B or
   // Overlay mode) B's stage asks for A's file too.
@@ -461,6 +464,12 @@ function Workspace({ a, b, seriesA, seriesB, attempts, pickers, eyebrow, backHre
           {stageA}
           {stageB}
         </div>
+      )}
+      {[...missingA, ...missingB].some((m) => !isSampleAttempt(m.attempt)) && (
+        <p className="v2-rev-stageinfo-line" style={{ marginTop: -4 }}>
+          <Icon name="device" size={16} />
+          <span className="muted">Videos stay on your device and aren’t stored. Add the same file again to see it under the skeleton.</span>
+        </p>
       )}
       {(failed.a || failed.b) && (
         <NoteBox title="This browser can’t play one of the video files.">Its skeleton is shown on its own.</NoteBox>

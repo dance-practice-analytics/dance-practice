@@ -116,7 +116,7 @@ describe('focus themes', () => {
     expect(cleanFocus(['arm_reach', 'nope', 'arm_reach', 'head_lead', 'neck_range', 'circle_completion'])).toEqual(['arm_reach', 'head_lead', 'neck_range'])
   })
 
-  it('theme cards render focus first, with “What is this?”, and no judging words', () => {
+  it('theme cards render focus first, with “What does this mean?”, and no judging words', () => {
     const html = renderToStaticMarkup(
       createElement(ThemeCards, {
         phrase: result({ arm_reach: 1.3, head_lead: 0.1, neck_range: 50, upper_body_curve: 40, circle_completion: 300 }),
@@ -128,7 +128,7 @@ describe('focus themes', () => {
       }),
     )
     expect(html.indexOf('Neck movement range')).toBeLessThan(html.indexOf('Head leads the arms'))
-    expect(html).toContain('What is this?')
+    expect(html).toContain('What does this mean?')
     expect(html).toContain('My focus')
     expect(html).toContain('no plié in this clip')
     expect(html.replace(/<[^>]+>/g, ' ')).not.toMatch(JUDGEMENT)

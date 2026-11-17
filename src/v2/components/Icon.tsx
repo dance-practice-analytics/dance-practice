@@ -26,6 +26,9 @@ const PATHS = {
   lock: 'M6 11h12v10H6zM8 11V7a4 4 0 0 1 8 0v4',
   warning: 'M12 4l9 16H3zM12 10v4M12 17v.5',
   info: 'M12 3a9 9 0 1 0 0 18 9 9 0 0 0 0-18zM12 11v6M12 7.5v.5',
+  // "What does this mean?": a question mark drawn as a path, centred in the circle
+  // (a text '?' sits on the font's baseline and looks low).
+  help: 'M12 3a9 9 0 1 0 0 18 9 9 0 0 0 0-18zM9.6 9.4a2.5 2.5 0 0 1 4.85.85c0 1.65-2.45 2.2-2.45 3.6M12 16.9v.2',
   clock: 'M12 3a9 9 0 1 0 0 18 9 9 0 0 0 0-18zM12 7v5l3 2',
   filter: 'M4 5h16l-6 8v6l-4-2v-4z',
   search: 'M11 4a7 7 0 1 0 0 14 7 7 0 0 0 0-14zM20 20l-4-4',
