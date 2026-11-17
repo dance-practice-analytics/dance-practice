@@ -1,6 +1,6 @@
 # generate-feedback
 
-Supabase Edge Function (Deno) that turns the metrics of one attempt into neutral practice notes with Claude (FR-3.7.x, SDD 5.6).
+Supabase Edge Function (Deno) that turns the metrics of one attempt into neutral practice notes with a language model (FR-3.7.x, SDD 5.6). The provider is Google Gemini or xAI Grok, called through their OpenAI-compatible Chat Completions endpoints by `../_shared/llm.ts` (plain `fetch`, no SDK) and chosen only by Supabase secrets.
 
 `POST { "attempt_id": "<uuid>", "regenerate"?: true }` with the user's JWT → the stored `feedback` row (`GenerateFeedbackResult` in `contract.ts`).
 
@@ -10,16 +10,17 @@ Supabase Edge Function (Deno) that turns the metrics of one attempt into neutral
 2. Requires an active account-level consent with scope `ai_metrics_only` (`AI_CONSENT_SCOPE`).
 3. Loads the attempt's `attempt_metrics` row, and the metrics of up to 3 earlier attempts of the same session for comparison.
 4. Builds the payload (`payload.ts`): metric id, value, unit, phases and confidence. No ids, labels, file names, subject codes, keypoints, frames or video.
-5. Returns the stored note when one exists for the same `input_hash` (SHA-256 of payload + prompt version + model), unless `regenerate` is set.
+5. Returns the stored note when one exists for the same `input_hash` (SHA-256 of payload + prompt version + model id from `LLM_MODEL`), unless `regenerate` is set.
 6. Allows 20 notes per user per hour, counted from the user's `feedback` rows.
-7. Calls `claude-sonnet-5-5` with the system prompt in `prompt.ts` and the `FeedbackResponse` JSON schema as the output format; 30-second timeout.
-8. Checks `stop_reason` (refusal and cut-off are errors), validates the JSON (`validate.ts`), inserts the `feedback` row and returns it.
+7. Calls the model in `LLM_MODEL` with the system prompt in `prompt.ts` and the `FeedbackResponse` JSON schema as `response_format` (`json_schema`, strict); 30-second budget, one retry on a connection error, 429 or 5xx.
+8. Checks `finish_reason` (a safety stop or refusal and a `length` cut-off are errors), validates the JSON (`validate.ts`, always, even in schema mode), inserts the `feedback` row and returns it.
 
 ## Files
 
 | File | Purpose |
 | --- | --- |
-| `index.ts` | Deno entry: CORS, Supabase queries, the Claude call and its error mapping |
+| `index.ts` | Deno entry: CORS, Supabase queries, the model call |
+| `../_shared/llm.ts` | Provider-neutral Chat Completions client (shared with `mika-chat`), tested in `src/feedback/llm.test.ts` |
 | `handler.ts` | The request flow with the database and the model injected |
 | `contract.ts` | Types, constants and error copy shared with `src/feedback/client.ts` (no imports) |
 | `payload.ts` | The metrics-only payload sent to the model |
@@ -33,23 +34,25 @@ Change `PROMPT_VERSION` whenever the prompt text changes; it is stored with each
 
 ## Secrets
 
+Set them yourself in your own terminal; never paste the key into a chat or a file in the repo. The same three secrets serve `mika-chat`. See `src/v2/README.md` ("AI provider") for the Gemini and Grok values.
+
 ```
-npx supabase login
-npx supabase link --project-ref <project-ref>
-npx supabase secrets set ANTHROPIC_API_KEY=sk-ant-...
+npx supabase secrets set LLM_API_KEY=<key> LLM_BASE_URL=<base-url> LLM_MODEL=<model>
 ```
 
 Optional:
 
+- `LLM_PROVIDER`: label for the logs (defaults to `gemini` / `grok` from the base URL).
+- `LLM_JSON_MODE=json_object`: if the provider rejects `response_format: json_schema`, asks for a JSON object instead and puts the schema in the instructions. The validator checks the answer either way.
+- `LLM_REASONING_EFFORT`: sent as `reasoning_effort` (e.g. `low`) when set; not sent by default because not every model accepts it.
 - `ALLOWED_ORIGINS`: comma-separated origins added to the defaults in `cors.ts` (dev server, GitHub Pages, Capacitor).
-- `REFUSAL_FALLBACK=off`: sends the request without the server-side refusal fallback (beta `server-side-fallback-2026-07-01`). Use it if the API rejects that beta for the account.
 
-`SUPABASE_URL` and `SUPABASE_ANON_KEY` are provided by the platform. The key never goes in `.env.local` or in the client bundle.
+Without `LLM_API_KEY`, `LLM_BASE_URL` or `LLM_MODEL` (or with a rejected key) the function answers `500 not_configured`. Changing `LLM_MODEL` changes the cache key, so the next request writes a fresh note. `SUPABASE_URL` and `SUPABASE_ANON_KEY` are provided by the platform. The key never goes in `.env.local` or in the client bundle.
 
 ## Deploy
 
 ```
-npx supabase functions deploy generate-feedback
+npx supabase functions deploy generate-feedback --use-api
 ```
 
 JWT verification stays on (the default): do not pass `--no-verify-jwt`.
@@ -97,13 +100,13 @@ Non-2xx bodies are `{ "error": { "code", "message", "recovery", "retry_after_s"?
 | 404 | `attempt_not_found` | No metrics row visible to the caller |
 | 405 | `method_not_allowed` | Not POST |
 | 422 | `nothing_measured` | Every metric is null; the model is not called |
-| 422 | `model_refused` | `stop_reason: refusal` |
+| 422 | `model_refused` | `finish_reason: content_filter` (or a safety reason, or a `refusal` field) |
 | 429 | `rate_limited` | 20 notes in the last hour (`Retry-After` header) |
-| 500 | `not_configured` | `ANTHROPIC_API_KEY` missing or rejected |
+| 500 | `not_configured` | `LLM_API_KEY`, `LLM_BASE_URL` or `LLM_MODEL` missing, or the key rejected (401/403, or 400 naming the API key) |
 | 500 | `storage_failed` | The note could not be inserted |
 | 500 | `internal` | Database error or unexpected failure |
-| 502 | `model_truncated` | `stop_reason: max_tokens` |
-| 502 | `model_invalid_output` | The answer failed validation |
-| 502 | `upstream_error` | Connection error or a 4xx from the Claude API |
-| 503 | `upstream_busy` | Claude API 429, 5xx or overloaded |
-| 504 | `upstream_timeout` | No answer within the timeout |
+| 502 | `model_truncated` | `finish_reason: length` |
+| 502 | `model_invalid_output` | Any other `finish_reason`, a body that is not a chat completion, or an answer that failed validation |
+| 502 | `upstream_error` | Connection error, or another 4xx from the provider (e.g. an unknown model id) |
+| 503 | `upstream_busy` | Provider 429 or 5xx after one retry |
+| 504 | `upstream_timeout` | No answer within 30 seconds |

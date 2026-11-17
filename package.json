@@ -1,9 +1,10 @@
 {
-  "name": "practice-studio",
+  "name": "dance-practice-analytics",
   "private": true,
   "version": "0.1.0",
   "type": "module",
-  "description": "Dance Analytics Dashboard (DAD) frontend prototype - CS 4850 Team 2 MT-1 HCI",
+  "description": "Dance Practice Analytics: on-device pose estimation and neutral attempt-to-attempt measurements for dance practice clips (KSU CS 4850, team MT-2-HCI)",
+  "license": "MIT",
   "scripts": {
     "dev": "vite",
     "build": "tsc --noEmit -p tsconfig.json && vite build",

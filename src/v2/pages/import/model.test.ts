@@ -27,6 +27,7 @@ const draft = (over: Partial<ClipDraft> = {}): ClipDraft => {
     movement: 'releve_balance',
     view: 'front',
     recordedOn: '2026-11-15',
+    clipNumber: null,
     reprocess: false,
     failure: null,
     ...over,
@@ -44,14 +45,14 @@ const knownClip = (over: Partial<KnownClip> = {}): KnownClip => ({
 
 describe('parseTags', () => {
   it('reads subject, movement and view from a study file name', () => {
-    expect(parseTags('S05_releve_side_01.mp4')).toEqual({ subject: 'S05', movement: 'releve_balance', view: 'side' })
-    expect(parseTags('S05_pir_front_01.mp4')).toEqual({ subject: 'S05', movement: 'pirouette', view: 'front' })
-    expect(parseTags('s11-pirouette-diag-07.mov')).toEqual({ subject: 'S11', movement: 'pirouette', view: 'diagonal' })
+    expect(parseTags('S05_releve_side_01.mp4')).toEqual({ subject: 'S05', movement: 'releve_balance', view: 'side', clipNumber: 1 })
+    expect(parseTags('S05_pir_front_01.mp4')).toEqual({ subject: 'S05', movement: 'pirouette', view: 'front', clipNumber: 1 })
+    expect(parseTags('s11-pirouette-diag-07.mov')).toEqual({ subject: 'S11', movement: 'pirouette', view: 'diagonal', clipNumber: 7 })
   })
 
   it('leaves a field empty when the name does not state it once', () => {
-    expect(parseTags('IMG_4471.MOV')).toEqual({ subject: null, movement: null, view: null })
-    expect(parseTags('1014-1.mp4')).toEqual({ subject: null, movement: null, view: null })
+    expect(parseTags('IMG_4471.MOV')).toEqual({ subject: null, movement: null, view: null, clipNumber: null })
+    expect(parseTags('1014-1.mp4')).toEqual({ subject: null, movement: null, view: null, clipNumber: null })
     expect(parseTags('S01_front_side.mp4').view).toBeNull()
   })
 

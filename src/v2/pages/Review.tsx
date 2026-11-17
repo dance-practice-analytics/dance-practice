@@ -30,6 +30,7 @@ import {
 import { href, useRoute } from '../router'
 import { useIsNarrow } from '../useIsNarrow'
 import { useViewMode, ViewModeSwitch } from '../viewMode'
+import { AttemptNote } from './review/AttemptNote'
 import { createClock, type Clock } from './review/clock'
 import { attemptName, comparisonInput, describeAttempt, neighbourInSession, sessionName } from './review/labels'
 import { RelinkOverlay } from './review/Relink'
@@ -290,6 +291,8 @@ function Workspace({ attempt, series, attempts }: WorkspaceProps) {
     </p>
   )
 
+  const note = <AttemptNote attemptId={attempt.id} note={attempt.note} />
+
   const mobileLinks = (
     <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, minmax(0, 1fr))', gap: 8 }}>
       <a className="btn btn-secondary btn-lg" href={compareHref} style={{ padding: '0 8px' }}>
@@ -325,6 +328,7 @@ function Workspace({ attempt, series, attempts }: WorkspaceProps) {
             : 'The skeleton, the phases and the measurements appear here once the clip has been processed on this device.'}
         </EmptyState>
         {attempt.metrics && <section aria-labelledby="rev-metrics" style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>{metrics}</section>}
+        {note}
         {strip}
       </>
     )
@@ -382,6 +386,7 @@ function Workspace({ attempt, series, attempts }: WorkspaceProps) {
           <section aria-labelledby="rev-metrics" style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
             {metrics}
           </section>
+          {note}
           {strip}
           {mobileLinks}
           {disclaimer}
@@ -397,6 +402,7 @@ function Workspace({ attempt, series, attempts }: WorkspaceProps) {
           </section>
           <aside className="v2-rev-side" aria-labelledby="rev-metrics">
             {metrics}
+            {note}
             {disclaimer}
           </aside>
         </div>

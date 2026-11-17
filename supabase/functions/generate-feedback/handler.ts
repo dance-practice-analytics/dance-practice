@@ -1,10 +1,11 @@
 // Request flow of generate-feedback (SDD 5.6) with every side effect behind `Deps`, so it
 // runs under a test with a mocked database and a mocked model. index.ts supplies the real
-// Supabase queries (with the caller's JWT) and the Claude call.
+// Supabase queries (with the caller's JWT) and the model call (_shared/llm.ts).
 
+// @ts-ignore TS5097: Deno needs the .ts extension
+import { LlmError, type LlmCompletion } from '../_shared/llm.ts'
 import {
   FAILURES,
-  MODEL,
   errorBody,
   isFeedbackResponse,
   type FailureCode,
@@ -24,26 +25,41 @@ import { decideRateLimit, windowStart } from './rateLimit.ts'
 // @ts-ignore TS5097: Deno needs the .ts extension
 import { parseFeedback } from './validate.ts'
 
-/** The parts of a Messages API response the function reads. */
-export interface ModelMessage {
-  stop_reason: string | null
-  model: string
-  content: readonly { type: string; text?: string }[]
-}
-
 export type ModelOutcome = { ok: true; text: string; model: string } | { ok: false; code: FailureCode; retryAfterS?: number }
 
-/** stop_reason is checked before the content is read: a refusal or a cut-off is never parsed. */
-export function interpretMessage(message: ModelMessage): ModelOutcome {
-  if (message.stop_reason === 'refusal') return { ok: false, code: 'model_refused' }
-  if (message.stop_reason === 'max_tokens') return { ok: false, code: 'model_truncated' }
-  if (message.stop_reason !== 'end_turn') return { ok: false, code: 'model_invalid_output' }
-  const text = message.content
-    .filter((b) => b.type === 'text' && typeof b.text === 'string')
-    .map((b) => b.text)
-    .join('')
-  if (text.trim().length === 0) return { ok: false, code: 'model_invalid_output' }
-  return { ok: true, text, model: message.model }
+/** A ```json fence some models put around JSON despite the instructions. */
+function stripJsonFence(text: string): string {
+  const m = /^\s*```(?:json)?\s*\n?([\s\S]*?)\n?\s*```\s*$/i.exec(text)
+  return m ? m[1] : text
+}
+
+/** finish_reason is checked before the content is read: a refusal or a cut-off is never parsed. */
+export function interpretCompletion(completion: LlmCompletion): ModelOutcome {
+  if (completion.finishReason === 'content_filter') return { ok: false, code: 'model_refused' }
+  if (completion.finishReason === 'length') return { ok: false, code: 'model_truncated' }
+  if (completion.finishReason !== 'stop') return { ok: false, code: 'model_invalid_output' }
+  const text = stripJsonFence(completion.text).trim()
+  if (text.length === 0) return { ok: false, code: 'model_invalid_output' }
+  return { ok: true, text, model: completion.model }
+}
+
+/** A failed model call → its failure code. Anything that is not an LlmError is a bug and is rethrown. */
+export function outcomeFromError(e: unknown): ModelOutcome {
+  if (!(e instanceof LlmError)) throw e
+  switch (e.kind) {
+    case 'not_configured':
+    case 'auth':
+      return { ok: false, code: 'not_configured' }
+    case 'rate_limited':
+    case 'unavailable':
+      return e.retryAfterS !== undefined ? { ok: false, code: 'upstream_busy', retryAfterS: e.retryAfterS } : { ok: false, code: 'upstream_busy' }
+    case 'timeout':
+      return { ok: false, code: 'upstream_timeout' }
+    case 'bad_response':
+      return { ok: false, code: 'model_invalid_output' }
+    default:
+      return { ok: false, code: 'upstream_error' }
+  }
 }
 
 export interface StoredFeedback {
@@ -65,6 +81,8 @@ export interface NewFeedback {
 
 /** Every database method runs as the caller, so RLS decides what is visible. */
 export interface Deps {
+  /** The configured model id (LLM_MODEL). Part of the cache key and stored with the note. */
+  model: string
   /** The signed-in user's id, or null when the JWT is missing or invalid. */
   userId(): Promise<string | null>
   hasAiConsent(): Promise<boolean>
@@ -123,7 +141,7 @@ export async function handleGenerate(method: string, body: unknown, deps: Deps):
     const payload = buildPayload(row, await deps.loadEarlierMetrics(attemptId))
     if (!hasMeasurements(payload)) return failure('nothing_measured')
 
-    const hash = await inputHash(payload, PROMPT_VERSION, MODEL)
+    const hash = await inputHash(payload, PROMPT_VERSION, deps.model)
     if (!request.regenerate) {
       const cached = await deps.findCached(attemptId, hash)
       if (cached && isFeedbackResponse(cached.response)) {

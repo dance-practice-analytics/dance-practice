@@ -126,7 +126,8 @@ export function RelinkOverlay({ missing, attempts, describe }: RelinkNoteProps) 
             </button>
             {clipNames.length > 0 && (
               <p className="v2-relink-file">
-                Expected {filesWord}: <span className="mono">{clipNames.join(', ')}</span>
+                {/* Stored names are de-identified (FR-3.2.5), so this is the clip, not the file's own name. */}
+                Clip: <span className="mono">{clipNames.join(', ')}</span> · matched by its content, whatever the file is called
               </p>
             )}
             {message && (

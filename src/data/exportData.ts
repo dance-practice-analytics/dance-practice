@@ -5,13 +5,15 @@
 //
 // What an export can contain is fixed here, field by field. It never has a clip, a
 // frame, a storage path, a file hash, an email, a display name or a user id, and
-// subjects appear by code only. Text a person typed (session title, attempt label,
-// clip file name) is left out unless the caller asks for it with `includeLabels`.
+// subjects appear by code only. Text a person typed (session title and note, attempt
+// label and note) and the de-identified clip label are left out unless the caller asks
+// for them with `includeLabels`. A clip's original file name is never exported (FR-3.2.5).
 // A value that is not available is null (JSON) or an empty cell (CSV) next to the
 // reason, never zero.
 
 import type { SupabaseClient } from '@supabase/supabase-js'
 import { ApiError } from '../api/errors'
+import { clipNumberOrNull, safeStoredClipName } from './clipFile'
 import { dataError, keypointsPath } from './repo'
 import {
   KEYPOINTS_BUCKET,
@@ -159,8 +161,12 @@ export interface ExportAttempt {
   created_at: string
   /** Only with `includeLabels`. */
   label?: string | null
-  /** Only with `includeLabels`. File name without folders. */
+  /** Only with `includeLabels`. De-identified clip label (`S03_att07.mp4`), never a file name. */
   clip_name?: string | null
+  /** Only with `includeLabels`. The account's own note on the attempt. */
+  note?: string | null
+  /** Clip number within the subject's dataset; null when unknown. */
+  clip_number: number | null
   /** null when metrics were not computed. */
   metrics_run: { movement: MovementType; algorithm_version: string; computed_at: string } | null
   phases: PhaseSpan[] | null
@@ -179,6 +185,8 @@ export interface ExportSession {
   created_at: string
   /** Only with `includeLabels`. */
   title?: string | null
+  /** Only with `includeLabels`. The account's own note on the session. */
+  note?: string | null
   attempts: ExportAttempt[]
 }
 
@@ -224,7 +232,7 @@ export interface ExportBundle {
 export interface ExportOptions {
   /** Also download each attempt's gzipped keypoints (FR-3.9.5). Default false. */
   includeKeypoints?: boolean
-  /** Also include text the account typed: session title, attempt label, clip file name. Default false. */
+  /** Also include text the account typed: session title and note, attempt label and note, clip label. Default false. */
   includeLabels?: boolean
   /** Clock for `generated_at` (tests). */
   now?: Date
@@ -239,11 +247,12 @@ const ABOUT =
 /** The rows an export is built from. Only the listed columns are ever requested. */
 export interface ExportRows {
   subjects: Pick<SubjectRow, 'id' | 'subject_code'>[]
-  sessions: Omit<SessionRow, 'owner_id'>[]
-  attempts: Pick<
+  sessions: (Omit<SessionRow, 'owner_id' | 'note'> & Partial<Pick<SessionRow, 'note'>>)[]
+  attempts: (Pick<
     AttemptRow,
     'id' | 'session_id' | 'source' | 'label' | 'clip_name' | 'duration_s' | 'fps' | 'status' | 'error' | 'created_at'
-  >[]
+  > &
+    Partial<Pick<AttemptRow, 'clip_number' | 'note'>>)[]
   keypoints: Pick<AttemptKeypointsRow, 'attempt_id' | 'frame_count' | 'size_bytes' | 'model' | 'created_at'>[]
   metrics: Omit<AttemptMetricsRow, 'owner_id'>[]
   feedback: Pick<FeedbackRow, 'id' | 'attempt_id' | 'model' | 'prompt_version' | 'response' | 'created_at'>[]
@@ -254,8 +263,8 @@ export interface ExportRows {
 // and the profiles table (display name) is not read at all.
 const COLS = {
   subjects: 'id, subject_code',
-  sessions: 'id, subject_id, movement_type, title, recorded_on, camera_view, created_at',
-  attempts: 'id, session_id, source, label, clip_name, duration_s, fps, status, error, created_at',
+  sessions: 'id, subject_id, movement_type, title, recorded_on, camera_view, note, created_at',
+  attempts: 'id, session_id, source, label, clip_name, clip_number, note, duration_s, fps, status, error, created_at',
   attempt_keypoints: 'attempt_id, frame_count, size_bytes, model, created_at',
   attempt_metrics:
     'attempt_id, movement, trunk_inclination_deg, pelvis_ankle_offset_norm, balance_duration_s, ' +
@@ -281,8 +290,7 @@ async function readRows(client: SupabaseClient, uid: string): Promise<ExportRows
 
 const finite = (n: unknown): number | null => (typeof n === 'number' && Number.isFinite(n) ? n : null)
 const LEVELS: readonly string[] = ['high', 'medium', 'low']
-/** A clip name is exported without any folder it may have been saved with. */
-const fileName = (name: string | null) => (name == null ? null : (name.split(/[\\/]/).pop() ?? null))
+const clipNumberOf = (n: unknown) => clipNumberOrNull(n)
 
 function noMetricsReason(status: AttemptStatus): ExportNullReason {
   if (status === 'failed') return 'processing_failed'
@@ -358,7 +366,11 @@ export function buildExportDocument(
       duration_s: finite(a.duration_s),
       fps: finite(a.fps),
       created_at: a.created_at,
-      ...(labels ? { label: a.label ?? null, clip_name: fileName(a.clip_name ?? null) } : {}),
+      clip_number: clipNumberOf(a.clip_number),
+      // A row saved before names were de-identified is rebuilt here, so no file name leaves.
+      ...(labels
+        ? { label: a.label ?? null, clip_name: safeStoredClipName(a.clip_name, clipNumberOf(a.clip_number)), note: a.note ?? null }
+        : {}),
       metrics_run: m ? { movement: m.movement, algorithm_version: m.algorithm_version, computed_at: m.computed_at } : null,
       phases: m ? (Array.isArray(m.phases) ? m.phases.map(({ phase, start, end }) => ({ phase, start, end })) : []) : null,
       metrics: metricValues(a, m),
@@ -386,7 +398,7 @@ export function buildExportDocument(
     recorded_on: s.recorded_on ?? null,
     camera_view: s.camera_view ?? null,
     created_at: s.created_at,
-    ...(labels ? { title: s.title ?? null } : {}),
+    ...(labels ? { title: s.title ?? null, note: s.note ?? null } : {}),
     attempts: attemptsOf.get(s.id) ?? [],
   }))
   const exported = sessions.flatMap((s) => s.attempts)

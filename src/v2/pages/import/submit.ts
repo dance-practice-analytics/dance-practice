@@ -1,15 +1,19 @@
 // Turns the tagged rows into sessions and attempts (FR-3.2.2–3.2.6). Only rows are
-// written: file name, fingerprint, length and tags. The clip itself is registered in
-// clips.ts (memory of this tab) and never sent anywhere.
+// written: a de-identified clip name (never the local file name, FR-3.2.5), clip
+// number, fingerprint, length, tags and the optional session note. The clip itself is
+// registered in clips.ts (memory of this tab) and never sent anywhere.
 
 import type { SupabaseClient } from '@supabase/supabase-js'
 import { ApiError } from '../../../api/errors'
 import {
+  ATTEMPT_COLS,
   createSession,
   createStudyAttempts,
   dataError,
   deleteSession,
   ensureSubject,
+  storedClipFields,
+  updateSession,
   type StudyAttemptResult,
   type StudyClipInput,
 } from '../../../data/repo'
@@ -20,9 +24,6 @@ export type RowOutcome =
   | { ok: true; attempt: AttemptRow }
   /** `duplicate`: the library already has this file, so no row could be created. */
   | { ok: false; duplicate: boolean; message: string }
-
-const ATTEMPT_COLS =
-  'id, owner_id, session_id, source, label, clip_name, video_path, video_sha256, duration_s, fps, status, error, created_at'
 
 const DUPLICATE = () =>
   new ApiError(409, 'duplicate_clip', 'This clip is already in your library.', 'Open the earlier import, or delete it to import again.')
@@ -39,7 +40,7 @@ async function createOwnAttempts(db: SupabaseClient, sessionId: string, clips: S
     const row = {
       session_id: sessionId,
       source: 'user_upload' as const,
-      clip_name: clip.clip_name,
+      ...storedClipFields(clip),
       video_path: null,
       video_sha256: clip.video_sha256,
       duration_s: clip.duration_s,
@@ -64,25 +65,39 @@ export async function createImport(
   db: SupabaseClient,
   source: ImportSource,
   groups: readonly SessionGroup[],
-  sessions: readonly SessionLike[],
+  sessions: readonly (SessionLike & { note?: string | null })[],
+  /** Optional session note (FR-3.2.2), for every session this batch creates or joins without a note. */
+  note: string | null = null,
 ): Promise<Map<string, RowOutcome>> {
   const outcomes = new Map<string, RowOutcome>()
+  const sessionNote = note?.trim() || null
   for (const group of groups) {
     let createdSessionId: string | null = null
     let created = 0
     try {
       const subjectId = group.subject ? (await ensureSubject(db, group.subject)).id : null
-      let sessionId = findSession(sessions, group)?.id ?? null
+      const existing = findSession(sessions, group)
+      let sessionId = existing?.id ?? null
       if (!sessionId) {
         const session = await createSession(db, {
           movement_type: group.movement,
           subject_id: subjectId,
           recorded_on: group.recordedOn,
           camera_view: group.view,
+          note: sessionNote,
         })
         sessionId = createdSessionId = session.id
+      } else if (sessionNote && !existing?.note) {
+        // Joining a session that has no note yet: the note is added, an existing one is kept.
+        // The clips matter more than the note, so a failure here doesn't stop the import.
+        await updateSession(db, sessionId, { note: sessionNote }).catch(() => undefined)
       }
-      const clips: StudyClipInput[] = group.rows.map((r) => ({ clip_name: r.name, video_sha256: r.sha ?? '', duration_s: r.durationS }))
+      const clips: StudyClipInput[] = group.rows.map((r) => ({
+        clip_name: r.name,
+        clip_number: r.clipNumber,
+        video_sha256: r.sha ?? '',
+        duration_s: r.durationS,
+      }))
       const results =
         source === 'study' ? await createStudyAttempts(db, sessionId, clips) : await createOwnAttempts(db, sessionId, clips)
       results.forEach((res, i) => {

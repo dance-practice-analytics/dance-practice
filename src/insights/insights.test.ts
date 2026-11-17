@@ -22,6 +22,7 @@ function session(id: string, over: Partial<SessionRow> = {}): SessionRow {
     title: null,
     recorded_on: null,
     camera_view: 'front',
+    note: null,
     created_at: '2026-11-01T15:00:00Z',
     ...over,
   }
@@ -35,6 +36,8 @@ function attempt(id: string, sessionId: string, over: Partial<AttemptRow> = {}):
     source: 'user_upload',
     label: null,
     clip_name: `${id}.mp4`,
+    clip_number: null,
+    note: null,
     video_path: null,
     video_sha256: null,
     duration_s: 8,

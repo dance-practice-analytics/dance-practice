@@ -5,8 +5,8 @@
 // clips are registered in clips.ts and handed to the on-device pipeline.
 
 import { useCallback, useEffect, useMemo, useRef, useState, type DragEvent, type ReactNode } from 'react'
-import { baseName } from '../../data/clipFile'
-import { CAMERA_VIEWS, MOVEMENT_TYPES, type CameraView, type MovementType } from '../../data/schema'
+import { baseName, clipNumberOrNull } from '../../data/clipFile'
+import { CAMERA_VIEWS, MOVEMENT_TYPES, NOTE_MAX_CHARS, type CameraView, type MovementType } from '../../data/schema'
 import { client } from '../auth'
 import { registerClip } from '../clips'
 import { Alert, ErrorAlert, Icon, NoteBox, PageHeader, PrivacyPill, StatusPill } from '../components'
@@ -29,6 +29,7 @@ import {
   type ClipDraft,
   type ImportSource,
   type KnownClip,
+  videoFilesOfFolder,
 } from './import/model'
 import { probeFile } from './import/probe'
 import { createImport } from './import/submit'
@@ -47,7 +48,8 @@ const MOVEMENT_SHORT: Record<MovementType, string> = { releve_balance: 'Relevé'
 
 let nextRowId = 0
 
-function newRow(file: File): Row {
+function newRow(file: File, sessionDate: string | null): Row {
+  // Shown on this screen only; what is saved is a de-identified label (FR-3.2.5).
   const name = baseName(file.name)
   const tags = parseTags(name)
   return {
@@ -64,7 +66,8 @@ function newRow(file: File): Row {
     subject: tags.subject,
     movement: tags.movement ?? 'releve_balance',
     view: tags.view ?? 'front',
-    recordedOn: localDate(file.lastModified),
+    recordedOn: sessionDate ?? localDate(file.lastModified),
+    clipNumber: tags.clipNumber,
     reprocess: false,
     failure: null,
     selected: true,
@@ -78,16 +81,27 @@ export function Import() {
   const [rows, setRows] = useState<Row[]>([])
   const [busy, setBusy] = useState(false)
   const [notice, setNotice] = useState<{ queued: number; failed: number } | null>(null)
+  /** Session date chosen by the user (FR-3.2.2); null = each file's own date. */
+  const [sessionDate, setSessionDate] = useState<string | null>(null)
+  const [sessionNote, setSessionNote] = useState('')
+  const [skipped, setSkipped] = useState(0)
+  const noteTooLong = [...sessionNote.trim()].length > NOTE_MAX_CHARS
 
   const patch = useCallback((id: string, change: Partial<Row>) => {
     setRows((list) => list.map((r) => (r.id === id ? { ...r, ...change } : r)))
   }, [])
   const remove = useCallback((id: string) => setRows((list) => list.filter((r) => r.id !== id)), [])
 
+  const changeSessionDate = (day: string | null) => {
+    setSessionDate(day)
+    setRows((list) => list.map((r) => ({ ...r, recordedOn: day ?? localDate(r.file.lastModified) })))
+  }
+
   const addFiles = useCallback(
-    (files: readonly File[]) => {
+    (files: readonly File[], skippedFiles = 0) => {
+      setSkipped(skippedFiles)
       if (files.length === 0) return
-      const added = files.map(newRow)
+      const added = files.map((f) => newRow(f, sessionDate))
       setNotice(null)
       setRows((list) => [...list, ...added])
       for (const row of added) {
@@ -98,7 +112,7 @@ export function Import() {
         )
       }
     },
-    [patch],
+    [patch, sessionDate],
   )
 
   // Clips this account already has, by fingerprint.
@@ -127,14 +141,14 @@ export function Import() {
   const selected = rows.filter((r) => r.selected)
 
   async function submit() {
-    if (busy || !library.data) return
+    if (busy || !library.data || noteTooLong) return
     setBusy(true)
     setNotice(null)
     const jobs: PipelineJob[] = []
     let failed = 0
     try {
       const fresh = rows.filter((r) => checks.get(r.id)?.kind === 'ready')
-      const outcomes = await createImport(client(), source, groupIntoSessions(fresh), library.data.sessions)
+      const outcomes = await createImport(client(), source, groupIntoSessions(fresh), library.data.sessions, sessionNote)
       const changes = new Map<string, Partial<Row> | null>()
       for (const row of fresh) {
         const res = outcomes.get(row.id)
@@ -190,6 +204,12 @@ export function Import() {
       <SourceStep source={source} onChange={setSource} narrow={narrow} />
       <FileStep onFiles={addFiles} narrow={narrow} />
 
+      {skipped > 0 && (
+        <p className="t-caption" role="status">
+          {skipped} {skipped === 1 ? 'file in that folder isn’t a video and was' : 'files in that folder aren’t videos and were'} left out.
+        </p>
+      )}
+
       {notice && (
         <Alert
           title={
@@ -213,7 +233,8 @@ export function Import() {
 
       {rows.length === 0 && (
         <NoteBox title="Clips stay on this device.">
-          Only the file name, a fingerprint, the length and the tags are saved to your account; the video is read here and never sent.
+          Only a clip label made from the subject code and clip number (never the file name), a fingerprint, the length and the tags are saved to
+          your account; the video is read here and never sent.
         </NoteBox>
       )}
 
@@ -234,6 +255,16 @@ export function Import() {
             />
           )}
 
+          <SessionStep
+            date={sessionDate ?? rows[0].recordedOn}
+            fromFiles={sessionDate === null}
+            onDate={changeSessionDate}
+            note={sessionNote}
+            onNote={setSessionNote}
+            tooLong={noteTooLong}
+            narrow={narrow}
+          />
+
           <div className="card v2-imp-bar">
             <p style={narrow ? { textAlign: 'center' } : { flex: '1 1 300px' }} className={narrow ? 't-caption' : undefined} role="status">
               <span style={{ fontWeight: 600 }}>{counts.ready} ready</span>
@@ -247,7 +278,7 @@ export function Import() {
             <button
               className={narrow ? 'btn btn-primary btn-lg btn-block' : 'btn btn-primary'}
               type="button"
-              disabled={busy || counts.toQueue === 0 || counts.reading > 0 || !library.data}
+              disabled={busy || counts.toQueue === 0 || counts.reading > 0 || !library.data || noteTooLong}
               aria-busy={busy}
               onClick={() => void submit()}
             >
@@ -331,10 +362,57 @@ function SourceStep({ source, onChange, narrow }: { source: ImportSource; onChan
 
 // ---------- 2 · Files ----------
 
-function FileStep({ onFiles, narrow }: { onFiles(files: File[]): void; narrow: boolean }) {
+/**
+ * Folder picking (FR-3.2.4). Phones report `webkitdirectory` but their pickers can't
+ * choose a folder, so the option is shown on desktop browsers only.
+ */
+function canPickFolder(): boolean {
+  if (typeof document === 'undefined') return false
+  const probe = document.createElement('input')
+  if (!('webkitdirectory' in probe)) return false
+  const ua = typeof navigator !== 'undefined' ? navigator.userAgent : ''
+  const touchMac = /Macintosh/.test(ua) && typeof navigator !== 'undefined' && navigator.maxTouchPoints > 1
+  return !/Android|iPhone|iPad|iPod|Mobile/i.test(ua) && !touchMac
+}
+
+function FileStep({ onFiles, narrow }: { onFiles(files: File[], skipped?: number): void; narrow: boolean }) {
   const input = useRef<HTMLInputElement>(null)
+  const folderInput = useRef<HTMLInputElement>(null)
   const [over, setOver] = useState(false)
   const depth = useRef(0)
+  const [folderOk] = useState(canPickFolder)
+
+  // Not in React's attribute types; set on the element itself.
+  useEffect(() => {
+    const el = folderInput.current
+    if (!el) return
+    el.setAttribute('webkitdirectory', '')
+    el.setAttribute('directory', '')
+  }, [folderOk])
+
+  const folderPicker = folderOk && (
+    <input
+      ref={folderInput}
+      type="file"
+      multiple
+      className="v2-sr"
+      tabIndex={-1}
+      aria-label="Choose a folder of video clips"
+      data-testid="import-folder"
+      onChange={(e) => {
+        // Only the bare file names are read; the folder path never reaches a row.
+        const { videos, skipped } = videoFilesOfFolder([...(e.target.files ?? [])])
+        onFiles(videos, skipped)
+        e.target.value = ''
+      }}
+    />
+  )
+  const folderButton = (size: string) =>
+    folderOk && (
+      <button className={`btn btn-secondary ${size}`} type="button" onClick={() => folderInput.current?.click()}>
+        Choose a folder
+      </button>
+    )
 
   const onDrop = (e: DragEvent) => {
     e.preventDefault()
@@ -365,11 +443,13 @@ function FileStep({ onFiles, narrow }: { onFiles(files: File[]): void; narrow: b
     return (
       <section style={{ display: 'flex', flexDirection: 'column', gap: 8 }} aria-label="Files">
         {picker}
+        {folderPicker}
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, minmax(0, 1fr))', gap: 10 }}>
           <button className="btn btn-secondary btn-lg" type="button" onClick={() => input.current?.click()}>
             <Icon name="library" />
             Choose videos
           </button>
+          {folderButton('btn-lg')}
           <button className="btn btn-secondary btn-lg" type="button" disabled aria-describedby="v2-imp-record-why">
             <Icon name="camera" />
             Record
@@ -403,18 +483,114 @@ function FileStep({ onFiles, narrow }: { onFiles(files: File[]): void; narrow: b
         onDrop={onDrop}
       >
         {picker}
+        {folderPicker}
         <Icon name="upload" size={28} style={{ color: 'var(--text-2)' }} />
-        <p>
-          <span style={{ fontWeight: 600 }}>Drop video clips here</span> <span className="muted">or</span>{' '}
+        <p style={{ display: 'flex', flexWrap: 'wrap', gap: 8, alignItems: 'center', justifyContent: 'center' }}>
+          <span style={{ fontWeight: 600 }}>Drop video clips here</span> <span className="muted">or</span>
           <button className="btn btn-secondary btn-sm" type="button" onClick={() => input.current?.click()}>
             Choose files
           </button>
+          {folderButton('btn-sm')}
         </p>
         <p className="t-caption">
-          MP4 or MOV (H.264) · up to 60 s each · file names like <span className="mono">S05_releve_side_01.mp4</span> fill the tags for you
+          MP4 or MOV (H.264) · up to 60 s each · file names like <span className="mono">S05_releve_side_01.mp4</span> fill the tags and clip number for you
         </p>
       </div>
     </section>
+  )
+}
+
+// ---------- 4 · Session ----------
+
+interface SessionStepProps {
+  date: string
+  /** True while the date still comes from the files. */
+  fromFiles: boolean
+  onDate(day: string | null): void
+  note: string
+  onNote(note: string): void
+  tooLong: boolean
+  narrow: boolean
+}
+
+/** Session date and optional note (FR-3.2.2). The note is the dancer's own; it is never sent to the AI. */
+function SessionStep({ date, fromFiles, onDate, note, onNote, tooLong, narrow }: SessionStepProps) {
+  const length = [...note.trim()].length
+  return (
+    <section className="card" style={{ padding: narrow ? 14 : 16, display: 'flex', flexDirection: 'column', gap: 12 }} aria-labelledby="v2-imp-session-h">
+      <h2 className="t-h3" id="v2-imp-session-h">
+        4 · Session
+      </h2>
+      <div style={{ display: 'flex', flexWrap: 'wrap', gap: 16, alignItems: 'flex-start' }}>
+        <div className="field" style={{ flex: '0 1 200px' }}>
+          <label className="field-label" htmlFor="v2-imp-date">
+            Session date
+          </label>
+          <input
+            id="v2-imp-date"
+            className="input input-sm"
+            type="date"
+            value={date}
+            max={localDate(Date.now())}
+            onChange={(e) => onDate(e.target.value || null)}
+            aria-describedby="v2-imp-date-hint"
+          />
+          <span className="hint" id="v2-imp-date-hint">
+            {fromFiles ? 'From the files’ dates on this device.' : 'Used for every clip in this import.'}{' '}
+            {!fromFiles && (
+              <button className="btn btn-ghost btn-sm" type="button" onClick={() => onDate(null)} style={{ padding: '0 4px', height: 'auto' }}>
+                Use file dates
+              </button>
+            )}
+          </span>
+        </div>
+        <div className="field" style={{ flex: '1 1 320px' }}>
+          <label className="field-label" htmlFor="v2-imp-note">
+            Note <span className="subtle" style={{ fontWeight: 400 }}>(optional)</span>
+          </label>
+          <textarea
+            id="v2-imp-note"
+            className="input"
+            rows={2}
+            value={note}
+            onChange={(e) => onNote(e.target.value)}
+            aria-invalid={tooLong || undefined}
+            aria-describedby="v2-imp-note-hint"
+            placeholder="e.g. new shoes, tired after class"
+            style={{ height: 'auto', minHeight: 64, padding: '10px 12px', resize: 'vertical' }}
+          />
+          <span className="hint" id="v2-imp-note-hint">
+            {tooLong ? (
+              <span className="err-msg">
+                <Icon name="warning" />
+                {length} of {NOTE_MAX_CHARS} characters. Shorten the note to import.
+              </span>
+            ) : (
+              'Saved with the session for you only. Not used by the practice notes or Mika. Don’t write names.'
+            )}
+          </span>
+        </div>
+      </div>
+    </section>
+  )
+}
+
+function ClipNumberInput({ row, patch, disabled, width }: { row: Row; patch: TagProps['patch']; disabled?: boolean; width?: number | string }) {
+  return (
+    <input
+      className="input input-sm mono"
+      type="number"
+      inputMode="numeric"
+      min={1}
+      max={999}
+      step={1}
+      aria-label={`Clip number for ${row.name}`}
+      placeholder="—"
+      style={{ width: width ?? 72 }}
+      value={row.clipNumber ?? ''}
+      disabled={disabled}
+      onChange={(e) => patch(row.id, { clipNumber: clipNumberOrNull(e.target.value === '' ? null : Number(e.target.value)) })}
+    />
   )
 }
 
@@ -549,6 +725,7 @@ function TagTable({ rows, checks, source, selectedCount, patch, remove, onSelect
               </th>
               <th scope="col">File</th>
               <th scope="col">Length</th>
+              <th scope="col">Clip no.</th>
               <th scope="col">Subject</th>
               <th scope="col">Movement</th>
               <th scope="col">Camera view</th>
@@ -584,6 +761,9 @@ function TagTable({ rows, checks, source, selectedCount, patch, remove, onSelect
                   </td>
                   <td className="mono subtle" style={{ fontSize: 12 }}>
                     {formatLength(row.durationS)}
+                  </td>
+                  <td>
+                    <ClipNumberInput row={row} patch={patch} disabled={!editable} />
                   </td>
                   <td>
                     <SubjectSelect
@@ -702,14 +882,19 @@ function TagCards({ rows, checks, source, patch, remove, onApplyAll }: TagProps 
             </div>
             {taggable(check) && (
               <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-                <SubjectSelect
-                  value={row.subject}
-                  label={`Subject for ${row.name}`}
-                  source={source}
-                  need={check?.kind === 'needs_subject'}
-                  width="100%"
-                  onChange={(subject) => patch(row.id, { subject })}
-                />
+                <div style={{ display: 'flex', gap: 10 }}>
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <SubjectSelect
+                      value={row.subject}
+                      label={`Subject for ${row.name}`}
+                      source={source}
+                      need={check?.kind === 'needs_subject'}
+                      width="100%"
+                      onChange={(subject) => patch(row.id, { subject })}
+                    />
+                  </div>
+                  <ClipNumberInput row={row} patch={patch} width={88} />
+                </div>
                 <Seg
                   label={`Movement for ${row.name}`}
                   value={row.movement}

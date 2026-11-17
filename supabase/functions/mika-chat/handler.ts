@@ -1,10 +1,12 @@
 // Request flow of mika-chat with every side effect behind `Deps`, so it runs under a test
 // with a mocked database and a mocked model. index.ts supplies the real Supabase queries
-// (with the caller's JWT, so RLS applies) and the Claude call.
+// (with the caller's JWT, so RLS applies) and the model call (_shared/llm.ts).
 //
-// GET  → { ready } : whether the function has its API key. No model call, no data read.
+// GET  → { ready } : whether the model is configured. No model call, no data read.
 // POST → { reply } : one answer from Mika about the caller's own measurements.
 
+// @ts-ignore TS5097: Deno needs the .ts extension
+import { LlmError, type LlmCompletion } from '../_shared/llm.ts'
 import {
   MIKA_FAILURES,
   MAX_SESSION_ATTEMPTS,
@@ -27,27 +29,35 @@ import type { RateDecision } from './rateLimit.ts'
 // @ts-ignore TS5097: Deno needs the .ts extension
 import { parseMikaRequest } from './validate.ts'
 
-/** The parts of a Messages API response the function reads. */
-export interface ModelMessage {
-  stop_reason: string | null
-  model: string
-  content: readonly { type: string; text?: string }[]
-}
-
 export type ModelOutcome = { ok: true; text: string; model: string } | { ok: false; code: MikaFailureCode; retryAfterS?: number }
 
-/** stop_reason is checked before the content is read: a refusal or a cut-off is never shown. */
-export function interpretMessage(message: ModelMessage): ModelOutcome {
-  if (message.stop_reason === 'refusal') return { ok: false, code: 'model_refused' }
-  if (message.stop_reason === 'max_tokens') return { ok: false, code: 'model_truncated' }
-  if (message.stop_reason !== 'end_turn' && message.stop_reason !== 'stop_sequence') return { ok: false, code: 'model_invalid_output' }
-  const text = message.content
-    .filter((b) => b.type === 'text' && typeof b.text === 'string')
-    .map((b) => b.text)
-    .join('')
-    .trim()
+/** finish_reason is checked before the content is read: a refusal or a cut-off is never shown. */
+export function interpretCompletion(completion: LlmCompletion): ModelOutcome {
+  if (completion.finishReason === 'content_filter') return { ok: false, code: 'model_refused' }
+  if (completion.finishReason === 'length') return { ok: false, code: 'model_truncated' }
+  if (completion.finishReason !== 'stop') return { ok: false, code: 'model_invalid_output' }
+  const text = completion.text.trim()
   if (text.length === 0) return { ok: false, code: 'model_invalid_output' }
-  return { ok: true, text, model: message.model }
+  return { ok: true, text, model: completion.model }
+}
+
+/** A failed model call → its failure code. Anything that is not an LlmError is a bug and is rethrown. */
+export function outcomeFromError(e: unknown): ModelOutcome {
+  if (!(e instanceof LlmError)) throw e
+  switch (e.kind) {
+    case 'not_configured':
+    case 'auth':
+      return { ok: false, code: 'not_connected' }
+    case 'rate_limited':
+    case 'unavailable':
+      return e.retryAfterS !== undefined ? { ok: false, code: 'upstream_busy', retryAfterS: e.retryAfterS } : { ok: false, code: 'upstream_busy' }
+    case 'timeout':
+      return { ok: false, code: 'upstream_timeout' }
+    case 'bad_response':
+      return { ok: false, code: 'model_invalid_output' }
+    default:
+      return { ok: false, code: 'upstream_error' }
+  }
 }
 
 export type MetricsRow = MetricsRowLike & { attempt_id: string }
@@ -56,7 +66,7 @@ export type MetricsRow = MetricsRowLike & { attempt_id: string }
 export interface Deps {
   /** The signed-in user's id, or null when the JWT is missing or invalid. */
   userId(): Promise<string | null>
-  /** False when ANTHROPIC_API_KEY is not set. */
+  /** False when LLM_API_KEY, LLM_BASE_URL or LLM_MODEL is not set. */
   hasApiKey(): boolean
   hasAiConsent(): Promise<boolean>
   /** attempt_metrics rows visible to the caller, for these attempt ids. */

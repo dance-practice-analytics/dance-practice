@@ -1,6 +1,6 @@
 // System prompt of Mika (FR-3.7.4, FR-3.7.5). The fixed instructions come first and the
-// dancer's measurements after them, in a second system block, so the instructions are a
-// stable prefix. Change PROMPT_VERSION whenever the text changes (it is logged nowhere
+// dancer's measurements after them, in a second block (joined into one system message by
+// _shared/llm.ts), so the instructions are a stable prefix. Change PROMPT_VERSION whenever the text changes (it is logged nowhere
 // with content; it only tells which prompt produced an answer).
 
 // @ts-ignore TS5097: Deno needs the .ts extension

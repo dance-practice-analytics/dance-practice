@@ -9,7 +9,6 @@ import {
   MAX_QUESTION_CHARS,
   MAX_REPLY_CHARS,
   MIKA_FAILURES,
-  MODEL,
   RATE_LIMIT_MAX,
   RATE_LIMIT_WINDOW_MS,
   mikaErrorBody,
@@ -17,7 +16,8 @@ import {
   type MikaErrorBody,
 } from '../../../../supabase/functions/mika-chat/contract'
 import { METRIC_DEFINITIONS, buildMikaContext } from '../../../../supabase/functions/mika-chat/context'
-import { handleMika, interpretMessage, type Deps, type MetricsRow } from '../../../../supabase/functions/mika-chat/handler'
+import { handleMika, interpretCompletion, outcomeFromError, type Deps, type MetricsRow } from '../../../../supabase/functions/mika-chat/handler'
+import { LlmError, type LlmCompletion } from '../../../../supabase/functions/_shared/llm'
 import { SYSTEM_PROMPT, buildContextBlock, buildSystem } from '../../../../supabase/functions/mika-chat/prompt'
 import { createRateLimiter } from '../../../../supabase/functions/mika-chat/rateLimit'
 import { parseMikaRequest, trimHistory } from '../../../../supabase/functions/mika-chat/validate'
@@ -57,10 +57,11 @@ const LATER: MetricsRow = { ...ROW, attempt_id: A3, trunk_inclination_deg: 3.9 }
 const PIROUETTE: MetricsRow = { ...ROW, attempt_id: OTHER_SESSION, movement: 'pirouette', turn_count: 2 }
 
 const QUESTION: ChatMessage = { role: 'user', content: 'What changed since attempt 1?' }
+/** Whatever LLM_MODEL is set to; the function never hard-codes a model. */
+const MODEL = 'grok-4.7'
 
 describe('mika-chat contract', () => {
-  it('uses the model named in CLAUDE.md and documented limits', () => {
-    expect(MODEL).toBe('claude-sonnet-5-5')
+  it('uses the documented limits', () => {
     expect(RATE_LIMIT_MAX).toBe(30)
     expect(RATE_LIMIT_WINDOW_MS).toBe(3_600_000)
   })
@@ -210,18 +211,31 @@ describe('createRateLimiter', () => {
   })
 })
 
-describe('interpretMessage', () => {
-  const msg = (stop_reason: string | null, text = 'Your torso lean was 4.2 degrees.') => ({
-    stop_reason,
+describe('interpretCompletion', () => {
+  const msg = (finishReason: LlmCompletion['finishReason'], text = 'Your torso lean was 4.2 degrees.'): LlmCompletion => ({
+    text,
+    finishReason,
+    rawFinishReason: finishReason,
     model: MODEL,
-    content: [{ type: 'thinking' }, { type: 'text', text }],
+    usage: { inputTokens: null, outputTokens: null },
   })
-  it('reads the text of a finished answer and checks the stop reason first', () => {
-    expect(interpretMessage(msg('end_turn'))).toEqual({ ok: true, text: 'Your torso lean was 4.2 degrees.', model: MODEL })
-    expect(interpretMessage(msg('refusal'))).toEqual({ ok: false, code: 'model_refused' })
-    expect(interpretMessage(msg('max_tokens'))).toEqual({ ok: false, code: 'model_truncated' })
-    expect(interpretMessage(msg('pause_turn'))).toEqual({ ok: false, code: 'model_invalid_output' })
-    expect(interpretMessage(msg('end_turn', '  '))).toEqual({ ok: false, code: 'model_invalid_output' })
+  it('reads the text of a finished answer and checks the finish reason first', () => {
+    expect(interpretCompletion(msg('stop', ' Your torso lean was 4.2 degrees. '))).toEqual({ ok: true, text: 'Your torso lean was 4.2 degrees.', model: MODEL })
+    expect(interpretCompletion(msg('content_filter'))).toEqual({ ok: false, code: 'model_refused' })
+    expect(interpretCompletion(msg('length'))).toEqual({ ok: false, code: 'model_truncated' })
+    expect(interpretCompletion(msg('other'))).toEqual({ ok: false, code: 'model_invalid_output' })
+    expect(interpretCompletion(msg('stop', '  '))).toEqual({ ok: false, code: 'model_invalid_output' })
+  })
+
+  it('maps adapter errors to Mika’s failure codes', () => {
+    expect(outcomeFromError(new LlmError('not_configured'))).toEqual({ ok: false, code: 'not_connected' })
+    expect(outcomeFromError(new LlmError('auth', 403))).toEqual({ ok: false, code: 'not_connected' })
+    expect(outcomeFromError(new LlmError('rate_limited', 429, 20))).toEqual({ ok: false, code: 'upstream_busy', retryAfterS: 20 })
+    expect(outcomeFromError(new LlmError('unavailable', 500))).toEqual({ ok: false, code: 'upstream_busy' })
+    expect(outcomeFromError(new LlmError('timeout'))).toEqual({ ok: false, code: 'upstream_timeout' })
+    expect(outcomeFromError(new LlmError('network'))).toEqual({ ok: false, code: 'upstream_error' })
+    expect(outcomeFromError(new LlmError('bad_response', 200))).toEqual({ ok: false, code: 'model_invalid_output' })
+    expect(() => outcomeFromError(new Error('bug'))).toThrow('bug')
   })
 })
 

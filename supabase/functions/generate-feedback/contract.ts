@@ -3,7 +3,8 @@
 // and uses no Deno or DOM API, so the browser bundle can import it as is.
 
 export const FUNCTION_NAME = 'generate-feedback'
-export const MODEL = 'claude-sonnet-5-5'
+// The model is not fixed here: it is the LLM_MODEL secret (supabase/functions/_shared/llm.ts),
+// and each stored note records the model that wrote it.
 
 /** consents.scope that allows sending metrics to the model (account-level row, not revoked). */
 export const AI_CONSENT_SCOPE = 'ai_metrics_only'

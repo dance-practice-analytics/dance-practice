@@ -7,7 +7,7 @@
 
 import type { SupabaseClient } from '@supabase/supabase-js'
 import { ApiError } from '../api/errors'
-import { baseName } from './clipFile'
+import { clipNumberOrNull, deidentifiedClipName, parseClipName } from './clipFile'
 import {
   ATTEMPT_STATUSES,
   CONSENT_SCOPES,
@@ -15,6 +15,7 @@ import {
   DEFAULT_POSE_MODEL,
   KEYPOINTS_BUCKET,
   KEYPOINTS_MAX_BYTES,
+  NOTE_MAX_CHARS,
   SUBJECT_CODE_RE,
   VIDEOS_BUCKET,
   type AttemptKeypointsRow,
@@ -251,7 +252,31 @@ export function revokeConsent(client: SupabaseClient, scope: ConsentScope): Prom
 
 // ---------- sessions ----------
 
-const SESSION_COLS = 'id, owner_id, subject_id, movement_type, title, recorded_on, camera_view, created_at'
+const SESSION_COLS = 'id, owner_id, subject_id, movement_type, title, recorded_on, camera_view, note, created_at'
+
+/**
+ * A note as it is saved: trimmed, empty → null. Longer than the column allows is
+ * refused rather than cut, so the dancer's words are never silently lost.
+ */
+export function normaliseNote(note: string | null | undefined): string | null {
+  const text = (note ?? '').replace(/\r\n?/g, '\n').trim()
+  if (!text) return null
+  if ([...text].length > NOTE_MAX_CHARS) {
+    throw invalid('note_too_long', `Notes can be up to ${NOTE_MAX_CHARS} characters.`, 'Shorten the note and try again.')
+  }
+  return text
+}
+
+const DATE_RE = /^\d{4}-\d{2}-\d{2}$/
+
+function validDate(day: string | null | undefined): string | null {
+  if (day == null || day === '') return null
+  const d = new Date(`${day}T00:00:00Z`)
+  if (!DATE_RE.test(day) || Number.isNaN(d.getTime()) || d.toISOString().slice(0, 10) !== day) {
+    throw invalid('invalid_date', 'That date isn’t valid.', 'Pick the day the clips were recorded.')
+  }
+  return day
+}
 
 export interface SessionSummary extends SessionRow {
   subject_code: string | null
@@ -270,8 +295,9 @@ export function createSession(client: SupabaseClient, input: SessionInsert): Pro
       movement_type: input.movement_type,
       subject_id: input.subject_id ?? null,
       title: input.title?.trim() || null,
-      recorded_on: input.recorded_on ?? null,
+      recorded_on: validDate(input.recorded_on),
       camera_view: input.camera_view ?? null,
+      note: normaliseNote(input.note),
     }
     return unwrap<SessionRow>(await client.from('sessions').insert(row).select(SESSION_COLS).single(), {
       notFound: ['That subject is no longer here.', 'Pick the subject again.'],
@@ -301,6 +327,26 @@ export function listSessions(client: SupabaseClient): Promise<SessionSummary[]> 
   })
 }
 
+/** Changes the session's note and / or date (FR-3.2.2). Only the fields given are sent. */
+export function updateSession(
+  client: SupabaseClient,
+  sessionId: string,
+  change: { note?: string | null; recorded_on?: string | null },
+): Promise<SessionRow> {
+  return guard(async () => {
+    await requireUid(client)
+    const row: Partial<Pick<SessionRow, 'note' | 'recorded_on'>> = {}
+    if ('note' in change) row.note = normaliseNote(change.note)
+    if ('recorded_on' in change) row.recorded_on = validDate(change.recorded_on)
+    const saved = unwrap<SessionRow | null>(
+      await client.from('sessions').update(row).eq('id', sessionId).select(SESSION_COLS).maybeSingle(),
+      SESSION_GONE,
+    )
+    if (!saved) throw dataError({ code: 'PGRST116' }, SESSION_GONE)
+    return saved
+  }, SESSION_GONE)
+}
+
 /** Deletes a session, its attempts and their stored keypoints (and clips, for user uploads). */
 export function deleteSession(client: SupabaseClient, sessionId: string): Promise<void> {
   return guard(async () => {
@@ -316,8 +362,8 @@ export function deleteSession(client: SupabaseClient, sessionId: string): Promis
 
 // ---------- attempts ----------
 
-const ATTEMPT_COLS =
-  'id, owner_id, session_id, source, label, clip_name, video_path, video_sha256, duration_s, fps, status, error, created_at'
+export const ATTEMPT_COLS =
+  'id, owner_id, session_id, source, label, clip_name, clip_number, note, video_path, video_sha256, duration_s, fps, status, error, created_at'
 
 const ATTEMPT_GONE: ErrorCopy = {
   notFound: ['That clip is no longer in your library.', 'Refresh the list and try again.'],
@@ -326,7 +372,10 @@ const DUPLICATE_CLIP: Copy = ['This clip is already in your library.', 'Open the
 
 /** What the import screen knows about one picked study clip. No bytes, no path. */
 export interface StudyClipInput {
+  /** The local file name. Only `deidentifiedClipName` of it is stored. */
   clip_name: string
+  /** Clip number in the dataset (FR-3.2.4); read from the name when not given. */
+  clip_number?: number | null
   /** Lower-case hex from `sha256Hex`. */
   video_sha256: string
   duration_s: number | null
@@ -343,13 +392,25 @@ export type StudyAttemptResult =
 
 const finiteOrNull = (n: number | null | undefined) => (typeof n === 'number' && Number.isFinite(n) && n >= 0 ? n : null)
 
+/**
+ * Clip name and number as they may be stored (FR-3.2.5): the local file name never
+ * leaves the device, only a label rebuilt from the subject code and clip number.
+ */
+export function storedClipFields(clip: Pick<StudyClipInput, 'clip_name' | 'clip_number'>): {
+  clip_name: string
+  clip_number: number | null
+} {
+  const clip_number = clipNumberOrNull(clip.clip_number) ?? clipNumberOrNull(parseClipName(clip.clip_name ?? '').take)
+  return { clip_name: deidentifiedClipName(clip.clip_name ?? '', clip_number), clip_number }
+}
+
 function studyRow(sessionId: string, clip: StudyClipInput, sha: string): StudyAttemptInsert {
   // Written out field by field: a study clip never gets a video_path, whatever the caller passes.
   return {
     session_id: sessionId,
     source: 'study_dataset',
     label: clip.label?.trim() || null,
-    clip_name: baseName(clip.clip_name) || null,
+    ...storedClipFields(clip),
     video_path: null,
     video_sha256: sha,
     duration_s: finiteOrNull(clip.duration_s),
@@ -480,6 +541,19 @@ export function setAttemptStatus(
     // RLS hides rows of other accounts, so "no row came back" is the not-found case.
     const row = unwrap<AttemptRow | null>(
       await client.from('attempts').update({ status, error: reason }).eq('id', attemptId).select(ATTEMPT_COLS).maybeSingle(),
+      ATTEMPT_GONE,
+    )
+    if (!row) throw dataError({ code: 'PGRST116' }, ATTEMPT_GONE)
+    return row
+  }, ATTEMPT_GONE)
+}
+
+/** Saves the dancer's note on an attempt (FR-3.5.7); an empty note clears it. */
+export function updateAttemptNote(client: SupabaseClient, attemptId: string, note: string | null): Promise<AttemptRow> {
+  return guard(async () => {
+    await requireUid(client)
+    const row = unwrap<AttemptRow | null>(
+      await client.from('attempts').update({ note: normaliseNote(note) }).eq('id', attemptId).select(ATTEMPT_COLS).maybeSingle(),
       ATTEMPT_GONE,
     )
     if (!row) throw dataError({ code: 'PGRST116' }, ATTEMPT_GONE)

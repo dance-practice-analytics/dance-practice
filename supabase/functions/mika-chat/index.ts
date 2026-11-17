@@ -1,27 +1,28 @@
 // Supabase Edge Function mika-chat (FR-3.7.x): Mika, the AI practice chat.
 // POST { attempt_id, compare_attempt_id?, scope?, messages } with the caller's JWT → { reply }.
-// GET → { ready } (whether ANTHROPIC_API_KEY is set; used by the app to show the
-// "not connected" state without asking the model anything).
+// GET → { ready } (whether LLM_API_KEY, LLM_BASE_URL and LLM_MODEL are set; used by the
+// app to show the "not connected" state without asking the model anything).
 //
 // - The Supabase client is created with the request's Authorization header, so every
 //   query runs under the caller's RLS. The service-role key is never used.
 // - Only attempt_metrics rows and attempt ids/order are read: never keypoints, frames,
 //   video, titles, file names or subject codes.
-// - ANTHROPIC_API_KEY is read from the function's secrets only.
+// - The provider (Gemini or Grok, OpenAI-compatible) and its key come from the function's
+//   secrets only (see ../_shared/llm.ts).
 //
-// The request flow lives in handler.ts; this file wires it to Supabase and Claude.
+// The request flow lives in handler.ts; this file wires it to Supabase and the model.
 
-import Anthropic from '@anthropic-ai/sdk'
 import { createClient, type SupabaseClient } from '@supabase/supabase-js'
-import { AI_CONSENT_SCOPE, MIKA_FAILURES, MODEL, mikaErrorBody, type ChatMessage, type MikaFailureCode } from './contract.ts'
+import { createLlm, llmConfigFromEnv, LlmError, type Llm } from '../_shared/llm.ts'
+import { AI_CONSENT_SCOPE, MIKA_FAILURES, mikaErrorBody, type ChatMessage, type MikaFailureCode } from './contract.ts'
 import { allowedOrigins, corsHeaders } from '../generate-feedback/cors.ts'
-import { handleMika, interpretMessage, type Deps, type MetricsRow, type ModelOutcome } from './handler.ts'
+import { handleMika, interpretCompletion, outcomeFromError, type Deps, type MetricsRow, type ModelOutcome } from './handler.ts'
 import { createRateLimiter } from './rateLimit.ts'
 
-/** A chat answer should come back fast; one retry on a connection error, 429 or 5xx. */
+/** A chat answer should come back fast; one retry on a connection error, 429 or 5xx (in llm.ts). */
 const TIMEOUT_MS = 30_000
 const MAX_RETRIES = 1
-/** Room for adaptive thinking plus a short answer. */
+/** Room for a thinking model's reasoning plus a short answer. */
 const MAX_TOKENS = 8000
 
 const METRIC_COLUMNS =
@@ -30,50 +31,21 @@ const METRIC_COLUMNS =
 /** Per instance: see rateLimit.ts for what that means. */
 const limiter = createRateLimiter()
 
-function retryAfterSeconds(headers: unknown): number | undefined {
-  const value = headers instanceof Headers ? headers.get('retry-after') : null
-  const seconds = value ? Number(value) : NaN
-  return Number.isFinite(seconds) && seconds > 0 ? Math.ceil(seconds) : undefined
-}
-
-async function callClaude(
-  apiKey: string,
-  system: { type: 'text'; text: string }[],
-  messages: ChatMessage[],
-  fallback: boolean,
-): Promise<ModelOutcome> {
-  const client = new Anthropic({ apiKey, timeout: TIMEOUT_MS, maxRetries: MAX_RETRIES })
+async function askModel(llm: Llm, system: { type: 'text'; text: string }[], messages: ChatMessage[]): Promise<ModelOutcome> {
   try {
-    const message = await client.beta.messages.create({
-      model: MODEL,
-      max_tokens: MAX_TOKENS,
-      // Thinking is adaptive by default on this model; low effort keeps a chat answer quick.
-      output_config: { effort: 'low' },
-      system,
-      messages,
-      // Server-side refusal fallback, as in generate-feedback. REFUSAL_FALLBACK=off drops it.
-      ...(fallback ? { betas: ['server-side-fallback-2026-07-01'], fallbacks: 'default' as const } : {}),
-    })
-    return interpretMessage(message)
+    // Instructions first, then the measurements block, in one system message.
+    const completion = await llm.complete({ system: system.map((b) => b.text), messages, maxTokens: MAX_TOKENS })
+    if (completion.finishReason !== 'stop') {
+      console.warn('mika-chat: model stopped', llm.provider, completion.rawFinishReason ?? 'none')
+    }
+    return interpretCompletion(completion)
   } catch (e) {
-    if (e instanceof Anthropic.APIConnectionTimeoutError) return { ok: false, code: 'upstream_timeout' }
-    if (e instanceof Anthropic.APIConnectionError) return { ok: false, code: 'upstream_error' }
-    if (e instanceof Anthropic.AuthenticationError || e instanceof Anthropic.PermissionDeniedError) {
-      console.error('mika-chat: the API key was rejected')
-      return { ok: false, code: 'not_connected' }
-    }
-    if (e instanceof Anthropic.RateLimitError) {
-      return { ok: false, code: 'upstream_busy', retryAfterS: retryAfterSeconds(e.headers) }
-    }
-    if (e instanceof Anthropic.APIError) {
-      console.error('mika-chat: Claude API error', e.status)
-      return { ok: false, code: typeof e.status === 'number' && e.status >= 500 ? 'upstream_busy' : 'upstream_error' }
-    }
-    throw e
+    if (e instanceof LlmError) console.error('mika-chat: model call failed', llm.provider, e.kind, e.status ?? '')
+    return outcomeFromError(e)
   }
 }
 
-function deps(supabase: SupabaseClient, token: string, apiKey: string | undefined, fallback: boolean): Deps {
+function deps(supabase: SupabaseClient, token: string, llm: Llm): Deps {
   const must = <T>(res: { data: T; error: { message: string } | null }): T => {
     if (res.error) throw new Error('database')
     return res.data
@@ -85,7 +57,7 @@ function deps(supabase: SupabaseClient, token: string, apiKey: string | undefine
       return error ? null : (data.user?.id ?? null)
     },
 
-    hasApiKey: () => Boolean(apiKey),
+    hasApiKey: () => llm.configured,
 
     async hasAiConsent() {
       const rows = must(
@@ -123,8 +95,8 @@ function deps(supabase: SupabaseClient, token: string, apiKey: string | undefine
     rateLimit: (uid, now) => limiter.take(uid, now),
 
     async callModel(system, messages) {
-      if (!apiKey) return { ok: false, code: 'not_connected' }
-      return callClaude(apiKey, system, messages, fallback)
+      if (!llm.configured) return { ok: false, code: 'not_connected' }
+      return askModel(llm, system, messages)
     },
 
     now: () => Date.now(),
@@ -167,7 +139,7 @@ Deno.serve(async (req: Request) => {
     }
   }
 
-  const fallback = Deno.env.get('REFUSAL_FALLBACK') !== 'off'
-  const result = await handleMika(req.method, body, deps(supabase, token, Deno.env.get('ANTHROPIC_API_KEY'), fallback))
+  const llm = createLlm(llmConfigFromEnv((name) => Deno.env.get(name)), { timeoutMs: TIMEOUT_MS, maxRetries: MAX_RETRIES })
+  const result = await handleMika(req.method, body, deps(supabase, token, llm))
   return json(result.status, result.body, result.retryAfterS ? { 'Retry-After': String(result.retryAfterS) } : {})
 })

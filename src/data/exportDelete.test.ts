@@ -246,7 +246,7 @@ function seed(db = new FakeDb()) {
   )
   db.add(
     'sessions',
-    { id: 'ses-1', ...own, subject_id: 'sub-1', movement_type: 'releve_balance', title: `${NAME}, "front" view`, recorded_on: '2026-11-10', camera_view: 'front', created_at: at(10) },
+    { id: 'ses-1', ...own, subject_id: 'sub-1', movement_type: 'releve_balance', title: `${NAME}, "front" view`, recorded_on: '2026-11-10', camera_view: 'front', note: `${NAME} felt dizzy today`, created_at: at(10) },
     { id: 'ses-2', ...own, subject_id: null, movement_type: 'pirouette', title: null, recorded_on: null, camera_view: null, created_at: at(11) },
   )
   const attempt = (id: string, session_id: string, n: number, extra: Row = {}): Row => ({
@@ -267,7 +267,7 @@ function seed(db = new FakeDb()) {
   })
   db.add(
     'attempts',
-    attempt('att-1', 'ses-1', 1),
+    attempt('att-1', 'ses-1', 1, { note: `${NAME}: heel came down early` }),
     attempt('att-2', 'ses-1', 2, { status: 'failed', error: 'No person was found in this clip.' }),
     attempt('att-3', 'ses-1', 3, { status: 'queued', fps: null }),
     attempt('att-4', 'ses-2', 4, { source: 'user_upload', video_path: `${UID}/att-4.mp4` }),
@@ -323,7 +323,7 @@ function seed(db = new FakeDb()) {
     id: 'fb-1',
     ...own,
     attempt_id: 'att-1',
-    model: 'claude-sonnet-5-5',
+    model: 'gemini-3.8-flash',
     prompt_version: 'p1',
     input_hash: 'abc123',
     response: {
@@ -464,7 +464,7 @@ describe('exportAll', () => {
       file_null_reason: 'not_included',
     })
     expect(a1.feedback).toHaveLength(1)
-    expect(a1.feedback[0]).toMatchObject({ id: 'fb-1', model: 'claude-sonnet-5-5', prompt_version: 'p1' })
+    expect(a1.feedback[0]).toMatchObject({ id: 'fb-1', model: 'gemini-3.8-flash', prompt_version: 'p1' })
     expect((a1.feedback[0].response as { observations: unknown[] }).observations).toHaveLength(1)
   })
 
@@ -570,7 +570,7 @@ describe('export contents', () => {
     'input_hash',
     'role',
   ]
-  const LABEL_KEYS = ['title', 'label', 'clip_name']
+  const LABEL_KEYS = ['title', 'label', 'clip_name', 'note']
 
   function expectClean(text: string) {
     expect(text).not.toContain(UID)
@@ -610,12 +610,17 @@ describe('export contents', () => {
     expect(db.ops.some((o) => o.startsWith('delete:') || o.startsWith('storage.remove'))).toBe(false)
   })
 
-  it('adds typed labels only when asked, and a clip name without its folder', async () => {
+  it('adds typed labels and notes only when asked, and only a de-identified clip label', async () => {
     const { client } = seed()
     const { document, json } = await exportAll(client, { includeLabels: true, now: NOW })
     expect(document.includes.labels).toBe(true)
     expect(document.sessions[0].title).toBe(`${NAME}, "front" view`)
-    expect(document.sessions[0].attempts[0]).toMatchObject({ label: `${NAME} take 1`, clip_name: 'S01_releve_take1.mp4' })
+    // A row saved before de-identification still leaves as S01_att01.mp4, never with the folder or the name in it.
+    expect(document.sessions[0].attempts[0]).toMatchObject({ label: `${NAME} take 1`, clip_name: 'S01_att01.mp4', clip_number: null })
+    expect(document.sessions[0].note).toBe(`${NAME} felt dizzy today`)
+    expect(document.sessions[0].attempts[0].note).toBe(`${NAME}: heel came down early`)
+    expect(document.sessions[0].attempts[1].note).toBeNull()
+    expect(json).not.toContain('releve_take')
     expect(json).not.toContain('C:\\\\clips')
     const keys = keysOf(document)
     for (const k of FORBIDDEN_KEYS) expect(keys.has(k), k).toBe(false)

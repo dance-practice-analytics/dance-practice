@@ -3,7 +3,7 @@
 // no imports and uses no Deno or DOM API, so the browser bundle can import it as is.
 
 export const FUNCTION_NAME = 'mika-chat'
-export const MODEL = 'claude-sonnet-5-5'
+// The model is not fixed here: it is the LLM_MODEL secret (supabase/functions/_shared/llm.ts).
 
 /** consents.scope that allows sending metrics to the model (same as practice notes). */
 export const AI_CONSENT_SCOPE = 'ai_metrics_only'

@@ -473,7 +473,9 @@ describe('study attempts', () => {
       expect(row.source).toBe('study_dataset')
       expect(row.status).toBe('queued')
     }
-    expect(sent[0]).toMatchObject({ clip_name: 'S01_releve_take1.mp4', video_sha256: sha(1), duration_s: 12.5, fps: 30 })
+    // FR-3.2.5: only a label rebuilt from the subject code and clip number is stored.
+    expect(sent[0]).toMatchObject({ clip_name: 'S01_att01.mp4', clip_number: 1, video_sha256: sha(1), duration_s: 12.5, fps: 30 })
+    expect(JSON.stringify(sent)).not.toMatch(/someone|Users|releve_take/)
     expect(sent[1]).toMatchObject({ fps: null })
     for (const row of db.rows('attempts')) expect(row.video_path ?? null).toBeNull()
     // Rows only: the import touched no storage bucket.
@@ -545,7 +547,7 @@ describe('study attempts', () => {
     const { client, session } = await setup()
     await createStudyAttempts(client, session.id, [clip(2), clip(1)])
     const list = await listAttempts(client, session.id)
-    expect(list.map((a) => a.clip_name)).toEqual(['S01_releve_take2.mp4', 'S01_releve_take1.mp4'])
+    expect(list.map((a) => a.clip_name)).toEqual(['S01_att02.mp4', 'S01_att01.mp4'])
 
     const failed = await setAttemptStatus(client, list[0].id, 'failed', '  No person was found in this clip.  ')
     expect(failed).toMatchObject({ status: 'failed', error: 'No person was found in this clip.' })

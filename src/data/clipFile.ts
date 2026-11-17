@@ -7,7 +7,7 @@ import { SUBJECT_CODE_RE, type MovementType } from './schema'
 
 // ---------- file name ----------
 
-/** The file name without any folder part, so a local path never reaches the database (FR-3.2.5). */
+/** The file name without any folder part. For what is stored, use `deidentifiedClipName`. */
 export function baseName(name: string): string {
   return name.replace(/^.*[\\/]/, '').trim()
 }
@@ -71,6 +71,48 @@ export function parseClipName(name: string): ParsedClipName {
     movement: movements.size === 1 ? [...movements][0] : null,
     take: take !== null && take > 0 ? take : null,
   }
+}
+
+// ---------- de-identified name (FR-3.2.5, NFR-2) ----------
+
+/** Extensions kept on a stored clip name; anything else is dropped, so no free text survives. */
+const VIDEO_EXTENSIONS = new Set(['mp4', 'm4v', 'mov', 'webm', 'mkv', 'avi', '3gp', 'mpg', 'mpeg', 'ogv', 'wmv'])
+
+/** A clip number the database accepts (attempts.clip_number), or null. */
+export function clipNumberOrNull(n: unknown): number | null {
+  return typeof n === 'number' && Number.isInteger(n) && n > 0 && n <= 999 ? n : null
+}
+
+/**
+ * The only clip name that is ever stored or exported. A local file name can hold a
+ * dancer's name ("Maria_S03_07.mp4", "C:\Users\maria\…"), so it is rebuilt from what
+ * was recognised in it: `S03_att07.mp4` when the name follows the dataset pattern
+ * (subject code + attempt number), otherwise the neutral `clip 7.mp4` / `clip.mp4`.
+ * `clipNumber` is used when the name itself has no attempt number. Never returns any
+ * other part of the original name.
+ */
+export function deidentifiedClipName(name: string, clipNumber?: number | null): string {
+  const base = baseName(name ?? '')
+  const ext = /\.([a-z0-9]{2,4})$/i.exec(base)?.[1]?.toLowerCase()
+  const suffix = ext && VIDEO_EXTENSIONS.has(ext) ? `.${ext}` : ''
+  const parsed = parseClipName(base)
+  const number = clipNumberOrNull(parsed.take) ?? clipNumberOrNull(clipNumber)
+  if (parsed.subjectCode && number !== null) return `${parsed.subjectCode}_att${String(number).padStart(2, '0')}${suffix}`
+  return number !== null ? `clip ${number}${suffix}` : `clip${suffix}`
+}
+
+/** True when a stored name has the shape `deidentifiedClipName` produces. */
+export function isDeidentifiedClipName(name: string): boolean {
+  return /^(S\d{2}_att\d{2,3}|clip(?: \d{1,3})?)(\.[a-z0-9]{2,4})?$/.test(name)
+}
+
+/**
+ * For reading rows saved before names were de-identified: a stored name that isn't in
+ * the de-identified shape is rebuilt the same way before it is shown in an export.
+ */
+export function safeStoredClipName(name: string | null | undefined, clipNumber?: number | null): string | null {
+  if (name == null || name === '') return null
+  return isDeidentifiedClipName(name) ? name : deidentifiedClipName(name, clipNumber)
 }
 
 // ---------- SHA-256 ----------

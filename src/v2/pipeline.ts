@@ -15,6 +15,7 @@ import { smoothSeries } from '../pose/oneEuro'
 import type { PoseSeries } from '../pose/types'
 import { client } from './auth'
 import { getClip } from './clips'
+import { processingWakeLock } from './wakeLock'
 
 export type PipelineStatus = 'queued' | 'processing' | 'done' | 'failed' | 'cancelled'
 
@@ -200,10 +201,14 @@ async function pump(): Promise<void> {
       if (state.paused) return
       const next = state.items.find((it) => it.status === 'queued')
       if (!next) return
+      // FR-3.8.5: keep the screen on while clips are processing; a no-op where unsupported.
+      processingWakeLock.setActive(true)
       await processOne(next)
     }
   } finally {
     pumping = false
+    // Queue empty, paused or reset: the screen may sleep again.
+    processingWakeLock.setActive(false)
     set({ activeId: null })
   }
 }

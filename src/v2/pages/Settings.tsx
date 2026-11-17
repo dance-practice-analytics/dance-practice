@@ -528,7 +528,7 @@ export function Settings() {
     <label className="check">
       <input type="checkbox" checked={withLabels} onChange={(e) => setWithLabels(e.target.checked)} />
       <span className="t-small">
-        Include session titles, attempt labels and clip file names in the JSON
+        Include your notes, session titles, attempt labels and clip labels in the JSON
         <span className="t-caption" style={{ display: 'block' }}>
           Off by default: text you typed can identify someone. Exports never contain video, emails or names.
         </span>

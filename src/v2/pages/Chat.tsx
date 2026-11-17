@@ -1,7 +1,8 @@
 // Screen 11 — Mika, the AI practice assistant (named after the domain mentor).
 // Design: Chat.dc.html, ChatMobile.dc.html.
 // Questions go to the Edge Function mika-chat (supabase/functions/mika-chat), which loads
-// the attempt's metrics under the dancer's RLS and asks Claude; only metric values ever
+// the attempt's metrics under the dancer's RLS and asks the configured model (Gemini or
+// Grok); only metric values ever
 // reach the model. Before the function is deployed (404) or while it has no API key, the
 // screen keeps the honest "not connected" state and nothing can be sent.
 

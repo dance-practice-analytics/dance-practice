@@ -1,4 +1,5 @@
-// Row types for the Supabase schema (supabase/migrations/20261115000000_init.sql, SDD 6).
+// Row types for the Supabase schema (supabase/migrations/20261115000000_init.sql and
+// 20261117000000_attempt_notes.sql, SDD 6).
 // Column names stay in snake_case so a row can be passed to and from the client as is.
 // Insert types leave out owner_id on purpose: the database fills it with auth.uid(),
 // so the browser never chooses whose row it is writing.
@@ -102,6 +103,8 @@ export interface SessionRow {
   title: string | null
   recorded_on: DateOnly | null
   camera_view: CameraView | null
+  /** The dancer's own words (≤ NOTE_MAX_CHARS). Never sent to the AI functions. */
+  note: string | null
   created_at: Timestamp
 }
 
@@ -111,7 +114,11 @@ export interface SessionInsert {
   title?: string | null
   recorded_on?: DateOnly | null
   camera_view?: CameraView | null
+  note?: string | null
 }
+
+/** CHECK on sessions.note and attempts.note (migration 20261117000000). */
+export const NOTE_MAX_CHARS = 2000
 
 // ---------- attempts ----------
 export interface AttemptRow {
@@ -120,7 +127,12 @@ export interface AttemptRow {
   session_id: string
   source: AttemptSource
   label: string | null
+  /** De-identified (`S03_att07.mp4`, `clip 7.mp4`), never the local file name (FR-3.2.5). */
   clip_name: string | null
+  /** Clip number within the subject's dataset (FR-3.2.4), 1–999. */
+  clip_number: number | null
+  /** The dancer's own note on this attempt (FR-3.5.7). Never sent to the AI functions. */
+  note: string | null
   /** Storage path in the videos bucket; always null for study_dataset (CHECK study_no_video). */
   video_path: string | null
   video_sha256: string | null
@@ -136,6 +148,8 @@ export interface AttemptInsert {
   source: AttemptSource
   label?: string | null
   clip_name?: string | null
+  clip_number?: number | null
+  note?: string | null
   video_path?: string | null
   video_sha256?: string | null
   duration_s?: number | null

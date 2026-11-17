@@ -4,72 +4,49 @@
 // - The Supabase client is created with the request's Authorization header, so every
 //   query runs under the caller's RLS. The service-role key is never used.
 // - The model receives the metrics payload of payload.ts and nothing else.
-// - ANTHROPIC_API_KEY is read from the function's secrets only.
+// - The provider (Gemini or Grok, OpenAI-compatible) and its key come from the function's
+//   secrets only: LLM_API_KEY, LLM_BASE_URL, LLM_MODEL (see ../_shared/llm.ts).
 //
-// The request flow lives in handler.ts; this file wires it to Supabase and Claude.
+// The request flow lives in handler.ts; this file wires it to Supabase and the model.
 
-import Anthropic from '@anthropic-ai/sdk'
 import { createClient, type SupabaseClient } from '@supabase/supabase-js'
-import { AI_CONSENT_SCOPE, MODEL, RATE_LIMIT_MAX, errorBody, FAILURES, type FailureCode } from './contract.ts'
+import { createLlm, llmConfigFromEnv, LlmError, type Llm } from '../_shared/llm.ts'
+import { AI_CONSENT_SCOPE, RATE_LIMIT_MAX, errorBody, FAILURES, type FailureCode } from './contract.ts'
 import { allowedOrigins, corsHeaders } from './cors.ts'
-import { handleGenerate, interpretMessage, type Deps, type ModelOutcome, type StoredFeedback } from './handler.ts'
+import { handleGenerate, interpretCompletion, outcomeFromError, type Deps, type ModelOutcome, type StoredFeedback } from './handler.ts'
 import { MAX_EARLIER_ATTEMPTS, type FeedbackPayload, type MetricsRowLike } from './payload.ts'
 import { SYSTEM_PROMPT, buildUserMessage } from './prompt.ts'
 import { FEEDBACK_JSON_SCHEMA } from './validate.ts'
 
-/** SDD 5.6: 30-second timeout. One retry on a connection error, 429 or 5xx. */
+/** SDD 5.6: 30-second timeout. One retry on a connection error, 429 or 5xx (in llm.ts). */
 const TIMEOUT_MS = 30_000
 const MAX_RETRIES = 1
-/** Room for adaptive thinking plus the notes (a few hundred tokens). */
+/** Room for a thinking model's reasoning plus the notes (a few hundred tokens). */
 const MAX_TOKENS = 8000
 
 const METRIC_COLUMNS =
   'attempt_id, movement, trunk_inclination_deg, pelvis_ankle_offset_norm, balance_duration_s, knee_tracking_dev_deg, turn_count, phases, confidence'
 const FEEDBACK_COLUMNS = 'id, attempt_id, model, prompt_version, created_at, response'
 
-function retryAfterSeconds(headers: unknown): number | undefined {
-  const value = headers instanceof Headers ? headers.get('retry-after') : null
-  const seconds = value ? Number(value) : NaN
-  return Number.isFinite(seconds) && seconds > 0 ? Math.ceil(seconds) : undefined
-}
-
-async function callClaude(apiKey: string, payload: FeedbackPayload, fallback: boolean): Promise<ModelOutcome> {
-  const client = new Anthropic({ apiKey, timeout: TIMEOUT_MS, maxRetries: MAX_RETRIES })
+async function askModel(llm: Llm, payload: FeedbackPayload): Promise<ModelOutcome> {
   try {
-    const message = await client.beta.messages.create({
-      model: MODEL,
-      max_tokens: MAX_TOKENS,
-      // Thinking is adaptive by default on this model; low effort keeps a short task fast (NFR-8).
-      output_config: {
-        effort: 'low',
-        format: { type: 'json_schema', schema: FEEDBACK_JSON_SCHEMA },
-      },
+    const completion = await llm.complete({
       system: SYSTEM_PROMPT,
       messages: [{ role: 'user', content: buildUserMessage(payload) }],
-      // Server-side refusal fallback: a decline in a category that can be retried is re-run
-      // on the fallback model inside the same call. Set REFUSAL_FALLBACK=off to drop it.
-      ...(fallback ? { betas: ['server-side-fallback-2026-07-01'], fallbacks: 'default' as const } : {}),
+      maxTokens: MAX_TOKENS,
+      jsonSchema: { name: 'practice_notes', schema: FEEDBACK_JSON_SCHEMA },
     })
-    return interpretMessage(message)
+    if (completion.finishReason !== 'stop') {
+      console.warn('generate-feedback: model stopped', llm.provider, completion.rawFinishReason ?? 'none')
+    }
+    return interpretCompletion(completion)
   } catch (e) {
-    if (e instanceof Anthropic.APIConnectionTimeoutError) return { ok: false, code: 'upstream_timeout' }
-    if (e instanceof Anthropic.APIConnectionError) return { ok: false, code: 'upstream_error' }
-    if (e instanceof Anthropic.AuthenticationError || e instanceof Anthropic.PermissionDeniedError) {
-      return { ok: false, code: 'not_configured' }
-    }
-    if (e instanceof Anthropic.RateLimitError) {
-      return { ok: false, code: 'upstream_busy', retryAfterS: retryAfterSeconds(e.headers) }
-    }
-    if (e instanceof Anthropic.APIError) {
-      console.error('generate-feedback: Claude API error', e.status)
-      // 5xx and 529 (overloaded) are temporary; a 4xx means the request itself is wrong.
-      return { ok: false, code: typeof e.status === 'number' && e.status >= 500 ? 'upstream_busy' : 'upstream_error' }
-    }
-    throw e
+    if (e instanceof LlmError) console.error('generate-feedback: model call failed', llm.provider, e.kind, e.status ?? '')
+    return outcomeFromError(e)
   }
 }
 
-function deps(supabase: SupabaseClient, token: string, apiKey: string | undefined, fallback: boolean): Deps {
+function deps(supabase: SupabaseClient, token: string, llm: Llm): Deps {
   const must = <T>(res: { data: T; error: { message: string } | null }): T => {
     if (res.error) throw new Error('database')
     return res.data
@@ -79,6 +56,8 @@ function deps(supabase: SupabaseClient, token: string, apiKey: string | undefine
     must(await supabase.from('attempt_metrics').select(METRIC_COLUMNS).in('attempt_id', ids)) ?? []
 
   return {
+    model: llm.model,
+
     async userId() {
       const { data, error } = await supabase.auth.getUser(token)
       return error ? null : (data.user?.id ?? null)
@@ -151,8 +130,8 @@ function deps(supabase: SupabaseClient, token: string, apiKey: string | undefine
     },
 
     async callModel(payload): Promise<ModelOutcome> {
-      if (!apiKey) return { ok: false, code: 'not_configured' }
-      return callClaude(apiKey, payload, fallback)
+      if (!llm.configured) return { ok: false, code: 'not_configured' }
+      return askModel(llm, payload)
     },
 
     async saveFeedback(row) {
@@ -200,7 +179,7 @@ Deno.serve(async (req: Request) => {
     }
   }
 
-  const fallback = Deno.env.get('REFUSAL_FALLBACK') !== 'off'
-  const result = await handleGenerate(req.method, body, deps(supabase, token, Deno.env.get('ANTHROPIC_API_KEY'), fallback))
+  const llm = createLlm(llmConfigFromEnv((name) => Deno.env.get(name)), { timeoutMs: TIMEOUT_MS, maxRetries: MAX_RETRIES })
+  const result = await handleGenerate(req.method, body, deps(supabase, token, llm))
   return json(result.status, result.body, result.retryAfterS ? { 'Retry-After': String(result.retryAfterS) } : {})
 })

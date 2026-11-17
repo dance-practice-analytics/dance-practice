@@ -332,15 +332,15 @@ isNotConnected(e)                                // 404 (not deployed) or missin
 - The function verifies the caller's JWT and queries with it (RLS applies), checks the
   `ai_metrics_only` consent, loads the attempt's `attempt_metrics` row (plus the
   comparison attempt, or every attempt of the session for scope `session`) and sends
-  Claude (`claude-sonnet-5-5`, low effort) metric values, units, confidence and null
-  reasons only, labelled "Attempt N". Never keypoints, frames, video, titles, file names
+  the configured model (Gemini or Grok, see "AI provider" below) metric values, units,
+  confidence and null reasons only, labelled "Attempt N". Never keypoints, frames, video, titles, file names
   or subject codes. The system prompt is in `mika-chat/prompt.ts` (answers only from
   the numbers, neutral differences, never grades, no medical advice, short).
 - The screen sends the last 12 messages (questions ≤ 1000 characters); in scope
   `attempt` it compares with the previous analyzed attempt of the session. Nothing is
   stored: the conversation lives in the page and is gone on reload or "New conversation".
-- Before the function is deployed (404) or while `ANTHROPIC_API_KEY` is unset, the
-  screen shows "Mika isn't connected yet" and sending stays off. Without the consent,
+- Before the function is deployed (404), while `LLM_API_KEY`, `LLM_BASE_URL` or
+  `LLM_MODEL` is unset, or when the provider rejects the key, the screen shows "Mika isn't connected yet" and sending stays off. Without the consent,
   it points to Settings.
 - Rate limit: 30 questions per user per hour, counted **in the memory of each function
   instance** (no table fits and the schema is unchanged). A cold start resets it and two
@@ -348,18 +348,59 @@ isNotConnected(e)                                // 404 (not deployed) or missin
 - Tests: `pages/chat/mika.test.ts` (validation, context, prompt, rate limit, handler with
   fakes, client). `index.ts` is the Deno wiring and is not run by Vitest.
 
+## AI provider (practice notes and Mika)
+
+Both Edge Functions call the model through `supabase/functions/_shared/llm.ts`: one
+`fetch` client for the OpenAI-compatible Chat Completions API (`POST {LLM_BASE_URL}/chat/completions`,
+`Authorization: Bearer {LLM_API_KEY}`), no SDK. The project does not use Anthropic. Google
+Gemini and xAI Grok both work; which one is used is decided only by three Supabase secrets:
+
+| Secret | Gemini | Grok (xAI) |
+| --- | --- | --- |
+| `LLM_API_KEY` | key from Google AI Studio | key from console.x.ai |
+| `LLM_BASE_URL` | `https://generativelanguage.googleapis.com/v1beta/openai/` | `https://api.x.ai/v1` |
+| `LLM_MODEL` | `gemini-3.8-flash` | `grok-4.7` |
+
+- Practice notes ask for `response_format: { type: "json_schema", strict: true }` with the
+  `FeedbackResponse` schema; the validator in `generate-feedback/validate.ts` checks every
+  answer anyway (schema adherence is best-effort on some providers). If a provider rejects
+  that mode, set `LLM_JSON_MODE=json_object`. Mika gets plain text.
+- `finish_reason`: `stop` is read; `length` → "incomplete" (`model_truncated`);
+  `content_filter`/safety or a `refusal` field → `model_refused`; anything else →
+  `model_invalid_output`. 401/403 (or Gemini's 400 "API key not valid") → not configured /
+  not connected. 429 and 5xx get one retry within the 30-second budget, then "busy".
+- Optional secrets: `LLM_PROVIDER` (log label), `LLM_JSON_MODE=json_object`,
+  `LLM_REASONING_EFFORT` (e.g. `low`; not sent unless set), `ALLOWED_ORIGINS`.
+- Only metrics JSON and the dancer's questions reach the provider, never keypoints,
+  frames or video. Changing `LLM_MODEL` changes the practice-notes cache key.
+- Tests: `src/feedback/llm.test.ts` (fake `fetch`: success, `length`, content filter,
+  429 retry, 5xx, network, bad key, timeout, missing config).
+
 ### Deploy
 
-Run these yourself (never paste the key into a chat or a file in the repo):
+Run these yourself in your own terminal (never paste the key into a chat or a file in the
+repo). Pick one provider:
 
 ```
-npx supabase secrets set ANTHROPIC_API_KEY=sk-ant-...
+# Gemini
+npx supabase secrets set LLM_API_KEY=<gemini-key> LLM_BASE_URL=https://generativelanguage.googleapis.com/v1beta/openai/ LLM_MODEL=gemini-3.8-flash
+
+# or Grok
+npx supabase secrets set LLM_API_KEY=<xai-key> LLM_BASE_URL=https://api.x.ai/v1 LLM_MODEL=grok-4.7
+```
+
+Then deploy both functions (the shared module is bundled with each):
+
+```
+npx supabase functions deploy generate-feedback --use-api
 npx supabase functions deploy mika-chat --use-api
 ```
 
 `--use-api` bundles on Supabase's side (no Docker). Keep JWT verification on (no
-`--no-verify-jwt`). Logs: `npx supabase functions logs mika-chat` (failure codes only).
-Optional secrets shared with `generate-feedback`: `ALLOWED_ORIGINS`, `REFUSAL_FALLBACK=off`.
+`--no-verify-jwt`). Switching provider later only needs `secrets set` again; secrets
+apply without a redeploy. Logs: `npx supabase functions logs mika-chat` (failure codes,
+provider label and finish reason only). If an old `ANTHROPIC_API_KEY` secret exists it is
+no longer read: `npx supabase secrets unset ANTHROPIC_API_KEY`.
 
 ## CSS rules
 
@@ -387,8 +428,8 @@ Optional secrets shared with `generate-feedback`: `ALLOWED_ORIGINS`, `REFUSAL_FA
   drawn from pose data.
 - **Video never leaves the device.** Study clips are local files (blob URLs); nothing in
   v2 sends video, frames or canvas captures anywhere. Only the publishable key is in the
-  browser; no service-role key; no new env vars. Claude is called only from the Edge
-  Functions `generate-feedback` and `mika-chat`, with metrics JSON only.
+  browser; no service-role key; no new env vars. The AI model (Gemini or Grok) is called
+  only from the Edge Functions `generate-feedback` and `mika-chat`, with metrics JSON only.
 - **No real people.** Subjects are codes S01–S12; no names, no real footage, no
   participant data in the repo, in fixtures or in screenshots.
 - UI copy in English, taken from the designs where it exists. Sample values in the

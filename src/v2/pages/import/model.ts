@@ -2,7 +2,7 @@
 // check column, the summary counts and the grouping of clips into sessions.
 // No DOM and no network here, so all of it is unit-tested.
 
-import { baseName, parseClipName } from '../../../data/clipFile'
+import { baseName, clipNumberOrNull, parseClipName } from '../../../data/clipFile'
 import type { AttemptStatus, CameraView, MovementType } from '../../../data/schema'
 
 export type ImportSource = 'study' | 'own'
@@ -27,8 +27,10 @@ export interface ClipDraft {
   subject: string | null
   movement: MovementType
   view: CameraView
-  /** YYYY-MM-DD, from the file's modified date on this device. */
+  /** YYYY-MM-DD: the file's modified date on this device, unless the user set the session date. */
   recordedOn: string
+  /** Clip number in the dataset (FR-3.2.4), read from the name or typed; null when unknown. */
+  clipNumber: number | null
   /** A duplicate of the library the user chose to process again. */
   reprocess: boolean
   /** Set when the server refused the row on an earlier try. */
@@ -65,6 +67,25 @@ export interface ParsedTags {
   subject: string | null
   movement: MovementType | null
   view: CameraView | null
+  /** Attempt / clip number, e.g. 7 in `S03_releve_front_07.mp4`. */
+  clipNumber: number | null
+}
+
+const VIDEO_EXT = /\.(mp4|m4v|mov|webm|mkv|avi|3gp|mpg|mpeg|ogv|wmv)$/i
+
+/** A file picked from a folder that is worth listing: a video by type or by extension. */
+export function isVideoFile(file: { name: string; type: string; size?: number }): boolean {
+  if (/^\./.test(file.name)) return false // hidden files (._clip.mp4 from macOS)
+  return file.type.startsWith('video/') || VIDEO_EXT.test(file.name)
+}
+
+/**
+ * The video files of a picked folder, in name order so clip numbers come out in the
+ * dataset's order. Only the bare name is ever read (never `webkitRelativePath`).
+ */
+export function videoFilesOfFolder<T extends { name: string; type: string }>(files: readonly T[]): { videos: T[]; skipped: number } {
+  const videos = files.filter(isVideoFile).sort((a, b) => a.name.localeCompare(b.name, undefined, { numeric: true }))
+  return { videos, skipped: files.length - videos.length }
 }
 
 /**
@@ -84,6 +105,7 @@ export function parseTags(name: string): ParsedTags {
     subject: parsed.subjectCode,
     movement: parsed.movement ?? (short.size === 1 ? [...short][0] : null),
     view: views.size === 1 ? [...views][0] : null,
+    clipNumber: clipNumberOrNull(parsed.take),
   }
 }
 

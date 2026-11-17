@@ -294,6 +294,12 @@ function GroupCard({ group, open, onToggle, targetId }: { group: SubjectGroup; o
               <div style={{ flex: '1 1 200px', display: 'flex', flexDirection: 'column', gap: 2, minWidth: 0 }}>
                 <span style={{ fontWeight: 500 }}>{b.title}</span>
                 <span className="t-caption">{b.meta}</span>
+                {b.session.note && (
+                  <span className="t-small muted v2-clip" title={b.session.note}>
+                    <span className="v2-sr">Note: </span>
+                    {b.session.note}
+                  </span>
+                )}
               </div>
               <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
                 {b.tiles.map((t) => (
@@ -327,6 +333,12 @@ function PhoneGroups({ model }: { model: LibraryModel }) {
                 />
                 <div style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', gap: 2 }}>
                   <span style={{ fontWeight: 500 }}>{r.title}</span>
+                  {r.block.session.note && (
+                    <span className="t-caption v2-clip">
+                      <span className="v2-sr">Note: </span>
+                      {r.block.session.note}
+                    </span>
+                  )}
                   <span className={`status st-${r.status.status}`} style={{ whiteSpace: 'normal' }}>
                     <span className="dot" aria-hidden="true" />
                     {r.status.text}

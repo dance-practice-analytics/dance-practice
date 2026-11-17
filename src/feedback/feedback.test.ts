@@ -7,7 +7,6 @@ import {
   AI_CONSENT_SCOPE,
   DISCLAIMER,
   FAILURES,
-  MODEL,
   RATE_LIMIT_MAX,
   errorBody,
   isFeedbackResponse,
@@ -19,7 +18,8 @@ import {
 import { allowedOrigins, corsHeaders } from '../../supabase/functions/generate-feedback/cors'
 import {
   handleGenerate,
-  interpretMessage,
+  interpretCompletion,
+  outcomeFromError,
   parseRequest,
   type Deps,
   type ModelOutcome,
@@ -31,7 +31,11 @@ import { buildPayload, hasMeasurements, type MetricsRowLike } from '../../supaba
 import { PROMPT_VERSION, SYSTEM_PROMPT, buildUserMessage } from '../../supabase/functions/generate-feedback/prompt'
 import { decideRateLimit, windowStart } from '../../supabase/functions/generate-feedback/rateLimit'
 import { FEEDBACK_JSON_SCHEMA, clampSummary, parseFeedback } from '../../supabase/functions/generate-feedback/validate'
+import { LlmError, type LlmCompletion } from '../../supabase/functions/_shared/llm'
 import { FeedbackError, feedbackError, generateFeedback, generateFeedbackNote, listFeedback } from './client'
+
+/** Whatever LLM_MODEL is set to; the function never hard-codes a model. */
+const MODEL = 'gemini-3.8-flash'
 
 const ATTEMPT = '3f0c1f6e-8d1b-4a53-9c58-0c7f5a3b2e11'
 
@@ -301,19 +305,37 @@ describe('decideRateLimit', () => {
   })
 })
 
-describe('interpretMessage', () => {
-  const message = (stop_reason: string | null, content = [{ type: 'thinking' }, { type: 'text', text: '{"a":1}' }]) => ({
-    stop_reason,
+describe('interpretCompletion', () => {
+  const completion = (finishReason: LlmCompletion['finishReason'], text = '{"a":1}'): LlmCompletion => ({
+    text,
+    finishReason,
+    rawFinishReason: finishReason,
     model: MODEL,
-    content,
+    usage: { inputTokens: 10, outputTokens: 5 },
   })
 
-  it('reads the text only when the turn ended normally', () => {
-    expect(interpretMessage(message('end_turn'))).toEqual({ ok: true, text: '{"a":1}', model: MODEL })
-    expect(interpretMessage(message('refusal'))).toEqual({ ok: false, code: 'model_refused' })
-    expect(interpretMessage(message('max_tokens'))).toEqual({ ok: false, code: 'model_truncated' })
-    expect(interpretMessage(message('tool_use'))).toEqual({ ok: false, code: 'model_invalid_output' })
-    expect(interpretMessage(message('end_turn', [{ type: 'thinking' }]))).toEqual({ ok: false, code: 'model_invalid_output' })
+  it('reads the text only when the answer ended normally', () => {
+    expect(interpretCompletion(completion('stop'))).toEqual({ ok: true, text: '{"a":1}', model: MODEL })
+    expect(interpretCompletion(completion('content_filter'))).toEqual({ ok: false, code: 'model_refused' })
+    expect(interpretCompletion(completion('length'))).toEqual({ ok: false, code: 'model_truncated' })
+    expect(interpretCompletion(completion('other'))).toEqual({ ok: false, code: 'model_invalid_output' })
+    expect(interpretCompletion(completion('stop', '  '))).toEqual({ ok: false, code: 'model_invalid_output' })
+  })
+
+  it('takes JSON out of a code fence', () => {
+    expect(interpretCompletion(completion('stop', '```json\n{"a":1}\n```'))).toEqual({ ok: true, text: '{"a":1}', model: MODEL })
+  })
+
+  it('maps adapter errors to the function’s failure codes', () => {
+    expect(outcomeFromError(new LlmError('not_configured'))).toEqual({ ok: false, code: 'not_configured' })
+    expect(outcomeFromError(new LlmError('auth', 401))).toEqual({ ok: false, code: 'not_configured' })
+    expect(outcomeFromError(new LlmError('rate_limited', 429, 30))).toEqual({ ok: false, code: 'upstream_busy', retryAfterS: 30 })
+    expect(outcomeFromError(new LlmError('unavailable', 503))).toEqual({ ok: false, code: 'upstream_busy' })
+    expect(outcomeFromError(new LlmError('timeout'))).toEqual({ ok: false, code: 'upstream_timeout' })
+    expect(outcomeFromError(new LlmError('network'))).toEqual({ ok: false, code: 'upstream_error' })
+    expect(outcomeFromError(new LlmError('bad_request', 400))).toEqual({ ok: false, code: 'upstream_error' })
+    expect(outcomeFromError(new LlmError('bad_response', 200))).toEqual({ ok: false, code: 'model_invalid_output' })
+    expect(() => outcomeFromError(new TypeError('bug'))).toThrow(TypeError)
   })
 })
 
@@ -323,6 +345,7 @@ describe('handleGenerate', () => {
   function setup(over: Partial<Deps> = {}) {
     const calls = { model: 0, saved: [] as NewFeedback[], sentToModel: [] as unknown[] }
     const deps: Deps = {
+      model: MODEL,
       userId: async () => 'user-1',
       hasAiConsent: async () => true,
       loadMetrics: async () => ROW,
@@ -509,7 +532,7 @@ describe('error copy', () => {
     for (const f of Object.values(FAILURES)) {
       expect(f.status).toBeGreaterThanOrEqual(400)
       expect(f.message.length).toBeGreaterThan(0)
-      expect(`${f.message} ${f.recovery}`).not.toMatch(/claude|anthropic|supabase|api key|token|json/i)
+      expect(`${f.message} ${f.recovery}`).not.toMatch(/claude|anthropic|gemini|grok|xai|supabase|api key|token|json/i)
     }
     expect(retryHint(30)).toBe('Try again in about a minute.')
     expect(retryHint(601)).toBe('Try again in about 11 minutes.')

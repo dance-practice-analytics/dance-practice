@@ -17,8 +17,9 @@ import {
 import type { FeedbackPayload } from './payload.ts'
 
 /**
- * JSON schema for `output_config.format`. Structured outputs do not enforce lengths or
- * item counts, so those limits are stated in the prompt and checked in `parseFeedback`.
+ * JSON schema sent as `response_format` (json_schema, strict). Providers do not all enforce
+ * lengths or item counts, and some follow a schema only on a best-effort basis, so those
+ * limits are stated in the prompt and everything is checked again in `parseFeedback`.
  */
 export const FEEDBACK_JSON_SCHEMA = {
   type: 'object',
