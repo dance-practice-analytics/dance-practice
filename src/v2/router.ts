@@ -4,7 +4,8 @@
 import { useSyncExternalStore } from 'react'
 
 export type Route =
-  | { name: 'signin' }
+  /** `mode: 'signup'` opens the Create account tab (`#/signin?mode=signup`, used by the landing page). */
+  | { name: 'signin'; mode?: 'signup' }
   | { name: 'consent' }
   | { name: 'dashboard' }
   /** `sessionId` narrows the library to one session (`#/library?session=..`). */
@@ -72,6 +73,8 @@ export function parseRoute(hash: string): Route {
       return sessionId ? { name: 'library', sessionId } : { name: 'library' }
     }
     case 'signin':
+      if (id) return DEFAULT_ROUTE
+      return query.get('mode') === 'signup' ? { name: 'signin', mode: 'signup' } : { name: 'signin' }
     case 'consent':
     case 'dashboard':
     case 'import':
@@ -109,6 +112,8 @@ export function href(route: Route): string {
     }
     case 'library':
       return route.sessionId ? `#/library?session=${seg(route.sessionId)}` : '#/library'
+    case 'signin':
+      return route.mode === 'signup' ? '#/signin?mode=signup' : '#/signin'
     default:
       return `#/${route.name}`
   }

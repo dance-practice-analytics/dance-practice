@@ -11,6 +11,7 @@ describe('v2 router', () => {
     { name: 'compare', a: 'id-a', b: 'id-b' },
     { name: 'compare', a: 'only-a' },
     { name: 'review', attemptId: 'needs/escaping ?&#' },
+    { name: 'signin', mode: 'signup' },
   ]
 
   it('round-trips every route through href and parseRoute', () => {
@@ -24,6 +25,8 @@ describe('v2 router', () => {
     expect(href({ name: 'compare', a: 'x1', b: 'x2' })).toBe('#/compare?a=x1&b=x2')
     expect(href({ name: 'notes' })).toBe('#/notes')
     expect(href({ name: 'library', sessionId: 's1' })).toBe('#/library?session=s1')
+    expect(href({ name: 'signin', mode: 'signup' })).toBe('#/signin?mode=signup')
+    expect(parseRoute('#/signin?mode=other')).toEqual({ name: 'signin' })
   })
 
   it('lands on the dashboard for empty, unknown or malformed hashes', () => {

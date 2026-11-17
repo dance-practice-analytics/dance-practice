@@ -10,9 +10,13 @@ import { ApiError } from '../../api/errors'
 import { clearLinkError, requestPasswordReset, signIn, signUp, useAuth } from '../auth'
 import { Icon, Logo, Spinner, type IconName } from '../components'
 import { playEntrance } from '../Entrance'
+import { useRoute } from '../router'
 import { useIsNarrow } from '../useIsNarrow'
 
 type Mode = 'signin' | 'signup' | 'reset'
+
+/** The public project website (landing page). */
+const PROJECT_SITE = 'https://dance-practice-analytics.github.io'
 
 const POINTS: { icon: IconName; text: string }[] = [
   { icon: 'device', text: 'Pose estimation runs on this device. Study clips are never uploaded.' },
@@ -97,7 +101,11 @@ export function SignIn() {
   const narrow = useIsNarrow()
   const { linkError } = useAuth()
   // A reset link that failed brings the user straight back to asking for a new one.
-  const [mode, setMode] = useState<Mode>(linkError ? 'reset' : 'signin')
+  // The landing page links to `#/signin?mode=signup` to open the Create account tab.
+  const route = useRoute()
+  const [mode, setMode] = useState<Mode>(
+    linkError ? 'reset' : route.name === 'signin' && route.mode === 'signup' ? 'signup' : 'signin',
+  )
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [busy, setBusy] = useState(false)
@@ -152,6 +160,13 @@ export function SignIn() {
     <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
       <Logo />
       <span className="t-h3">Dance Practice Analytics</span>
+      <a
+        href={PROJECT_SITE}
+        className="t-small"
+        style={{ marginLeft: 'auto', color: 'var(--text-2)', whiteSpace: 'nowrap' }}
+      >
+        About the project
+      </a>
     </div>
   )
 
