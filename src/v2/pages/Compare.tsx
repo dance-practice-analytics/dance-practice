@@ -14,7 +14,7 @@ import type { PoseSeries } from '../../pose/types'
 import { useClip } from '../clips'
 import { CompactGap, ConfBadge, EmptyState, ErrorAlert, NoteBox, PageHeader, SkeletonWorkspace } from '../components'
 import { useAttempt, useAttempts, type AttemptView } from '../data'
-import { compactGapReason, formatTimecode, isCompactGap, MOVEMENT_LABELS, PHASE_LABELS, readMetric, VIEW_LABELS } from '../format'
+import { compactGapReason, formatSeconds, formatTimecode, isCompactGap, MOVEMENT_LABELS, PHASE_LABELS, readMetric, VIEW_LABELS } from '../format'
 import { href, navigate, useRoute } from '../router'
 import { useIsNarrow } from '../useIsNarrow'
 import { useViewMode, ViewModeSwitch } from '../viewMode'
@@ -533,6 +533,35 @@ interface TimelinesProps {
   phrase?: { a: PhraseResult | null; b: PhraseResult | null; alignment: PhraseAlignment | null } | null
 }
 
+/**
+ * Phone: the ribbons stay on one time axis, so a short phase (rise, finish) is only a few
+ * pixels wide there. This list names every phase with A's and B's length; a tap puts the
+ * playhead at its start in A (or B's, mapped onto A's time, when only B has it).
+ */
+function PhaseList({ clock, phasesA, phasesB, map }: { clock: Clock; phasesA: readonly PhaseSpan[]; phasesB: readonly PhaseSpan[]; map: TimeMap }) {
+  const keys = [...new Set([...phasesA, ...phasesB].map((p) => p.phase))]
+  if (keys.length === 0) return null
+  const len = (p: PhaseSpan | undefined) => formatSeconds(p ? p.end - p.start : null)
+  return (
+    <ul className="v2-cmp-phases" aria-label="Phases of A and B">
+      {keys.map((k) => {
+        const a = phasesA.find((p) => p.phase === k)
+        const b = phasesB.find((p) => p.phase === k)
+        const start = a ? a.start : map.toA(b!.start)
+        return (
+          <li key={k}>
+            <button type="button" className="v2-cmp-phase" onClick={() => clock.seek(start)}>
+              <span className="v2-cmp-phase-name">{PHASE_LABELS[k]}</span>
+              <span className="mono">A {len(a)}</span>
+              <span className="mono">B {len(b)}</span>
+            </button>
+          </li>
+        )
+      })}
+    </ul>
+  )
+}
+
 function Timelines({ clock, a, b, sA, sB, durA, phasesA, phasesB, map, asked, narrow, alignControl, detail, phrase }: TimelinesProps) {
   const bandsA = useMemo(() => (sA ? trackingBands(sA) : []), [sA])
   const bandsB = useMemo(() => (sB ? trackingBands(sB) : []), [sB])
@@ -595,6 +624,7 @@ function Timelines({ clock, a, b, sA, sB, durA, phasesA, phasesB, map, asked, na
           </div>
         </ScrubTrack>
       </div>
+      {narrow && !phrase && <PhaseList clock={clock} phasesA={phasesA} phasesB={phasesB} map={map} />}
       <p className="t-caption">
         Drag the bar to scrub both.{' '}
         {gaps ? (
@@ -665,7 +695,7 @@ function PhraseRows({ clock, durA, map, phrase, narrow }: { clock: Clock; durA: 
         <span className="t-small">Events of B, placed on A’s time</span>
       </div>
       {phrase.b ? <PhraseTimeline clock={clock} phrase={phrase.b} duration={durA} mapT={map.toA} label="Events of B, placed on A’s time" matched={matchedB} compact={narrow} /> : empty('B')}
-      <p className="t-caption">Underlined events were matched with the other attempt. Click an event to jump to it.</p>
+      <p className="t-caption">Underlined events were matched with the other attempt. {narrow ? 'Tap' : 'Click'} an event to jump to it.</p>
     </div>
   )
 }

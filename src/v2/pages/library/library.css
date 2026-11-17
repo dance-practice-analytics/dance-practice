@@ -33,3 +33,12 @@
 /* A quiet link that reads as text (list rows inside cards) */
 .app a.v2-lib-plain{color:var(--text);text-decoration:none}
 .app a.v2-lib-plain:hover .v2-lib-plain-t{text-decoration:underline}
+
+/* Dashboard (phone): measure / theme tiles. Two per row; one per row under 420 px, where
+   two columns squeeze the change sentence to two or three words per line. A row's cards
+   keep one height (grid stretch) with the change line pinned to the bottom. */
+.v2-dash-tiles{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}
+.v2-dash-tiles>.metric{padding:12px;gap:6px}
+@media (max-width:419.98px){
+  .v2-dash-tiles{grid-template-columns:minmax(0,1fr)}
+}

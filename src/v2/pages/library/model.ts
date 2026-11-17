@@ -8,6 +8,7 @@ import type { FeedbackNote } from '../../../feedback/client'
 import { NEEDS_TWO_SESSIONS_TEXT, exclusionText, gapText, progressSeries, sessionDay } from '../../../insights'
 import type { ProgressPoint, ProgressSeries } from '../../../insights'
 import type { AttemptView } from '../../data'
+import { phraseOf, readTheme, THEME_KEYS } from '../phrase/model'
 import {
   METRICS,
   MOVEMENT_LABELS,
@@ -56,7 +57,11 @@ export function tileKind(attempt: AttemptView, live?: LiveStatus): TileKind {
   if (attempt.status === 'failed') return 'failed'
   // 'processing' in the database without a queue item is a closed tab's leftover.
   if (attempt.status !== 'done') return 'queued'
-  const readings = readMetrics(attempt.metrics, attempt.session.movement_type)
+  // A phrase has no relevé measures (stored as null, not applicable): its themes say it.
+  const readings =
+    attempt.session.movement_type === 'phrase'
+      ? THEME_KEYS.map((k) => readTheme(phraseOf(attempt.metrics), k))
+      : readMetrics(attempt.metrics, attempt.session.movement_type)
   if (readings.every((r) => r.value === null)) return 'none'
   return readings.some((r) => r.confidence === 'low') ? 'low' : 'done'
 }

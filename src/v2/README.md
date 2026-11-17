@@ -271,6 +271,12 @@ themes (`left_right_labels_uncertain`) and mark events `side_uncertain`.
 - Progress (`progress/phraseModel.ts`, `PhraseProgress.tsx`) and the Dashboard
   (`dashboard/PhraseTiles.tsx`) chart phrase themes only against phrase attempts.
 - Import reads `D01_att3_d.mp4`-style names (view letter f/s/d) as a phrase.
+- Phone: `PhraseTimeline compact` has 44 px events (at least 24 px wide), a 56 px label
+  column and three axis labels; theme cards are one per row under 420 px. Library tiles
+  read a phrase's themes for "Done / Hard to see / Not seen" (`tileKind`); the Library
+  trend card is relevé / pirouette only.
+- Compare on a phone (relevé, pirouette) adds a phase list under the ribbons (A and B
+  lengths, tap to seek), since short phases are only slivers on the shared time axis.
 
 ## Shared components (`components/`, import from `'../components'`)
 
@@ -314,6 +320,11 @@ No component fetches data. All copy is passed in.
   phase={PHASE_LABELS[phaseAt(metrics.phases, t)?.phase]}` with `t` from the video's
   `timeupdate` / `requestVideoFrameCallback` (keep the per-frame state in a small
   component so the whole page doesn't re-render at 30 fps).
+- **`AttemptThumb`** `{ attempt; draw?; className?; style?; children? }` — the dark `.thumb`
+  tile with one skeleton frame from the attempt's keypoints. Fetched once near the screen,
+  two at a time (a keypoints file is ~300 KB and can take seconds on a phone network);
+  the reduced 33-point pose is kept in memory and in this tab's sessionStorage, so a
+  reload doesn't refetch. Shimmers while loading, retries once, never invents a pose.
 - **`MetricCard`** `{ name; value: number | null; unit?; decimals?; confidence?:
   'high'|'medium'|'low'|'none'; phase?; meta?: ReactNode; delta?: ReactNode; reason?:
   ReactNode; selected?; onSelect? }` — `.metric`. `value === null` renders the `is-none`

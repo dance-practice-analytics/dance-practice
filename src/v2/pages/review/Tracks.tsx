@@ -274,10 +274,11 @@ export const TraceLayer = memo(function TraceLayer(props: TraceLayerProps) {
   )
 })
 
-export function TimeAxis({ duration }: { duration: number }) {
+/** `ticks`: fractions of the clip to label; fewer on a narrow track so the timecodes don't run together. */
+export function TimeAxis({ duration, ticks = [0, 0.25, 0.5, 0.75, 1] }: { duration: number; ticks?: readonly number[] }) {
   return (
-    <div className="mono muted" aria-hidden="true" style={{ display: 'flex', justifyContent: 'space-between', fontSize: 12 }}>
-      {[0, 0.25, 0.5, 0.75, 1].map((f) => (
+    <div className="mono muted" aria-hidden="true" style={{ display: 'flex', justifyContent: 'space-between', fontSize: 12, minWidth: 0, overflow: 'hidden' }}>
+      {ticks.map((f) => (
         <span key={f}>{formatTimecode(duration * f)}</span>
       ))}
     </div>

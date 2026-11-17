@@ -3,7 +3,7 @@
 // Nothing here deletes data, changes the password or sends a question to Mika.
 
 import { expect, test } from '@playwright/test'
-import { go, main, openLatestReview, requireTestAccount, signIn } from './helpers'
+import { go, main, openReleveReview, releveIds, requireTestAccount, signIn } from './helpers'
 
 requireTestAccount()
 
@@ -39,7 +39,7 @@ test('library: sessions grouped by subject with skeleton thumbnails', async ({ p
 })
 
 test('review: skeleton stage, measurements, phases and the relink card', async ({ page }) => {
-  await openLatestReview(page)
+  await openReleveReview(page)
   const m = main(page)
   const stage = m.getByRole('region', { name: 'Video and timelines' })
   await expect(stage.getByRole('img', { name: /^Tracked pose skeleton of attempt \d+/ })).toBeVisible()
@@ -62,7 +62,7 @@ test('review: skeleton stage, measurements, phases and the relink card', async (
 })
 
 test('review: the attempt note autosaves, survives a reload and is put back', async ({ page }) => {
-  await openLatestReview(page)
+  await openReleveReview(page)
   const note = main(page).getByRole('textbox', { name: 'My note on this attempt' })
   const status = main(page).locator('#rev-note-status')
   await expect(note).toBeEditable()
@@ -84,9 +84,9 @@ test('review: the attempt note autosaves, survives a reload and is put back', as
 })
 
 test('compare: A and B pickers and the differences table', async ({ page }) => {
-  const link = main(page).getByRole('link', { name: 'Compare attempts' })
-  await expect(link).toBeVisible()
-  await link.click()
+  // Two relevé attempts (the newest attempt is a phrase, compared on its own terms).
+  const [a, b] = await releveIds(page)
+  await go(page, `#/compare?a=${a}&b=${b}`)
   await expect(page).toHaveURL(/#\/compare\?a=[^&]+&b=/)
   const m = main(page)
   await expect(m.getByRole('heading', { level: 1, name: 'Compare attempts' })).toBeVisible()
@@ -108,6 +108,8 @@ test('progress: session labels and date presets', async ({ page }) => {
   await go(page, '#/progress')
   const m = main(page)
   await expect(m.getByRole('heading', { level: 1, name: 'Progress' })).toBeVisible()
+  // The newest movement is the synthetic phrase sample; the session table is the relevé view.
+  await m.getByRole('tablist', { name: 'Movement' }).getByRole('tab', { name: 'Relevé balance' }).click()
   const sessions = m.getByRole('region', { name: 'Sessions' })
   await expect(sessions.getByRole('link', { name: /^Session \d+$/ }).first()).toBeVisible()
   await expect(m.getByRole('figure').first()).toBeVisible()

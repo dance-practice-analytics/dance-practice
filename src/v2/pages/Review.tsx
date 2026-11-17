@@ -541,7 +541,7 @@ function Timelines({ clock, series, phases, duration, narrow, noPhaseReason, det
     phrase ? (
       <>
         <PhraseTimeline clock={clock} phrase={phrase} duration={duration} label="Events of this attempt" compact={narrow} />
-        <p className="t-caption">{eventSummary(phrase)}. Click an event to jump to it; the thick border marks the main leg extension.</p>
+        <p className="t-caption">{eventSummary(phrase)}. {narrow ? 'Tap' : 'Click'} an event to jump to it; the thick border marks the main leg extension.</p>
       </>
     ) : (
       <p className="t-caption">This attempt hasn’t been processed as a phrase yet, so no events are listed. Process it again on this device.</p>

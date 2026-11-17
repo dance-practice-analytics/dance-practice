@@ -2,7 +2,7 @@
 // the bottom bar (Mika in the middle, Settings as the header gear). Read-only.
 
 import { expect, test, type Page } from '@playwright/test'
-import { main, openLatestReview, requireTestAccount, signIn } from './helpers'
+import { main, openReleveReview, requireTestAccount, signIn } from './helpers'
 
 requireTestAccount()
 
@@ -48,10 +48,15 @@ test('phone nav: Mika in the middle of the bottom bar, Settings via the header g
 })
 
 test('phone review: skeleton, phases and measurements fit the screen', async ({ page }) => {
-  await openLatestReview(page)
+  await openReleveReview(page)
   const m = main(page)
   await expect(m.getByRole('img', { name: /^Tracked pose skeleton of attempt \d+/ })).toBeVisible()
-  await expect(m.getByRole('button', { name: 'Choose the file again' }).first()).toBeVisible()
+  // On a phone the relink card is a slim bar docked at the bottom of the stage ("Choose file").
+  const relink = m.getByRole('region', { name: 'Video not on this device' })
+  await expect(relink.getByRole('button', { name: 'Choose file' })).toBeVisible()
+  const [stageBox, barBox] = await Promise.all([m.getByRole('img', { name: /^Tracked pose skeleton/ }).boundingBox(), relink.boundingBox()])
+  expect(barBox!.height).toBeLessThan(80)
+  expect(barBox!.y + barBox!.height).toBeLessThanOrEqual(stageBox!.y + stageBox!.height + 1)
   await expect(m.getByRole('group', { name: 'Phases' })).toBeVisible()
   // On phones the measurements are a plain section under the stage (no sidebar).
   const heading = m.getByRole('heading', { name: 'Measurements' })

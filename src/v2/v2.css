@@ -125,3 +125,7 @@ html.v2-dark,html.v2-dark body{background:#0B1533;color-scheme:dark}
 .v2-metric-info-body{display:flex;gap:12px;align-items:center;margin-top:8px;padding:10px;border-radius:10px;background:var(--surface-2)}
 .v2-metric-info-body p{color:var(--text-2);margin:0;flex:1;min-width:0}
 .v2-metric-info-body svg{flex:none}
+
+/* AttemptThumb while its keypoints download: a slow shimmer in the stage tones. */
+.thumb.v2-thumb-loading{background-image:linear-gradient(90deg,transparent 0%,color-mix(in srgb,var(--bone) 10%,transparent) 50%,transparent 100%);background-size:200% 100%;animation:dpa-shimmer 1.6s ease-in-out infinite}
+@media (prefers-reduced-motion:reduce){.thumb.v2-thumb-loading{animation:none}}

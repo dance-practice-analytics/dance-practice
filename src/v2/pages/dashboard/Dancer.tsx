@@ -72,7 +72,7 @@ export function DancerDashboard({ data, notes, live, narrow }: DancerProps) {
                 Progress
               </a>
             </div>
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, minmax(0, 1fr))', gap: 10 }}>
+            <div className="v2-dash-tiles">
               {tiles.tiles.filter((t) => !compactTile(t)).map((t) => (
                 <MetricTilePhone key={t.metric} tile={t} />
               ))}
@@ -288,7 +288,7 @@ function MetricTileWide({ tile }: { tile: MetricTile }) {
 
 function MetricTilePhone({ tile }: { tile: MetricTile }) {
   return (
-    <a href={href({ name: 'progress' })} className={tileClass(tile)} style={{ padding: 12, gap: 6, textDecoration: 'none', color: 'var(--text)' }}>
+    <a href={href({ name: 'progress' })} className={tileClass(tile)} style={{ textDecoration: 'none', color: 'var(--text)' }}>
       <span className="metric-name" style={{ fontSize: 12, lineHeight: '16px' }}>
         {tile.name}
       </span>

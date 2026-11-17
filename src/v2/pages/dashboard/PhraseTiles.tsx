@@ -24,7 +24,10 @@ export function PhraseTiles({ sessions, attempts, prefix, narrow }: { sessions: 
           Open Progress
         </a>
       </div>
-      <div style={{ display: 'grid', gridTemplateColumns: narrow ? 'repeat(2, minmax(0, 1fr))' : 'repeat(auto-fit, minmax(min(220px, 100%), 1fr))', gap: narrow ? 10 : 12 }}>
+      <div
+        className={narrow ? 'v2-dash-tiles' : undefined}
+        style={narrow ? undefined : { display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(min(220px, 100%), 1fr))', gap: 12 }}
+      >
         {shown.map((t) => (
           <a key={t.key} href={href({ name: 'progress' })} className={t.none ? 'metric is-none' : 'metric'} style={{ textDecoration: 'none', color: 'var(--text)' }}>
             <span className="metric-top">
@@ -35,7 +38,8 @@ export function PhraseTiles({ sessions, attempts, prefix, narrow }: { sessions: 
               {t.value}
               {!t.none && <span className="metric-unit">{t.unit}</span>}
             </span>
-            <span className={t.none ? 'reason hatch' : 'metric-delta'} style={{ display: 'block' }}>
+            {/* Pinned to the bottom so the cards of one row line up. */}
+            <span className={t.none ? 'reason hatch' : 'metric-delta'} style={{ display: 'block', marginTop: 'auto' }}>
               {t.delta}
             </span>
           </a>

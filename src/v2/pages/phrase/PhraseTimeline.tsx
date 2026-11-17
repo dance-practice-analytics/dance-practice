@@ -23,7 +23,7 @@ export interface PhraseTimelineProps {
   matched?: ReadonlySet<number>
   /** Hide the time axis (when another strip below shows it). */
   axis?: boolean
-  /** Fewer words: lane labels only. */
+  /** Phone: lane labels only, 44 px tall lanes (tap targets), three axis labels. */
   compact?: boolean
 }
 
@@ -40,7 +40,7 @@ export function PhraseTimeline({ clock, phrase, duration, mapT, label = 'Events'
     )
   }
   return (
-    <div className="v2-phr-lanes" role="group" aria-label={label}>
+    <div className={compact ? 'v2-phr-lanes is-compact' : 'v2-phr-lanes'} role="group" aria-label={label}>
       {LANES.map((lane, i) =>
         used[i] ? (
           <div className="v2-phr-lane" key={lane.key}>
@@ -54,7 +54,7 @@ export function PhraseTimeline({ clock, phrase, duration, mapT, label = 'Events'
       {axis && (
         <div className="v2-phr-axis">
           <span />
-          <TimeAxis duration={duration} />
+          <TimeAxis duration={duration} ticks={compact ? [0, 0.5, 1] : undefined} />
         </div>
       )}
     </div>

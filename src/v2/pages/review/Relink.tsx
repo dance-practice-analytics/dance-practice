@@ -4,7 +4,8 @@
 //
 // Shown as a card ON the stage (children of SyncedStage), over its lower part and
 // between the pill rows. The dancer may close it for this browser session so the
-// skeleton is fully visible; a small "Add video" chip then stays on the stage.
+// skeleton is fully visible; a small "Add video" chip then stays on the stage. On a
+// phone it is a slim bar docked at the bottom of the stage (review.css).
 
 import { useRef, useState } from 'react'
 import { relink } from '../../clips'
@@ -118,11 +119,14 @@ export function RelinkOverlay({ missing, attempts, describe }: RelinkNoteProps) 
             </button>
             <p className="v2-relink-title">
               <Icon name="device" />
-              <span>{subject} not on this device — showing the skeleton only.</span>
+              {/* Phone: the card is a one-line bar docked at the bottom of the stage, with shorter words. */}
+              <span className="v2-relink-long">{subject} not on this device — showing the skeleton only.</span>
+              <span className="v2-relink-short">{subject} not on this device</span>
             </p>
             <button className="btn btn-primary" type="button" disabled={busy} aria-busy={busy} onClick={choose}>
               {busy ? <Spinner size={14} /> : <Icon name="upload" />}
-              Choose the {filesWord} again
+              <span className="v2-relink-long">Choose the {filesWord} again</span>
+              <span className="v2-relink-short">Choose {filesWord}</span>
             </button>
             {clipNames.length > 0 && (
               <p className="v2-relink-file">

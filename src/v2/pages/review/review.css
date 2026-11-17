@@ -52,9 +52,22 @@
   .v2-relink-close{position:static;order:2}
   .v2-relink-wrap .v2-relink-card .btn-primary{width:auto}
 }
+.v2-relink-short{display:none}
+/* Phone: a slim bar docked at the bottom edge of the stage, so the skeleton stays in view;
+   the stage's bottom pills (timecode, phase) move up above it. */
 @media (max-width:560px){
-  .v2-relink-wrap{inset:44px 8px 44px}
-  .v2-relink-card .btn-primary{width:100%}
+  .v2-relink-wrap{inset:auto 0 0 0;container-type:normal;align-items:stretch}
+  .v2-relink-card{max-width:none;border-radius:0;border:0;border-top:1px solid var(--line-strong);box-shadow:none;flex-direction:row;flex-wrap:wrap;align-items:center;gap:6px 8px;padding:6px 4px 6px 12px}
+  .v2-relink-title{flex:1 1 0;min-width:0;padding-right:0;font-size:13px;line-height:1.3;align-items:center}
+  .v2-relink-title svg{margin-top:0}
+  .v2-relink-long,.v2-relink-file{display:none}
+  .v2-relink-short{display:inline}
+  .v2-relink-card .btn-primary{width:auto;flex:none;padding:0 12px;font-size:13px}
+  .v2-relink-close{position:static;order:3;flex:none}
+  .v2-relink-msg{order:4;flex-basis:100%;padding-bottom:4px}
+  .v2-relink-wrap .v2-relink-card.v2-relink-sample{max-width:none;padding:8px 12px}
+  /* !important: the pill row is positioned by an inline style in VideoStage. */
+  div:has(>.v2-relink-wrap)>.v2-stage-foot{bottom:62px!important}
   .v2-relink-chip{right:8px;bottom:44px}
 }
 /* Sample session: a small label on the stage, nothing to choose. */
@@ -66,6 +79,17 @@
 .v2-rev-strip .attempt{flex:none}
 
 /* Compare */
+/* Phone: a phase only a few pixels wide on the ribbon keeps a sliver you can see (the
+   offset this adds is under a few pixels; the list below gives the exact lengths). */
+@media (max-width:899.98px){
+  .v2-cmp-row .v2-rev-phase{min-width:8px}
+}
+.v2-cmp-phases{list-style:none;margin:0;padding:0;display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:6px}
+.v2-cmp-phase{width:100%;min-height:44px;display:grid;grid-template-columns:minmax(0,1fr) auto;column-gap:8px;align-items:center;padding:4px 10px;border:1px solid var(--line);border-radius:8px;background:var(--surface);color:var(--text);font:inherit;font-size:13px;text-align:left;cursor:pointer}
+.v2-cmp-phase:hover{background:var(--surface-2)}
+.v2-cmp-phase:focus-visible{outline:2px solid var(--focus);outline-offset:2px}
+.v2-cmp-phase-name{grid-row:span 2;font-weight:500}
+.v2-cmp-phase .mono{font-size:11px;color:var(--text-2);text-align:right}
 .v2-cmp-stages{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(380px,100%),1fr));gap:12px}
 .v2-cmp-rows{position:relative;display:flex;flex-direction:column;gap:6px;padding-left:54px}
 .v2-cmp-rowlabel{position:absolute;left:0;font-weight:600}

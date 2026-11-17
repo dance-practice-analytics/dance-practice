@@ -1,7 +1,10 @@
 // Attempt thumbnail: the dark `.thumb` tile with a small skeleton drawn from the
 // attempt's saved keypoints (one representative frame, see thumbPose.ts). The keypoints
 // are fetched only once the tile is near the screen, at most two at a time, decoded once
-// and reduced to 33 points kept in memory by attempt id. While loading, on failure or
+// and reduced to 33 points kept by attempt id, in memory and in this tab's sessionStorage.
+// A keypoints file is ~300 KB and Storage can take seconds per file on a phone network,
+// so without that copy every reload left the dashboard tiles blank for a long while.
+// While loading the tile shimmers; a failed download is tried once more. On failure or
 // when nothing was tracked, the tile stays the plain dark box: no pose is ever invented.
 
 import { useEffect, useRef, useState, type CSSProperties, type ReactNode } from 'react'
@@ -20,6 +23,35 @@ type ThumbAttempt = Pick<AttemptView, 'id' | 'status' | 'metrics'>
 
 /** null = processed but no tracked frame (or no keypoints file): a plain tile, cached too. */
 const poses = new Map<string, ThumbPose | null>()
+
+// The tab's copy: a few hundred bytes per attempt, gone when the tab closes. Never video.
+const STORE_KEY = 'dpa-thumb-poses-v1'
+const STORE_MAX = 120
+let restored = false
+
+function restore(): void {
+  if (restored) return
+  restored = true
+  try {
+    const saved = JSON.parse(sessionStorage.getItem(STORE_KEY) ?? '[]') as [string, ThumbPose | null][]
+    for (const [k, v] of saved) if (!poses.has(k)) poses.set(k, v)
+  } catch {
+    // Storage blocked or a bad copy: the tiles load from Storage as before.
+  }
+}
+
+function persist(): void {
+  try {
+    const round = (v: number) => Math.round(v * 1e4) / 1e4
+    const entries = [...poses].slice(-STORE_MAX).map(([k, v]): [string, ThumbPose | null] => [
+      k,
+      v && { width: v.width, height: v.height, points: v.points.map((p) => ({ x: round(p.x), y: round(p.y), z: round(p.z), visibility: round(p.visibility) })) },
+    ])
+    sessionStorage.setItem(STORE_KEY, JSON.stringify(entries))
+  } catch {
+    // Full or blocked: the memory copy still serves this page.
+  }
+}
 const inflight = new Map<string, Promise<ThumbPose | null>>()
 const MAX_PARALLEL = 2
 let running = 0
@@ -53,6 +85,7 @@ function loadPose(a: ThumbAttempt): Promise<ThumbPose | null> {
     (pose) => {
       poses.set(key, pose)
       inflight.delete(key)
+      persist()
       return pose
     },
     (e: unknown) => {
@@ -65,26 +98,35 @@ function loadPose(a: ThumbAttempt): Promise<ThumbPose | null> {
   return p
 }
 
+const RETRY_MS = 4000
+
 function useThumbPose(attempt: ThumbAttempt, enabled: boolean) {
+  restore()
   const ref = useRef<HTMLDivElement>(null)
   const key = keyOf(attempt)
-  const [state, setState] = useState<{ key: string; pose: ThumbPose | null }>(() => ({ key, pose: poses.get(key) ?? null }))
+  const [state, setState] = useState<{ key: string; pose: ThumbPose | null; settled: boolean }>(() => ({ key, pose: poses.get(key) ?? null, settled: poses.has(key) }))
   const known = poses.has(key)
 
   useEffect(() => {
     if (!enabled || known) return
     const el = ref.current
     let live = true
-    const start = () => {
+    let retry: ReturnType<typeof setTimeout> | undefined
+    const start = (again = true) => {
       loadPose(attempt).then(
-        (pose) => live && setState({ key, pose }),
-        () => live && setState({ key, pose: null }),
+        (pose) => live && setState({ key, pose, settled: true }),
+        () => {
+          // A dropped request on a phone network: one more try, then the plain tile.
+          if (live && again) retry = setTimeout(() => start(false), RETRY_MS)
+          else if (live) setState({ key, pose: null, settled: true })
+        },
       )
     }
     if (!el || typeof IntersectionObserver === 'undefined') {
       start()
       return () => {
         live = false
+        clearTimeout(retry)
       }
     }
     const io = new IntersectionObserver(
@@ -98,13 +140,15 @@ function useThumbPose(attempt: ThumbAttempt, enabled: boolean) {
     io.observe(el)
     return () => {
       live = false
+      clearTimeout(retry)
       io.disconnect()
     }
     // `attempt` is read through `key`; its other fields don't change what is loaded.
   }, [key, enabled, known])
 
   const pose = !enabled ? null : known ? (poses.get(key) ?? null) : state.key === key ? state.pose : null
-  return { ref, pose }
+  const loading = enabled && !known && !(state.key === key && state.settled)
+  return { ref, pose, loading }
 }
 
 // ---------- drawing ----------
@@ -190,9 +234,9 @@ export interface AttemptThumbProps {
 }
 
 export function AttemptThumb({ attempt, draw, className = 'thumb', style, children }: AttemptThumbProps) {
-  const { ref, pose } = useThumbPose(attempt, draw ?? attempt.status === 'done')
+  const { ref, pose, loading } = useThumbPose(attempt, draw ?? attempt.status === 'done')
   return (
-    <div ref={ref} className={className} style={style}>
+    <div ref={ref} className={loading ? `${className} v2-thumb-loading` : className} style={style} aria-busy={loading || undefined}>
       {pose && <ThumbSkeleton pose={pose} />}
       {children}
     </div>

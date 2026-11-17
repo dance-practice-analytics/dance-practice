@@ -195,7 +195,7 @@ export function VideoStage(props: VideoStageProps) {
         </div>
       )}
       {(chrome || noTracking) && (
-        <div style={{ position: 'absolute', left: 12, right: 12, bottom: 12, display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap', pointerEvents: 'none' }}>
+        <div className="v2-stage-foot" style={{ position: 'absolute', left: 12, right: 12, bottom: 12, display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap', pointerEvents: 'none' }}>
           {chrome && timecode && (
             <span className="mono" style={{ ...PILL, borderRadius: 6, fontWeight: 400 }}>
               {timecode}

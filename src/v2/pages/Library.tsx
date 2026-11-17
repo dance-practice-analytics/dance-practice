@@ -145,7 +145,8 @@ export function Library() {
       ) : narrow ? (
         <>
           <NextFocusCard focus={next} step={step} notes={notes} emptyHref={notesHref} compact showSubject={hasSubjects} />
-          {focus && <TrendCardCompact focus={focus} />}
+          {/* The relevé / pirouette trend; a phrase has no such measures (its themes are on Progress). */}
+          {focus && focus.movement !== 'phrase' && <TrendCardCompact focus={focus} />}
           <div className="v2-lib-chips" role="group" aria-label="Filter clips">
             <button className={filtered ? 'chip' : 'chip on'} type="button" aria-pressed={!filtered} onClick={clear}>
               All
@@ -188,7 +189,7 @@ export function Library() {
             </section>
             <aside style={{ flex: '1 1 300px', minWidth: 0, display: 'flex', flexDirection: 'column', gap: 16 }}>
               <NextFocusCard focus={next} step={step} notes={notes} emptyHref={notesHref} showSubject={hasSubjects} />
-              {focus && <TrendCard focus={focus} showSubject={hasSubjects} />}
+              {focus && focus.movement !== 'phrase' && <TrendCard focus={focus} showSubject={hasSubjects} />}
             </aside>
           </div>
         </>

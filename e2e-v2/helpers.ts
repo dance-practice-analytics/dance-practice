@@ -26,6 +26,30 @@ export async function openLatestReview(page: Page) {
   await expect(main(page).getByRole('heading', { level: 1, name: /^Attempt \d+$/ })).toBeVisible()
 }
 
+/**
+ * Opens a relevé attempt in Review. The newest attempt of the test account is a synthetic
+ * phrase sample (no phase ribbon, theme cards instead of measurements), so the checks of
+ * the relevé screens pick one through the Library's movement filter.
+ */
+export async function openReleveReview(page: Page) {
+  await go(page, '#/library')
+  const m = main(page)
+  // Desktop: the "Relevé" segment; phone: the "Relevé balance" chip.
+  await m.getByRole('button', { name: /^Relevé( balance)?$/ }).first().click()
+  await m.locator('a[href^="#/review/"]').first().click()
+  await expect(m.getByRole('heading', { level: 1, name: /^Attempt \d+$/ })).toBeVisible()
+}
+
+/** Two relevé attempt ids from the Library (desktop: the tiles of the newest relevé sessions). */
+export async function releveIds(page: Page): Promise<string[]> {
+  await go(page, '#/library')
+  const m = main(page)
+  await m.getByRole('button', { name: /^Relevé( balance)?$/ }).first().click()
+  await expect(m.locator('a[href^="#/review/"]').nth(1)).toBeVisible()
+  const hrefs = await m.locator('a[href^="#/review/"]').evaluateAll((as) => as.map((a) => a.getAttribute('href') ?? ''))
+  return [...new Set(hrefs.map((h) => h.split('/')[2]))].slice(0, 2)
+}
+
 /** Navigates by hash inside the running app (no reload, the session stays in memory). */
 export async function go(page: Page, hash: string) {
   await page.evaluate((h) => {
