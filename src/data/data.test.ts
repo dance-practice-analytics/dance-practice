@@ -819,6 +819,11 @@ describe('parseClipName', () => {
     expect(parseClipName('S01_releve_00.mp4').take).toBeNull()
   })
 
+  it('reads a labelled take 0 (att0, take 0)', () => {
+    expect(parseClipName('D01_att0_f.mp4').take).toBe(0)
+    expect(parseClipName('S01_releve_take_0.mp4').take).toBe(0)
+  })
+
   it('baseName drops folders', () => {
     expect(baseName('C:\\Users\\someone\\S01_releve.mp4')).toBe('S01_releve.mp4')
     expect(baseName('study/S01/clip.mp4')).toBe('clip.mp4')

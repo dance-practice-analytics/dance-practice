@@ -37,6 +37,15 @@ describe('takeKey / viewsOfTake', () => {
     expect(viewsOfTake(s, all).front).toBe(f)
   })
 
+  it('links the cameras of take 0 (att0) and keeps it apart from take 1', () => {
+    const f = attempt('front', 0)
+    const s = attempt('side', 0)
+    const d = attempt('diagonal', 0)
+    const one = attempt('front', 1)
+    expect(takeKey(f)).not.toBeNull()
+    expect(viewsOfTake(s, [f, s, d, one])).toEqual({ front: f, side: s, diagonal: d })
+  })
+
   it('needs a take number, a date and a camera', () => {
     expect(takeKey(attempt('front', null))).toBeNull()
     expect(takeKey(attempt('front', 1, { recorded_on: null }))).toBeNull()
@@ -161,6 +170,13 @@ describe('Import: dataset takes', () => {
       ['S02', 1, ['side'], ['side']],
     ])
     expect(links[1].rowIds.sort()).toEqual(['1', '2', '3'])
+  })
+
+  it('links the three cameras of an att0 take', () => {
+    const rows = [row('1', 'D01_att0_f.mp4'), row('2', 'D01_att0_s.mp4'), row('3', 'D01_att0_d.mp4'), row('4', 'D01_att1_f.mp4')]
+    const links = linkedTakes(rows)
+    expect(links.map((l) => [l.take, l.views])).toEqual([[0, ['front', 'diagonal', 'side']]])
+    expect(links[0].rowIds.sort()).toEqual(['1', '2', '3'])
   })
 
   it('does not link rows without a take number', () => {

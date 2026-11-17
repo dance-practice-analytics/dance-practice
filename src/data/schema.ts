@@ -132,7 +132,7 @@ export interface AttemptRow {
   label: string | null
   /** De-identified (`S03_att07.mp4`, `clip 7.mp4`), never the local file name (FR-3.2.5). */
   clip_name: string | null
-  /** Clip number within the subject's dataset (FR-3.2.4), 1–999. */
+  /** Clip number within the subject's dataset (FR-3.2.4), 0–999. */
   clip_number: number | null
   /** The dancer's own note on this attempt (FR-3.5.7). Never sent to the AI functions. */
   note: string | null

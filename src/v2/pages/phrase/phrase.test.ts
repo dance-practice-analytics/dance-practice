@@ -248,8 +248,9 @@ describe('Import: dataset clip names', () => {
     expect(parseTags('D01_att3_d.mp4')).toEqual({ subject: null, movement: 'phrase', view: 'diagonal', clipNumber: 3 })
     expect(parseTags('D01_att1_f.mov')).toMatchObject({ view: 'front', clipNumber: 1 })
     expect(parseTags('D12_att2_s.mp4')).toMatchObject({ view: 'side', movement: 'phrase' })
-    // att0 has no valid clip number (1–999): left empty, never 0.
-    expect(parseTags('D01_att0_s.mp4').clipNumber).toBeNull()
+    // att0 is a real take (clip_number 0–999).
+    expect(parseTags('D01_att0_s.mp4')).toEqual({ subject: null, movement: 'phrase', view: 'side', clipNumber: 0 })
+    expect(parseTags('D01_att1000_s.mp4').clipNumber).toBeNull()
     // A lone letter elsewhere is not a view.
     expect(parseTags('S05_releve_s_01.mp4').view).toBeNull()
   })

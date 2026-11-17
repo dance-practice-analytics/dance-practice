@@ -63,14 +63,15 @@ export function parseClipName(name: string): ParsedClipName {
   // already follows the study pattern; dates and camera counters (VID_123) are left alone.
   const patterned = subjects.size === 1 || movements.size === 1
   const closesName = /^\d{1,3}$/.test(tokens[tokens.length - 1] ?? '')
+  // Take 0 counts only when labelled (`att0`, `take 0`); a bare `00` is not a take.
   let take: number | null = null
   if (labelled.length === 1) take = labelled[0]
-  else if (labelled.length === 0 && bare.length === 1 && patterned && closesName) take = bare[0]
+  else if (labelled.length === 0 && bare.length === 1 && patterned && closesName && bare[0] > 0) take = bare[0]
 
   return {
     subjectCode: subjects.size === 1 ? [...subjects][0] : null,
     movement: movements.size === 1 ? [...movements][0] : null,
-    take: take !== null && take > 0 ? take : null,
+    take,
   }
 }
 
@@ -79,9 +80,12 @@ export function parseClipName(name: string): ParsedClipName {
 /** Extensions kept on a stored clip name; anything else is dropped, so no free text survives. */
 const VIDEO_EXTENSIONS = new Set(['mp4', 'm4v', 'mov', 'webm', 'mkv', 'avi', '3gp', 'mpg', 'mpeg', 'ogv', 'wmv'])
 
-/** A clip number the database accepts (attempts.clip_number), or null. */
+/**
+ * A clip number the database accepts (attempts.clip_number, 0–999), or null. 0 is a
+ * real take: the phrase study numbers its takes from att0.
+ */
 export function clipNumberOrNull(n: unknown): number | null {
-  return typeof n === 'number' && Number.isInteger(n) && n > 0 && n <= 999 ? n : null
+  return typeof n === 'number' && Number.isInteger(n) && n >= 0 && n <= 999 ? n : null
 }
 
 /**

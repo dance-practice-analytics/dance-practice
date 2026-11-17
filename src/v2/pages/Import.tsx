@@ -716,7 +716,7 @@ function ClipNumberInput({ row, patch, disabled, width }: { row: Row; patch: Tag
       className="input input-sm mono"
       type="number"
       inputMode="numeric"
-      min={1}
+      min={0}
       max={999}
       step={1}
       aria-label={`Take number for ${row.name}`}

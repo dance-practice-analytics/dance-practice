@@ -57,7 +57,10 @@ describe('deidentifiedClipName', () => {
   it('storedClipFields records the clip number with the label', () => {
     expect(storedClipFields({ clip_name: 'S02_pir_front_11.mp4' })).toEqual({ clip_name: 'S02_att11.mp4', clip_number: 11 })
     expect(storedClipFields({ clip_name: 'Maria.mp4', clip_number: 4 })).toEqual({ clip_name: 'clip 4.mp4', clip_number: 4 })
-    expect(storedClipFields({ clip_name: 'Maria.mp4', clip_number: 0 })).toEqual({ clip_name: 'clip.mp4', clip_number: null })
+    expect(storedClipFields({ clip_name: 'Maria.mp4', clip_number: 0 })).toEqual({ clip_name: 'clip 0.mp4', clip_number: 0 })
+    expect(storedClipFields({ clip_name: 'D01_att0_d.mp4' })).toEqual({ clip_name: 'clip 0.mp4', clip_number: 0 })
+    expect(storedClipFields({ clip_name: 'Maria.mp4', clip_number: -1 })).toEqual({ clip_name: 'clip.mp4', clip_number: null })
+    expect(storedClipFields({ clip_name: 'Maria.mp4', clip_number: 1000 })).toEqual({ clip_name: 'clip.mp4', clip_number: null })
   })
 })
 
