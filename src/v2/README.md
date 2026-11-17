@@ -18,7 +18,7 @@ error patterns; `Main.dc.html` shows every component class.
 | --- | --- |
 | `main.tsx` | Entry: loads `fonts.css`, `studio.css`, `v2.css`, mounts `App`. |
 | `App.tsx` | Auth gate → consent gate → `Shell` + routed page. No screen logic. |
-| `Shell.tsx` | Sidebar (≥ 900px) / bottom nav (< 900px). Pages render inside `<main class="v2-main">`. Top level only: Dashboard, Library, Import, Progress, (Study dataset), Settings & data; the phone bar is Home, Library, Import, Progress, Settings. Review / Compare / Practice notes / Mika are opened from an attempt and show as a sub-item under Library while open (Library gets `.parent`, the sub-item `aria-current="page"`). Processing shows under Import only while the queue has clips (with a count) or while it is open; the phone bar shows the count on Import. |
+| `Shell.tsx` | Sidebar (≥ 900px) / bottom nav (< 900px). Pages render inside `<main class="v2-main">`. Sidebar: Dashboard, Library, Import, Review, Compare, Progress, Practice notes, Mika, (Study dataset), Settings & data. The phone bar is Home, Library, Import, Progress, Settings (attempt screens light up Library; Mika is in the page header). Processing shows under Import only while the queue has clips (with a count) or while it is open; the phone bar shows the count on Import. |
 | `router.ts` | Hash routes: `Route`, `href`, `navigate`, `useRoute`, `parseRoute`. |
 | `auth.ts` | Supabase auth store: `useAuth`, `signIn`, `signUp`, `signOut`, `client()`. |
 | `consents.ts` | `useConsents`, `acceptConsents`, `setConsent` (table `consents`). |

@@ -1,10 +1,8 @@
 // Frame of every signed-in screen (Sidebar.dc.html, BottomNav.dc.html).
-// Wide: 240px sidebar with the top-level destinations only. Under 900px: the page's
-// own `.mhead` (rendered by PageHeader) and the five-item bottom navigation.
-// Review, Compare, Practice notes and Mika belong to one attempt: they are opened from
-// the attempt (Library, Dashboard, Review header), and while one is open the sidebar
-// shows it as a sub-item under Library. Processing is the second half of Import: it
-// appears under Import only while clips are queued or being read (or while open).
+// Wide: 240px sidebar with every destination, Mika included. Under 900px: the page's
+// own `.mhead` (rendered by PageHeader, with the Mika button) and the five-item bottom
+// navigation, where the attempt screens light up Library. Processing is the second half
+// of Import: it appears under Import only while clips are queued or being read (or while open).
 // The role shown is the real profiles.role; the Dancer/Researcher switch on the
 // canvas is a design prop, so here it is a label, not a control.
 
@@ -12,7 +10,7 @@ import type { ReactNode } from 'react'
 import { signOut, useAuth } from './auth'
 import { Icon, Logo, type IconName } from './components/Icon'
 import { usePipeline } from './pipeline'
-import { href, useRoute, type Route, type RouteName } from './router'
+import { href, type Route, type RouteName } from './router'
 import { toggleTheme, useTheme } from './theme'
 
 interface NavItem {
@@ -35,9 +33,13 @@ const ATTEMPT_ROUTES = Object.keys(ATTEMPT_SCREENS) as RouteName[]
 
 const SIDE_ITEMS: NavItem[] = [
   { route: { name: 'dashboard' }, label: 'Dashboard', icon: 'home' },
-  { route: { name: 'library' }, label: 'Library', icon: 'library', covers: ATTEMPT_ROUTES },
+  { route: { name: 'library' }, label: 'Library', icon: 'library' },
   { route: { name: 'import' }, label: 'Import', icon: 'import', covers: ['processing'] },
+  { route: { name: 'review' }, label: 'Review', icon: 'review' },
+  { route: { name: 'compare' }, label: 'Compare', icon: 'compare' },
   { route: { name: 'progress' }, label: 'Progress', icon: 'progress' },
+  { route: { name: 'notes' }, label: 'Practice notes', icon: 'notes' },
+  { route: { name: 'chat' }, label: 'Mika', icon: 'chat' },
   { route: { name: 'dataset' }, label: 'Study dataset', icon: 'dataset', researcherOnly: true },
   { route: { name: 'settings' }, label: 'Settings & data', icon: 'settings' },
 ]
@@ -86,22 +88,6 @@ function ProcessingSubItem({ active }: { active: RouteName }) {
   )
 }
 
-/** The open attempt screen under Library; links to the exact route so the ids are kept. */
-function AttemptSubItem({ route }: { route: Route }) {
-  const screen = ATTEMPT_SCREENS[route.name]
-  if (!screen) return null
-  return (
-    <ul className="v2-subnav" aria-label="Current attempt">
-      <li>
-        <a href={href(route)} className="active" aria-current="page">
-          <Icon name={screen.icon} />
-          <span className="v2-clip">{screen.label}</span>
-        </a>
-      </li>
-    </ul>
-  )
-}
-
 export interface ShellProps {
   /** The current route name, for `aria-current`. */
   active: RouteName
@@ -112,8 +98,6 @@ export interface ShellProps {
 export function Shell({ active, children }: ShellProps) {
   const { user, role, profile } = useAuth()
   const theme = useTheme()
-  // The full route (with ids) for the "current attempt" sub-item; `active` is its name.
-  const route = useRoute()
   const items = SIDE_ITEMS.filter((i) => role === 'researcher' || !i.researcherOnly)
 
   return (
@@ -145,7 +129,6 @@ export function Shell({ active, children }: ShellProps) {
                   <Icon name={it.icon} />
                   {it.label}
                 </a>
-                {it.route.name === 'library' && <AttemptSubItem route={route} />}
                 {it.route.name === 'import' && <ProcessingSubItem active={active} />}
               </li>
             )
