@@ -30,8 +30,11 @@ import type { ConfidenceLevel } from './types'
  * 0.2.0: keypoints are read through capRelabeled (src/pose/swaps.ts): a relabeled stretch longer than
  *        MAX_SWAP_S goes back to the tracker's labels, so one missed swap-back no longer flips the
  *        sides for the rest of the clip (stored keypoints included).
+ * 0.3.0: knee_over_toes and circle_completion never rise above low confidence (DEPTH_LIMITED): both
+ *        depend on depth, which one camera does not measure well enough (checked against a calibrated
+ *        multi-camera reference, numbers only; see CALIBRATION.md).
  */
-export const PHRASE_ALGORITHM_VERSION = 'mt2-phrase-0.2.0'
+export const PHRASE_ALGORITHM_VERSION = 'mt2-phrase-0.3.0'
 
 export const THEME_KEYS = ['knee_over_toes', 'head_lead', 'neck_range', 'upper_body_curve', 'arm_reach', 'circle_completion'] as const
 export type ThemeKey = (typeof THEME_KEYS)[number]
@@ -131,6 +134,13 @@ export const MAX_CIRCLES = 40
 
 /** Themes whose value depends on telling left from right (or front from back). */
 const SIDE_DEPENDENT: ReadonlySet<ThemeKey> = new Set(['knee_over_toes', 'upper_body_curve', 'circle_completion'])
+
+/**
+ * Themes that depend on depth: where the knee points relative to the foot seen from above, and the path
+ * of a limb around its joint. From one camera, depth comes from the pose model's guess, so these values
+ * are shown (never hidden or filled in) but their confidence is capped at low.
+ */
+export const DEPTH_LIMITED: ReadonlySet<ThemeKey> = new Set(['knee_over_toes', 'circle_completion'])
 
 const HEAD_TRUNK = [LM.leftEar, LM.rightEar, LM.leftShoulder, LM.rightShoulder, LM.leftHip, LM.rightHip]
 const ARMS = [LM.leftShoulder, LM.rightShoulder, LM.leftElbow, LM.rightElbow, LM.leftWrist, LM.rightWrist]
@@ -381,6 +391,8 @@ export function computePhrase(input: PoseSeries): PhraseResult {
       c.notes = [...(c.notes ?? []), 'left_right_labels_uncertain']
     }
   }
+  // One camera can't measure depth well: never more than low for these.
+  for (const k of DEPTH_LIMITED) if (themes[k].value !== null) themes[k].confidence.level = 'low'
 
   return {
     ...base,

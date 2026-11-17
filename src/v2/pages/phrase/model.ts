@@ -54,7 +54,7 @@ export const THEMES: Record<ThemeKey, ThemeInfo> = {
     about:
       'In each plié (both feet on the floor, knees bent), the angle seen from above between where the knee points and where the foot points. 0° means the knee is over the line of the foot; a positive value means the knee is inside that line (towards the other leg), a negative value outside. Median of both legs over every plié frame.',
     bestViews: ['front', 'diagonal'],
-    viewNote: 'Best seen from the front or the diagonal.',
+    viewNote: 'Best seen from the front or the diagonal. It depends on depth, which one camera can’t measure reliably, so it is always low confidence: read it as rough.',
     more: 'more towards the inside of the foot line',
     less: 'more towards the outside of the foot line',
     sign: (v) => (Math.abs(v) < 0.05 ? 'knee over the foot line' : v > 0 ? 'knee inside the foot line' : 'knee outside the foot line'),
@@ -67,8 +67,8 @@ export const THEMES: Record<ThemeKey, ThemeInfo> = {
     decimals: 2,
     about:
       'Each time the arms start a movement, how long before or after them the head started moving (head relative to the shoulders). Positive: the head started first. Negative: the arms started first. Median over the paired starts.',
-    bestViews: ['diagonal', 'side', 'front'],
-    viewNote: 'Best seen from the diagonal.',
+    bestViews: ['diagonal', 'side'],
+    viewNote: 'Best seen from the diagonal or the side.',
     more: 'earlier relative to the arms',
     less: 'later relative to the arms',
     sign: (v) => (Math.abs(v) < 0.005 ? 'head and arms start together' : v > 0 ? 'head starts first' : 'arms start first'),
@@ -107,8 +107,8 @@ export const THEMES: Record<ThemeKey, ThemeInfo> = {
     decimals: 2,
     about:
       'How far the wrists reach from the middle of the shoulders, in arm lengths (90th percentile over the clip, mean of both arms). Above 1 means the shoulders travel with the reach.',
-    bestViews: ['diagonal', 'front', 'side'],
-    viewNote: 'Best seen from the diagonal.',
+    bestViews: ['front', 'diagonal'],
+    viewNote: 'Best seen from the front or the diagonal.',
     more: 'further',
     less: 'less far',
   },
@@ -121,7 +121,7 @@ export const THEMES: Record<ThemeKey, ThemeInfo> = {
     about:
       'The largest circle an arm or a leg drew around its shoulder or hip, as the angle swept (360° is a full circle). Closure says how far the end of that circle was from its start, in limb lengths (0 = back where it started).',
     bestViews: ['diagonal', 'front'],
-    viewNote: 'Best seen from the diagonal.',
+    viewNote: 'Best seen from the diagonal or the front. It depends on depth, which one camera can’t measure reliably, so it is always low confidence: read it as rough.',
     more: 'more',
     less: 'less',
   },

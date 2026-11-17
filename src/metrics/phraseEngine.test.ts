@@ -6,7 +6,7 @@ import { describe, expect, it } from 'vitest'
 import type { PoseSeries } from '../pose/types'
 import { computeAttempt } from './attempt'
 import { ALGORITHM_VERSION, computeMetrics } from './engine'
-import { computePhrase, isPhraseResult, PHRASE_ALGORITHM_VERSION, THEME_KEYS, type PhraseResult } from './phrase'
+import { computePhrase, DEPTH_LIMITED, isPhraseResult, PHRASE_ALGORITHM_VERSION, THEME_KEYS, type PhraseResult } from './phrase'
 import { alignPhrases, similarity } from './phraseAlign'
 import { bump, phraseSeries, STAND, type PhrasePose } from './testing/phraseDancer'
 
@@ -120,6 +120,18 @@ describe('computePhrase', () => {
     const gestures = swapped.events.filter((e) => e.kind === 'gesture')
     expect(gestures.length).toBeGreaterThan(0)
     for (const g of gestures) expect(g.side_uncertain).toBe(true)
+  })
+
+  it('caps the depth-dependent themes at low confidence and leaves the others alone', () => {
+    const r = computePhrase(phraseSeries(phrase(), 21))
+    const measured = THEME_KEYS.filter((k) => r.themes[k].value !== null)
+    expect(measured.length).toBeGreaterThan(2)
+    for (const k of measured) {
+      if (DEPTH_LIMITED.has(k)) expect(r.themes[k].confidence.level).toBe('low')
+      else expect(r.themes[k].confidence.level).not.toBe('low')
+    }
+    // Shown with its value, never hidden: the cap changes the level only.
+    for (const k of DEPTH_LIMITED) if (r.themes[k].value !== null) expect(r.themes[k].confidence.reason).toBeUndefined()
   })
 
   it('reads stored keypoints whose unswapper lost track as the tracker labelled them', () => {

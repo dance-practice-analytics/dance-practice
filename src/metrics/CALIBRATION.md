@@ -199,6 +199,14 @@ pirouettes, but it is a known limit.
   every later frame stayed exchanged. Since then a relabeled stretch longer than
   `MAX_SWAP_S` (1 s) is put back as the tracker gave it (`capRelabeled`, also applied to
   stored keypoints by the phrase engine, mt2-phrase-0.2.0); short glitches are still undone.
+  A second check with the recording team's chessboard calibration (real focal lengths, lens
+  distortion and camera poses instead of values estimated from the dancer) gave the same picture:
+  trunk, neck, upper-body curve, knee flexion, leg elevation, arm reach and head timing follow the
+  reference from a single camera (best from a diagonal camera, the front close behind, the pure side
+  weakest), while knees over toes and circle completion do not follow it from any single view, and
+  circle completion is unstable even in the reference. Since mt2-phrase-0.3.0 those two themes are
+  still shown but never above low confidence (`DEPTH_LIMITED` in `phrase.ts`). The 1 s relabel cap
+  held up against the calibrated reference as well.
 - **Rise-end timing**: the two-step heel climb of the tracker may be a stick-figure
   artifact.
 - **Frame seek**: checked in desktop Chrome on an H.264 clip at 30 fps. Phone recordings
