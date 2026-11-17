@@ -3,7 +3,9 @@
 //
 // - The Supabase client is created with the request's Authorization header, so every
 //   query runs under the caller's RLS. The service-role key is never used.
-// - The model receives the metrics payload of payload.ts and nothing else.
+// - The model receives the metrics payload of payload.ts and nothing else (for a phrase:
+//   ../_shared/phrase.ts, with earlier sessions of the same view and the focus themes,
+//   loaded by ../_shared/phraseContext.ts).
 // - The provider (Gemini or Grok, OpenAI-compatible) and its key come from the function's
 //   secrets only: LLM_API_KEY, LLM_BASE_URL, LLM_MODEL (see ../_shared/llm.ts).
 //
@@ -11,6 +13,7 @@
 
 import { createClient, type SupabaseClient } from '@supabase/supabase-js'
 import { createLlm, llmConfigFromEnv, LlmError, type Llm } from '../_shared/llm.ts'
+import { loadPhraseContext } from '../_shared/phraseContext.ts'
 import { AI_CONSENT_SCOPE, RATE_LIMIT_MAX, errorBody, FAILURES, type FailureCode } from './contract.ts'
 import { allowedOrigins, corsHeaders } from './cors.ts'
 import { handleGenerate, interpretCompletion, outcomeFromError, type Deps, type ModelOutcome, type StoredFeedback } from './handler.ts'
@@ -25,7 +28,7 @@ const MAX_RETRIES = 1
 const MAX_TOKENS = 8000
 
 const METRIC_COLUMNS =
-  'attempt_id, movement, trunk_inclination_deg, pelvis_ankle_offset_norm, balance_duration_s, knee_tracking_dev_deg, turn_count, phases, confidence'
+  'attempt_id, movement, trunk_inclination_deg, pelvis_ankle_offset_norm, balance_duration_s, knee_tracking_dev_deg, turn_count, phases, confidence, phrase'
 const FEEDBACK_COLUMNS = 'id, attempt_id, model, prompt_version, created_at, response'
 
 async function askModel(llm: Llm, payload: FeedbackPayload): Promise<ModelOutcome> {
@@ -55,12 +58,21 @@ function deps(supabase: SupabaseClient, token: string, llm: Llm): Deps {
   const metricsFor = async (ids: string[]): Promise<(MetricsRowLike & { attempt_id: string })[]> =>
     must(await supabase.from('attempt_metrics').select(METRIC_COLUMNS).in('attempt_id', ids)) ?? []
 
+  let uid: string | null = null
+
   return {
     model: llm.model,
 
     async userId() {
       const { data, error } = await supabase.auth.getUser(token)
-      return error ? null : (data.user?.id ?? null)
+      uid = error ? null : (data.user?.id ?? null)
+      return uid
+    },
+
+    // Phrase only; the handler treats a failure as "no extra context".
+    async loadPhraseContext(attemptId) {
+      if (!uid) return {}
+      return loadPhraseContext(supabase, uid, attemptId)
     },
 
     async hasAiConsent() {

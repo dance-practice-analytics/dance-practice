@@ -32,11 +32,37 @@ export const METRIC_KEYS = [
 ] as const
 export type MetricKey = (typeof METRIC_KEYS)[number]
 
+/**
+ * Theme ids of a phrase attempt (attempt_metrics.phrase.themes, src/metrics/phrase.ts
+ * THEME_KEYS; a test keeps them equal). A phrase note's observations are about these.
+ */
+export const PHRASE_THEME_KEYS = ['knee_over_toes', 'head_lead', 'neck_range', 'upper_body_curve', 'arm_reach', 'circle_completion'] as const
+export type PhraseThemeKey = (typeof PHRASE_THEME_KEYS)[number]
+
+/** What one observation is about: a relevé metric or a phrase theme. */
+export type NoteTopic = MetricKey | PhraseThemeKey
+export const NOTE_TOPICS: readonly NoteTopic[] = [...METRIC_KEYS, ...PHRASE_THEME_KEYS]
+
 export const CONFIDENCE_LEVELS = ['high', 'medium', 'low'] as const
 export type ConfidenceLevel = (typeof CONFIDENCE_LEVELS)[number]
 
+/**
+ * Languages the notes can be written in (primary subtag of the browser language).
+ * Anything else is written in English.
+ */
+export const NOTE_LANGUAGES = ['en', 'es', 'fr', 'pt', 'de', 'it'] as const
+export type NoteLanguage = (typeof NOTE_LANGUAGES)[number]
+
+/** 'es-CO' → 'es'; unknown or missing → 'en'. */
+export function noteLanguage(v: unknown): NoteLanguage {
+  if (typeof v !== 'string') return 'en'
+  const primary = v.trim().toLowerCase().split(/[-_]/)[0]
+  return (NOTE_LANGUAGES as readonly string[]).includes(primary) ? (primary as NoteLanguage) : 'en'
+}
+
 export interface FeedbackObservation {
-  metric: MetricKey
+  /** A relevé metric id, or a phrase theme id for a phrase attempt. */
+  metric: NoteTopic
   observation: string
   suggestion: string
   confidence: ConfidenceLevel
@@ -54,6 +80,8 @@ export interface GenerateFeedbackRequest {
   attempt_id: string
   /** Skip the cached note for the same input and ask the model again (still rate limited). */
   regenerate?: boolean
+  /** The dancer's language (e.g. navigator.language); the notes are written in it when supported. */
+  language?: string
 }
 
 /** 200 body: the stored feedback row. */
@@ -208,7 +236,7 @@ export function isFeedbackResponse(v: unknown): v is FeedbackResponse {
     if (typeof o !== 'object' || o === null) return false
     const obs = o as Record<string, unknown>
     return (
-      (METRIC_KEYS as readonly unknown[]).includes(obs.metric) &&
+      (NOTE_TOPICS as readonly unknown[]).includes(obs.metric) &&
       isText(obs.observation) &&
       isText(obs.suggestion) &&
       (CONFIDENCE_LEVELS as readonly unknown[]).includes(obs.confidence)

@@ -210,7 +210,7 @@ describe('inputHash', () => {
     expect(base).toMatch(/^[0-9a-f]{64}$/)
     const other = buildPayload({ ...ROW, trunk_inclination_deg: 4.4 }, [EARLIER])
     expect(await inputHash(other, PROMPT_VERSION, MODEL)).not.toBe(base)
-    expect(await inputHash(PAYLOAD, 'practice-notes-v2', MODEL)).not.toBe(base)
+    expect(await inputHash(PAYLOAD, 'practice-notes-v1', MODEL)).not.toBe(base)
     expect(await inputHash(PAYLOAD, PROMPT_VERSION, 'another-model')).not.toBe(base)
   })
 
@@ -280,7 +280,7 @@ describe('system prompt', () => {
     for (const rule of ['never grades technique', 'scores, ratings, grades', 'medical or injury advice', 'other dancers', 'uncertain', 'not measured', DISCLAIMER]) {
       expect(SYSTEM_PROMPT).toContain(rule)
     }
-    expect(PROMPT_VERSION).toBe('practice-notes-v1')
+    expect(PROMPT_VERSION).toBe('practice-notes-v2')
   })
 })
 
@@ -503,8 +503,11 @@ describe('handleGenerate', () => {
   })
 
   it('validates the request body', () => {
-    expect(parseRequest({ attempt_id: ATTEMPT })).toEqual({ attemptId: ATTEMPT, regenerate: false })
-    expect(parseRequest({ attempt_id: ATTEMPT, regenerate: true })).toEqual({ attemptId: ATTEMPT, regenerate: true })
+    expect(parseRequest({ attempt_id: ATTEMPT })).toEqual({ attemptId: ATTEMPT, regenerate: false, language: 'en' })
+    expect(parseRequest({ attempt_id: ATTEMPT, regenerate: true })).toEqual({ attemptId: ATTEMPT, regenerate: true, language: 'en' })
+    expect(parseRequest({ attempt_id: ATTEMPT, language: 'es-CO' })).toEqual({ attemptId: ATTEMPT, regenerate: false, language: 'es' })
+    expect(parseRequest({ attempt_id: ATTEMPT, language: 'tlh' })).toEqual({ attemptId: ATTEMPT, regenerate: false, language: 'en' })
+    expect(parseRequest({ attempt_id: ATTEMPT, language: 3 })).toBeNull()
     expect(parseRequest({ attempt_id: ATTEMPT, regenerate: 'yes' })).toBeNull()
     expect(parseRequest(null)).toBeNull()
   })

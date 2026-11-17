@@ -21,7 +21,7 @@ import {
 // @ts-ignore TS5097: Deno needs the .ts extension
 import { buildMikaContext, type AttemptInput } from './context.ts'
 // @ts-ignore TS5097: Deno needs the .ts extension
-import { isMovement, type MetricsRowLike } from '../generate-feedback/payload.ts'
+import { isMovement, type MetricsRowLike, type PhraseContextInput } from '../generate-feedback/payload.ts'
 // @ts-ignore TS5097: Deno needs the .ts extension
 import { buildSystem } from './prompt.ts'
 // @ts-ignore TS5097: Deno needs the .ts extension
@@ -73,6 +73,11 @@ export interface Deps {
   loadMetrics(attemptIds: string[]): Promise<MetricsRow[]>
   /** Ids of the attempts in the same session as `attemptId`, oldest first (created_at). */
   sessionAttemptIds(attemptId: string): Promise<string[]>
+  /**
+   * Phrase attempts only: camera view, earlier sessions of the same movement, view and
+   * dancer (newest first) and the focus themes. Optional: a failure leaves them out.
+   */
+  loadPhraseContext?(userId: string, attemptId: string): Promise<PhraseContextInput>
   /** Counts the request toward the caller's hourly limit. */
   rateLimit(userId: string, nowMs: number): RateDecision
   callModel(system: { type: 'text'; text: string }[], messages: ChatMessage[]): Promise<ModelOutcome>
@@ -142,7 +147,16 @@ export async function handleMika(method: string, body: unknown, deps: Deps): Pro
       return row ? [{ row, number: numberOf(id) }] : []
     })
 
-    const context = buildMikaContext({ row: target, number: numberOf(attemptId) }, compare, session)
+    let phrase: PhraseContextInput = {}
+    if (target.movement === 'phrase' && deps.loadPhraseContext) {
+      try {
+        phrase = await deps.loadPhraseContext(uid, attemptId)
+      } catch {
+        phrase = {}
+      }
+    }
+
+    const context = buildMikaContext({ row: target, number: numberOf(attemptId) }, compare, session, phrase)
 
     const rate = deps.rateLimit(uid, deps.now())
     if (!rate.allowed) return failure('rate_limited', undefined, rate.retryAfterS)

@@ -58,6 +58,7 @@ describe('what is sent', () => {
   it('builds the same metrics-only payload as the function', () => {
     const payload = payloadFor(a3, all)!
     expect(payload.movement).toBe('releve_balance')
+    if (payload.movement === 'phrase') throw new Error('expected a relevé payload')
     expect(payload.metrics.map((m) => m.metric)).toEqual([
       'trunk_inclination_deg',
       'pelvis_ankle_offset_norm',

@@ -382,7 +382,7 @@ isNotConnected(e)                                // 404 (not deployed) or missin
   `ai_metrics_only` consent, loads the attempt's `attempt_metrics` row (plus the
   comparison attempt, or every attempt of the session for scope `session`) and sends
   the configured model (Gemini or Grok, see "AI provider" below) metric values, units,
-  confidence and null reasons only, labelled "Attempt N". Never keypoints, frames, video, titles, file names
+  confidence and null reasons only, labelled "Attempt N" (phrase attempts: see below). Never keypoints, frames, video, titles, file names
   or subject codes. The system prompt is in `mika-chat/prompt.ts` (answers only from
   the numbers, neutral differences, never grades, no medical advice, short).
 - The screen sends the last 12 messages (questions ≤ 1000 characters); in scope
@@ -396,6 +396,43 @@ isNotConnected(e)                                // 404 (not deployed) or missin
   instances count separately; it stops a runaway client, it is not a hard quota.
 - Tests: `pages/chat/mika.test.ts` (validation, context, prompt, rate limit, handler with
   fakes, client). `index.ts` is the Deno wiring and is not run by Vitest.
+
+### Phrase attempts in the AI features (prompts `practice-notes-v2`, `mika-v2`)
+
+For a `phrase` attempt both functions send, instead of the relevé metrics
+(`supabase/functions/_shared/phrase.ts`, allowlisted and rounded like `buildPayload`):
+
+- the six theme values with unit, confidence, notes (`left_right_labels_uncertain`,
+  `few_pairs`) and the null reason;
+- an event summary: counts per kind and at most one main event per role (main leg
+  extension, largest turn, deepest plié, largest tilt, longest relevé) with start/end
+  seconds and allowlisted values; `side_uncertain` events keep the flag;
+- the same theme values of up to 3 earlier attempts of the session;
+- **progress**: theme medians of up to 5 earlier sessions of the same phrase, camera view and
+  dancer (subject), oldest first (`sessions_before`), from high/medium values only, with
+  counts of uncertain values left out and of gaps. Loaded by `_shared/phraseContext.ts` with
+  the caller's JWT and an explicit `owner_id` filter on every query; a session without a
+  camera view gets no progress. Only `phrase->themes` is read from earlier rows;
+- the dancer's **focus themes** (`user_preferences`, up to 3).
+
+Never sent: titles, notes, dates, labels, file names, subject codes, ids, keypoints, video.
+Practice notes also take an optional `language` (the browser's, `en es fr pt de it`); it is
+added to the payload only when not English. The prompts explain each theme in dance-class
+words, ask for neutral change over time ("your arm reach went from 1.27 to 1.33 arm lengths
+across three sessions"), suggestions as options for attention tied to the focus themes, and
+say that uncertain values are named as uncertain and not interpreted. Relevé payloads are
+unchanged. `validate.ts` rejects notes with scores, grades or verdict words (good/bad,
+better/worse, correct/incorrect, improved, perfect…, English and Spanish) for every movement;
+a rejected note is `model_invalid_output` (try again). Mika's free-text answers are not
+filtered.
+
+On screen: Notes' "What is sent" lists the phrase payload plus "This attempt / Progress /
+Focus" lines (`phraseShare`, `progressLine`, `focusLine` in `pages/notes/model.ts`, built
+with the function's own code from the attempts already loaded); Mika's "What is shared"
+panel shows theme rows (focus first) and the same event, progress and focus lines. Both keep
+the "not connected" state until the functions are deployed. Tests: `src/feedback/phrase.test.ts`
+(payload allowlist, fake-DB progress with owner/view/dancer filters, focus, handlers,
+prompts, grading words, panels).
 
 ## AI provider (practice notes and Mika)
 

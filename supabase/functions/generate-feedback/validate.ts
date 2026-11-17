@@ -5,16 +5,16 @@ import {
   CONFIDENCE_LEVELS,
   DISCLAIMER,
   MAX_OBSERVATIONS,
-  METRIC_KEYS,
   MIN_OBSERVATIONS,
+  NOTE_TOPICS,
   SUMMARY_MAX_CHARS,
   type FeedbackObservation,
   type FeedbackResponse,
-  type MetricKey,
+  type NoteTopic,
   // @ts-ignore TS5097: Deno needs the .ts extension
 } from './contract.ts'
 // @ts-ignore TS5097: Deno needs the .ts extension
-import type { FeedbackPayload } from './payload.ts'
+import { noteTopics, type FeedbackPayload } from './payload.ts'
 
 /**
  * JSON schema sent as `response_format` (json_schema, strict). Providers do not all enforce
@@ -30,7 +30,7 @@ export const FEEDBACK_JSON_SCHEMA = {
       items: {
         type: 'object',
         properties: {
-          metric: { type: 'string', enum: [...METRIC_KEYS] },
+          metric: { type: 'string', enum: [...NOTE_TOPICS] },
           observation: { type: 'string' },
           suggestion: { type: 'string' },
           confidence: { type: 'string', enum: [...CONFIDENCE_LEVELS] },
@@ -49,11 +49,27 @@ export const FEEDBACK_JSON_SCHEMA = {
 export const MAX_TEXT_CHARS = 600
 export const MAX_CAUTIONS = 5
 
-/** Wording the notes must never contain: a score or a grade (CLAUDE.md hard rule, FR-3.7.4). */
-const GRADING_PATTERNS: RegExp[] = [
-  /\b\d+(\.\d+)?\s*(\/|out of)\s*(5|10|100)\b/i,
-  /\b(score|scores|scored|grade|grades|graded|rating|ratings|rated)\b/i,
+/**
+ * Wording the notes must never contain (CLAUDE.md hard rule, FR-3.7.4): a score or a
+ * grade, and verdict words that judge the dancing (good/bad, better/worse, correct/
+ * incorrect, improved...). Checked on every note, relevé or phrase, in English and in the
+ * other languages the notes can be written in. Neutral direction words (higher, lower,
+ * longer, further, more, less) are not in the list. A false positive only means the
+ * dancer is asked to try again; a verdict that slips through can't be taken back.
+ */
+export const GRADING_PATTERNS: RegExp[] = [
+  /\b\d+(\.\d+)?\s*(\/|out of|de|sur|von|su)\s*(5|10|20|100)\b/i,
+  /\b(score|scores|scored|scoring|grade|grades|graded|grading|rating|ratings|rated|rank|ranks|ranked|ranking)\b/i,
+  // English verdicts
+  /\b(good|bad|better|best|worse|worst|correct|correctly|incorrect|incorrectly|wrong|right way|perfect|perfectly|excellent|great|poor|poorly|ideal|flawless|sloppy|mistake|mistakes|improved|improvement|improvements|regressed|declined|well done|nice work|great job)\b/i,
+  // Spanish verdicts
+  /(?<![\p{L}])(bien|mal|malo|mala|buen|bueno|buena|mejor|mejores|mejora|mejoras|mejoró|mejorado|mejorada|peor|peores|empeoró|correcto|correcta|correctamente|incorrecto|incorrecta|incorrectamente|perfecto|perfecta|excelente|errores|error|ideal|puntuación|puntaje|calificación)(?![\p{L}])/iu,
 ]
+
+/** True when the text grades the dancing (see GRADING_PATTERNS). */
+export function containsGrading(text: string): boolean {
+  return GRADING_PATTERNS.some((p) => p.test(text))
+}
 
 export type ParseResult = { ok: true; value: FeedbackResponse } | { ok: false; reason: string }
 
@@ -98,20 +114,21 @@ export function parseFeedback(raw: string, payload: FeedbackPayload): ParseResul
   if (r.observations.length < MIN_OBSERVATIONS || r.observations.length > MAX_OBSERVATIONS) {
     return fail(`observations must have ${MIN_OBSERVATIONS} to ${MAX_OBSERVATIONS} items`)
   }
-  const sent = new Map(payload.metrics.map((m) => [m.metric as string, m]))
-  const seen = new Set<MetricKey>()
+  // Relevé metrics or phrase themes, whichever this payload carries.
+  const sent = noteTopics(payload)
+  const seen = new Set<NoteTopic>()
   const observations: FeedbackObservation[] = []
   for (const o of r.observations) {
     if (typeof o !== 'object' || o === null) return fail('observation is not an object')
     const obs = o as Record<string, unknown>
-    const metric = typeof obs.metric === 'string' ? sent.get(obs.metric) : undefined
-    if (!metric) return fail('observation about a metric that was not sent')
-    if (seen.has(metric.metric)) return fail('two observations about the same metric')
-    seen.add(metric.metric)
+    const topic = typeof obs.metric === 'string' && sent.has(obs.metric) ? (obs.metric as NoteTopic) : null
+    if (!topic) return fail('observation about a metric that was not sent')
+    if (seen.has(topic)) return fail('two observations about the same metric')
+    seen.add(topic)
     const observation = text(obs.observation)
     const suggestion = text(obs.suggestion)
     if (!observation || !suggestion) return fail('observation text missing or too long')
-    observations.push({ metric: metric.metric, observation, suggestion, confidence: metric.confidence })
+    observations.push({ metric: topic, observation, suggestion, confidence: sent.get(topic)! })
   }
 
   if (!Array.isArray(r.cautions) || r.cautions.length > MAX_CAUTIONS) return fail('cautions is not a short list')
@@ -123,7 +140,7 @@ export function parseFeedback(raw: string, payload: FeedbackPayload): ParseResul
   }
 
   const all = [summary, ...observations.flatMap((o) => [o.observation, o.suggestion]), ...cautions].join('\n')
-  if (GRADING_PATTERNS.some((p) => p.test(all))) return fail('contains a score or a grade')
+  if (containsGrading(all)) return fail('contains a score, a grade or a verdict')
 
   return { ok: true, value: { summary: clampSummary(summary), observations, cautions, disclaimer: DISCLAIMER } }
 }

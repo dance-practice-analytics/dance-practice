@@ -2,11 +2,13 @@
 // this only prepares the context panel — the real measurements a question would be
 // about — and the suggested questions. Nothing here sends or answers anything.
 
+import { buildPhrasePayload } from '../../../../supabase/functions/_shared/phrase'
 import { median } from '../../../insights'
 import type { Confidence } from '../../components'
 import type { AttemptView } from '../../data'
-import { formatMetricWithUnit, PHASE_LABELS, readMetrics, type MetricReading } from '../../format'
-import { earlierAttempts } from '../notes/model'
+import { formatMetricWithUnit, formatNumber, PHASE_LABELS, readMetrics, type MetricReading } from '../../format'
+import { earlierAttempts, focusLine, phraseContextFor, phraseShare, progressLine, type PhraseShare } from '../notes/model'
+import { orderThemes, phraseOf, readTheme, THEMES, type ThemeKey, type ThemeReading } from '../phrase/model'
 
 export type ChatScope = 'attempt' | 'session'
 
@@ -28,6 +30,85 @@ export interface ChatContext {
   /** How many rows carry a value. */
   valueCount: number
   note: string
+  /** Phrase attempts: which earlier sessions and focus themes go along with a question. */
+  phrase?: { progress: string; focus: string; events: string; share: PhraseShare }
+}
+
+/** The extra phrase context Mika gets (same rule as the function), in words. */
+function phraseExtras(attempt: AttemptView, all: readonly AttemptView[], focus: readonly ThemeKey[]): ChatContext['phrase'] {
+  if (!attempt.metrics) return undefined
+  const payload = buildPhrasePayload(attempt.metrics, [], phraseContextFor(attempt, all, focus))
+  const share = phraseShare(payload)
+  const counts = Object.entries(payload.events.counts).filter(([, n]) => n > 0)
+  const events = counts.length
+    ? `Event summary: ${counts.map(([k, n]) => `${n} ${EVENT_WORDS[k] ?? k}${n === 1 ? '' : 's'}`).join(', ')}, with times.`
+    : 'Event summary: no events detected.'
+  return { progress: progressLine(share), focus: focusLine(share), events, share }
+}
+
+const EVENT_WORDS: Record<string, string> = { gesture: 'leg gesture', releve: 'relevé', plie: 'plié', tilt: 'tilt', turn: 'turn' }
+
+function phraseChatContext(attempt: AttemptView, all: readonly AttemptView[], scope: ChatScope, focus: readonly ThemeKey[]): ChatContext {
+  const view = attempt.session.camera_view
+  const order = orderThemes(focus)
+  const mine = phraseOf(attempt.metrics)
+  const extras = phraseExtras(attempt, all, focus)
+  const unit = (r: ThemeReading, text: string) => `${text}${r.info.unit.startsWith('°') ? '' : ' '}${r.info.unit}`
+
+  if (scope === 'attempt') {
+    const prev = previousAttempt(attempt, all)
+    const before = prev ? phraseOf(prev.metrics) : null
+    const rows = order.map((k): SharedRow => {
+      const r = readTheme(mine, k, view)
+      const parts = [r.value === null ? 'Not measured' : unit(r, r.text)]
+      if (prev) {
+        const b = readTheme(before, k, view)
+        parts.push(`attempt ${prev.number}: ${b.value === null ? '—' : unit(b, b.text)}`)
+      }
+      if (r.confidence === 'low') parts.push('flagged low')
+      return {
+        key: k,
+        name: focus.includes(k) ? `${r.info.label} · focus` : r.info.label,
+        label: r.info.label,
+        value: parts.join(' · '),
+        confidence: r.confidence,
+        subdued: r.value === null || r.confidence === 'low',
+      }
+    })
+    return {
+      rows,
+      valueCount: rows.filter((r) => r.confidence !== 'none').length,
+      note: prev ? `Would include attempt ${prev.number}’s theme values so change can be described.` : 'No earlier analyzed attempt in this session to compare with.',
+      phrase: extras,
+    }
+  }
+
+  const session = all.filter((a) => a.session_id === attempt.session_id && a.metrics !== null)
+  const rows = order.map((k): SharedRow => {
+    const column = session.map((a) => readTheme(phraseOf(a.metrics), k, view))
+    const usable = column.filter((c) => c.value !== null)
+    const low = usable.filter((c) => c.confidence === 'low').length
+    const weakest = usable.reduce<Confidence>((w, c) => (ORDER.indexOf(c.confidence) < ORDER.indexOf(w) ? c.confidence : w), usable.length ? 'high' : 'none')
+    const parts = [`${column.length} ${column.length === 1 ? 'attempt' : 'attempts'}`]
+    const m = median(usable.map((c) => c.value as number))
+    const first = usable[0]
+    parts.push(m === null || !first ? 'no values' : `median ${unit(first, formatNumber(m, first.info.decimals))}`)
+    if (low) parts.push(`${low} flagged low`)
+    return {
+      key: k,
+      name: focus.includes(k) ? `${THEMES[k].label} · focus` : THEMES[k].label,
+      label: THEMES[k].label,
+      value: parts.join(' · '),
+      confidence: weakest,
+      subdued: weakest === 'none' || weakest === 'low',
+    }
+  })
+  return {
+    rows,
+    valueCount: rows.filter((r) => r.confidence !== 'none').length,
+    note: `Theme values for ${session.length === 1 ? 'the one analyzed attempt' : `all ${session.length} analyzed attempts`} in this session, with their confidence.`,
+    phrase: extras,
+  }
 }
 
 const ORDER: Confidence[] = ['none', 'low', 'medium', 'high']
@@ -41,8 +122,10 @@ export function previousAttempt(attempt: AttemptView, all: readonly AttemptView[
   return earlierAttempts(attempt, all)[0] ?? null
 }
 
-export function chatContext(attempt: AttemptView, all: readonly AttemptView[], scope: ChatScope): ChatContext {
+/** `focus` are the dancer's focus themes (phrase attempts only). */
+export function chatContext(attempt: AttemptView, all: readonly AttemptView[], scope: ChatScope, focus: readonly ThemeKey[] = []): ChatContext {
   const movement = attempt.session.movement_type
+  if (movement === 'phrase') return phraseChatContext(attempt, all, scope, focus)
   const readings = readMetrics(attempt.metrics, movement)
 
   if (scope === 'attempt') {
@@ -96,8 +179,29 @@ export function chatContext(attempt: AttemptView, all: readonly AttemptView[], s
   }
 }
 
+/** Suggested questions for a phrase: change over time and practice attention, tied to the focus themes. */
+function phraseQuestions(attempt: AttemptView, all: readonly AttemptView[], focus: readonly ThemeKey[]): string[] {
+  const prev = previousAttempt(attempt, all)
+  const mine = phraseOf(attempt.metrics)
+  const sessions = phraseExtras(attempt, all, focus)?.share.sessions ?? 0
+  const measured = orderThemes(focus).filter((k) => readTheme(mine, k).value !== null)
+  const first = measured[0]
+  const out: string[] = []
+  if (first && sessions > 0) out.push(`How did my ${THEMES[first].label.toLowerCase()} change across sessions?`)
+  else if (prev) out.push(`What changed since attempt ${prev.number}?`)
+  out.push(focus.length ? 'What could I pay attention to in my focus themes?' : 'What could I pay attention to next time?')
+  if (mine?.events.some((e) => e.kind === 'gesture')) out.push('What happened in the main leg extension?')
+  const uncertain = orderThemes(focus).find((k) => {
+    const r = readTheme(mine, k)
+    return r.value !== null && r.confidence === 'low'
+  })
+  if (uncertain) out.push(`Why is ${THEMES[uncertain].label.toLowerCase()} uncertain?`)
+  return out
+}
+
 /** Suggested questions, worded from what this attempt really has. */
-export function suggestedQuestions(attempt: AttemptView, all: readonly AttemptView[]): string[] {
+export function suggestedQuestions(attempt: AttemptView, all: readonly AttemptView[], focus: readonly ThemeKey[] = []): string[] {
+  if (attempt.session.movement_type === 'phrase') return phraseQuestions(attempt, all, focus)
   const prev = previousAttempt(attempt, all)
   const readings = readMetrics(attempt.metrics, attempt.session.movement_type)
   const low = readings.filter((r) => r.value !== null && r.confidence === 'low')

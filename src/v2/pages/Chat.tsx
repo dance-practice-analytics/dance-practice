@@ -15,6 +15,7 @@ import { latestProcessed, useAttempts, type AttemptView } from '../data'
 import { formatDate, MOVEMENT_LABELS, VIEW_LABELS } from '../format'
 import { href, navigate, useRoute } from '../router'
 import { useIsNarrow } from '../useIsNarrow'
+import { useFocusThemes } from '../focus'
 import { chatContext, previousAttempt, suggestedQuestions, type ChatContext, type ChatScope } from './chat/model'
 import { askMika, isNotConnected, MAX_QUESTION_CHARS, MikaError, mikaStatus, type ChatMessage } from './chat/mikaClient'
 import { AttemptPicker } from './notes/AttemptPicker'
@@ -65,6 +66,8 @@ export function Chat() {
   const consents = useConsents()
   const [connection, markNotConnected] = useConnection()
   const [scope, setScope] = useState<ChatScope>('attempt')
+  // Phrase attempts: the dancer's focus themes go along with a question (and order the rows).
+  const focus = useFocusThemes().themes
   const routeId = route.name === 'chat' ? route.attemptId : undefined
 
   const all = attempts.data
@@ -72,8 +75,8 @@ export function Chat() {
     () => (routeId ? (all?.find((a) => a.id === routeId) ?? null) : latestProcessed(all)),
     [all, routeId],
   )
-  const context = useMemo(() => (attempt && all ? chatContext(attempt, all, scope) : null), [attempt, all, scope])
-  const questions = useMemo(() => (attempt && all ? suggestedQuestions(attempt, all) : []), [attempt, all])
+  const context = useMemo(() => (attempt && all ? chatContext(attempt, all, scope, focus) : null), [attempt, all, scope, focus])
+  const questions = useMemo(() => (attempt && all ? suggestedQuestions(attempt, all, focus) : []), [attempt, all, focus])
   const compareId = useMemo(() => (attempt && all ? (previousAttempt(attempt, all)?.id ?? null) : null), [attempt, all])
   const pick = (attemptId: string) => navigate({ name: 'chat', attemptId })
 
@@ -144,7 +147,7 @@ export function Chat() {
 
       {narrow ? (
         <>
-          <MobileContext context={chatContext(attempt, all, 'attempt')} live={live} />
+          <MobileContext context={chatContext(attempt, all, 'attempt', focus)} live={live} />
           <AttemptPicker id="chat-attempt" attempts={all} value={attempt.id} onChange={pick} label="Asking about" />
           {conversation}
         </>
@@ -229,6 +232,7 @@ function ContextPanel({ attempt, all, context, scope, setScope, onPick, reviewHr
             </li>
           ))}
         </ul>
+        {context.phrase && <PhraseShared phrase={context.phrase} />}
         <p className="t-caption">
           {context.note}{' '}
           {live ? 'Sent only with a question, as numbers.' : 'Nothing is shared now: the assistant isn’t connected.'}
@@ -240,7 +244,7 @@ function ContextPanel({ attempt, all, context, scope, setScope, onPick, reviewHr
           Never shared
         </h2>
         <p className="t-small muted">
-          Video, images, keypoints, your name or email. Mika can’t see you dance — only the numbers above.
+          Video, images, keypoints, your notes, session titles, file names, your name or email. Mika can’t see you dance — only the numbers above.
         </p>
       </section>
       {consents.status === 'ready' && !consents.has(AI_CONSENT_SCOPE) && (
@@ -250,6 +254,21 @@ function ContextPanel({ attempt, all, context, scope, setScope, onPick, reviewHr
         </p>
       )}
     </aside>
+  )
+}
+
+/** Phrase: the event summary, earlier sessions and focus themes that go along with a question. */
+function PhraseShared({ phrase }: { phrase: NonNullable<ChatContext['phrase']> }) {
+  return (
+    <ul className="t-small" style={{ display: 'flex', flexDirection: 'column', gap: 4, borderTop: '1px solid var(--line)', paddingTop: 10 }} aria-label="Also shared for this phrase">
+      <li>{phrase.events}</li>
+      <li>
+        <span style={{ fontWeight: 500 }}>Progress:</span> {phrase.progress}
+      </li>
+      <li>
+        <span style={{ fontWeight: 500 }}>Focus:</span> {phrase.focus}
+      </li>
+    </ul>
   )
 }
 
@@ -263,7 +282,7 @@ function MobileContext({ context, live }: { context: ChatContext; live: boolean 
         <Icon name="device" size={16} />
         <span className="t-small" style={{ flex: 1 }}>
           <span style={{ fontWeight: 600 }}>
-            {n} {n === 1 ? 'metric' : 'metrics'} {live ? 'shared with a question' : 'would be shared'}
+            {n} {context.phrase ? (n === 1 ? 'theme' : 'themes') : n === 1 ? 'metric' : 'metrics'} {live ? 'shared with a question' : 'would be shared'}
           </span>{' '}
           · never video
         </span>
@@ -279,6 +298,7 @@ function MobileContext({ context, live }: { context: ChatContext; live: boolean 
               <ConfBadge level={m.confidence} />
             </div>
           ))}
+          {context.phrase && <PhraseShared phrase={context.phrase} />}
           <p className="t-caption">
             Never shared: video, images, keypoints, name or email. {live ? 'Values are sent only with a question.' : 'Nothing is shared now.'}
           </p>

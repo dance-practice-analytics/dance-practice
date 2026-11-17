@@ -6,20 +6,40 @@
 // TypeScript, no Deno or DOM API, already unit-tested under Vitest), so the "What is
 // sent" panel cannot drift from what the function really sends to the model.
 
-import { FAILURES, RATE_LIMIT_MAX } from '../../../../supabase/functions/generate-feedback/contract'
+import { FAILURES, METRIC_KEYS, RATE_LIMIT_MAX, type NoteLanguage, type NoteTopic } from '../../../../supabase/functions/generate-feedback/contract'
 import {
-  buildPayload,
+  buildNotesPayload,
   hasMeasurements,
+  isPhrasePayload,
   MAX_EARLIER_ATTEMPTS,
   type FeedbackPayload,
   type PayloadMetric,
+  type PhraseContextInput,
 } from '../../../../supabase/functions/generate-feedback/payload'
+import {
+  progressSessions,
+  type PayloadTheme,
+  type PhrasePayload,
+  type SessionMeta,
+  type ThemeKey,
+} from '../../../../supabase/functions/_shared/phrase'
 import type { FeedbackNote } from '../../../feedback/client'
+import type { MetricKey } from '../../../metrics/types'
 import type { AttemptView } from '../../data'
 import { formatDate, formatDateTime, METRICS, MOVEMENT_LABELS, VIEW_LABELS } from '../../format'
+import { THEMES } from '../phrase/model'
 
-export { hasMeasurements }
-export type { FeedbackPayload, PayloadMetric }
+export { hasMeasurements, isPhrasePayload }
+export type { FeedbackPayload, PayloadMetric, PayloadTheme, PhrasePayload }
+
+/** The name of what an observation is about: a relevé metric or a phrase theme. */
+export function topicLabel(topic: NoteTopic): string {
+  return (METRIC_KEYS as readonly string[]).includes(topic) ? METRICS[topic as MetricKey].label : THEMES[topic as ThemeKey].label
+}
+
+export function isThemeTopic(topic: NoteTopic): topic is ThemeKey {
+  return !(METRIC_KEYS as readonly string[]).includes(topic)
+}
 
 // ---------- attempts ----------
 
@@ -94,13 +114,58 @@ export function earlierAttempts(attempt: AttemptView, all: readonly AttemptView[
     .filter((a) => a.metrics !== null)
 }
 
-/** The metrics-only payload for an attempt; null when it has no measurements row. */
-export function payloadFor(attempt: AttemptView, all: readonly AttemptView[]): FeedbackPayload | null {
+function sessionMeta(a: AttemptView): SessionMeta {
+  const s = a.session
+  return {
+    id: s.id,
+    owner_id: s.owner_id,
+    movement_type: s.movement_type,
+    camera_view: s.camera_view,
+    subject_id: s.subject_id,
+    recorded_on: s.recorded_on,
+    created_at: s.created_at,
+  }
+}
+
+/**
+ * What the function loads around a phrase attempt, from the attempts already on screen:
+ * the camera view, the earlier sessions of the same phrase, view and dancer (the same
+ * rule as supabase/functions/_shared/phraseContext.ts) and the focus themes.
+ */
+export function phraseContextFor(attempt: AttemptView, all: readonly AttemptView[], focus: readonly ThemeKey[] = []): PhraseContextInput {
+  const sessions = new Map<string, SessionMeta>()
+  for (const a of all) if (!sessions.has(a.session_id)) sessions.set(a.session_id, sessionMeta(a))
+  const picked = progressSessions(sessionMeta(attempt), [...sessions.values()])
+  return {
+    cameraView: attempt.session.camera_view,
+    progress: picked.map((s) => ({
+      rows: all
+        .filter((a) => a.session_id === s.id && a.metrics !== null)
+        .sort((x, y) => x.created_at.localeCompare(y.created_at))
+        .map((a) => a.metrics!),
+    })),
+    focus,
+  }
+}
+
+/**
+ * The metrics-only payload for an attempt; null when it has no measurements row.
+ * `focus` are the dancer's focus themes (phrase only); `language` the notes' language.
+ */
+export function payloadFor(
+  attempt: AttemptView,
+  all: readonly AttemptView[],
+  focus: readonly ThemeKey[] = [],
+  language: NoteLanguage = 'en',
+): FeedbackPayload | null {
   if (!attempt.metrics) return null
   try {
-    return buildPayload(
+    const ctx = attempt.session.movement_type === 'phrase' ? phraseContextFor(attempt, all, focus) : {}
+    return buildNotesPayload(
       attempt.metrics,
       earlierAttempts(attempt, all).map((a) => a.metrics!),
+      ctx,
+      language,
     )
   } catch {
     // A movement the function doesn't know: nothing would be sent.
@@ -108,9 +173,10 @@ export function payloadFor(attempt: AttemptView, all: readonly AttemptView[]): F
   }
 }
 
-/** How many metric values (not gaps) the payload carries. */
+/** How many metric (or theme) values, not gaps, the payload carries. */
 export function sentCount(payload: FeedbackPayload | null): number {
-  return payload ? payload.metrics.filter((m) => m.value !== null).length : 0
+  if (!payload) return 0
+  return isPhrasePayload(payload) ? payload.themes.filter((t) => t.value !== null).length : payload.metrics.filter((m) => m.value !== null).length
 }
 
 function metricLine(m: PayloadMetric): string {
@@ -118,8 +184,73 @@ function metricLine(m: PayloadMetric): string {
   return [`${m.metric}: ${value}`, m.phases.join('+') || null, m.confidence, ...(m.notes ?? [])].filter(Boolean).join(' · ')
 }
 
+function themeLine(t: PayloadTheme): string {
+  const value = t.value === null ? `not measured (${t.not_measured_reason ?? 'unknown'})` : `${t.value} ${t.unit}`
+  return [`${t.theme}: ${value}`, t.confidence, ...(t.notes ?? [])].join(' · ')
+}
+
+const plural = (n: number, one: string, many = `${one}s`) => `${n} ${n === 1 ? one : many}`
+
+/** What a phrase payload includes beyond this attempt, in words for the panels. */
+export interface PhraseShare {
+  /** Earlier sessions whose medians are included. */
+  sessions: number
+  /** Earlier attempts of this session included. */
+  earlierAttempts: number
+  /** Focus theme names, in the dancer's order. */
+  focus: string[]
+  view: string | null
+}
+
+export function phraseShare(payload: PhrasePayload): PhraseShare {
+  return {
+    sessions: payload.progress.length,
+    earlierAttempts: payload.earlier_attempts.length,
+    focus: payload.focus_themes.map((k) => THEMES[k].label),
+    view: payload.camera_view,
+  }
+}
+
+/** 'Theme medians of 3 earlier sessions (same phrase, diagonal view)' or why there are none. */
+export function progressLine(share: PhraseShare): string {
+  if (!share.view) return 'No earlier sessions: this session has no camera view, so none can be matched.'
+  if (share.sessions === 0) return `No earlier session of this phrase with the ${share.view} view.`
+  return `Theme medians of ${plural(share.sessions, 'earlier session')} (same phrase, dancer and ${share.view} view).`
+}
+
+/** 'Focus: Arm reach, Head leads the arms' or that none were chosen. */
+export function focusLine(share: PhraseShare): string {
+  return share.focus.length ? `Focus themes: ${share.focus.join(', ')}.` : 'No focus themes chosen (you can pick up to 3 in Review).'
+}
+
+function phraseLines(payload: PhrasePayload & { language?: NoteLanguage }): string[] {
+  const e = payload.events
+  const counts = Object.entries(e.counts)
+    .filter(([, n]) => n > 0)
+    .map(([k, n]) => `${n} ${k}`)
+  const lines = [`movement: phrase`, `camera_view: ${payload.camera_view ?? 'unknown'}`, ...payload.themes.map(themeLine)]
+  lines.push(
+    `events: ${counts.length ? counts.join(', ') : 'none detected'}${e.side_uncertain_events ? ` (${e.side_uncertain_events} with sides uncertain)` : ''}`,
+  )
+  for (const m of e.main_events) {
+    lines.push(`  ${m.role}: ${m.start_s}–${m.end_s} s${m.side ? ` · ${m.side}${m.side_uncertain ? ' (uncertain)' : ''}` : ''}`)
+  }
+  const n = payload.earlier_attempts.length
+  lines.push(n === 0 ? 'earlier_attempts: none' : `earlier_attempts: the same theme values for ${plural(n, 'earlier attempt')} of this session`)
+  const s = payload.progress.length
+  lines.push(
+    s === 0
+      ? 'progress: none'
+      : `progress: theme medians of ${plural(s, 'earlier session')} (${payload.progress.map((p) => plural(p.attempts, 'attempt')).join(', ')})`,
+  )
+  lines.push(`focus_themes: ${payload.focus_themes.length ? payload.focus_themes.join(', ') : 'none'}`)
+  if (payload.language) lines.push(`language: ${payload.language}`)
+  return lines
+}
+
 /** The payload as the lines of the "What is sent" panel: every field, nothing else. */
 export function payloadLines(payload: FeedbackPayload): string[] {
+  if (isPhrasePayload(payload)) return phraseLines(payload)
   const lines = [`movement: ${payload.movement}`, ...payload.metrics.map(metricLine)]
   if (payload.phases.length) lines.push(`phases: ${payload.phases.map((p) => `${p.phase} ${p.duration_s} s`).join(', ')}`)
   const n = payload.earlier_attempts.length
@@ -128,6 +259,7 @@ export function payloadLines(payload: FeedbackPayload): string[] {
       ? 'earlier_attempts: none'
       : `earlier_attempts: the same values for ${n} earlier ${n === 1 ? 'attempt' : 'attempts'} of this session`,
   )
+  if (payload.language) lines.push(`language: ${payload.language}`)
   return lines
 }
 
@@ -269,7 +401,7 @@ export function noteText(a: AttemptView, note: FeedbackNote, now: Date = new Dat
     r.summary,
     '',
     ...r.observations.flatMap((o, i) => [
-      `${i + 1}. ${METRICS[o.metric].label} (confidence: ${o.confidence})`,
+      `${i + 1}. ${topicLabel(o.metric)} (confidence: ${o.confidence})`,
       `   Observed: ${o.observation}`,
       `   Practice suggestion: ${o.suggestion}`,
     ]),

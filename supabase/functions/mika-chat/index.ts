@@ -5,8 +5,9 @@
 //
 // - The Supabase client is created with the request's Authorization header, so every
 //   query runs under the caller's RLS. The service-role key is never used.
-// - Only attempt_metrics rows and attempt ids/order are read: never keypoints, frames,
-//   video, titles, file names or subject codes.
+// - Only attempt_metrics rows and attempt ids/order are read (for a phrase also the
+//   session's view and dancer ids, earlier sessions' theme values and the focus themes):
+//   never keypoints, frames, video, titles, notes, file names or subject codes.
 // - The provider (Gemini or Grok, OpenAI-compatible) and its key come from the function's
 //   secrets only (see ../_shared/llm.ts).
 //
@@ -14,6 +15,7 @@
 
 import { createClient, type SupabaseClient } from '@supabase/supabase-js'
 import { createLlm, llmConfigFromEnv, LlmError, type Llm } from '../_shared/llm.ts'
+import { loadPhraseContext } from '../_shared/phraseContext.ts'
 import { AI_CONSENT_SCOPE, MIKA_FAILURES, mikaErrorBody, type ChatMessage, type MikaFailureCode } from './contract.ts'
 import { allowedOrigins, corsHeaders } from '../generate-feedback/cors.ts'
 import { handleMika, interpretCompletion, outcomeFromError, type Deps, type MetricsRow, type ModelOutcome } from './handler.ts'
@@ -26,7 +28,7 @@ const MAX_RETRIES = 1
 const MAX_TOKENS = 8000
 
 const METRIC_COLUMNS =
-  'attempt_id, movement, trunk_inclination_deg, pelvis_ankle_offset_norm, balance_duration_s, knee_tracking_dev_deg, turn_count, phases, confidence'
+  'attempt_id, movement, trunk_inclination_deg, pelvis_ankle_offset_norm, balance_duration_s, knee_tracking_dev_deg, turn_count, phases, confidence, phrase'
 
 /** Per instance: see rateLimit.ts for what that means. */
 const limiter = createRateLimiter()
@@ -91,6 +93,9 @@ function deps(supabase: SupabaseClient, token: string, llm: Llm): Deps {
       )
       return (rows ?? []).map((r: { id: string }) => r.id)
     },
+
+    // Phrase only: earlier sessions of the same view and the focus themes (owner-filtered, under RLS).
+    loadPhraseContext: (uid, attemptId) => loadPhraseContext(supabase, uid, attemptId),
 
     rateLimit: (uid, now) => limiter.take(uid, now),
 

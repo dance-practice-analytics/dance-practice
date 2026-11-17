@@ -19,9 +19,12 @@ import { client, signOut } from '../auth'
 import { Alert, ConfBadge, EmptyState, ErrorAlert, Icon, NoteBox, PageHeader, Skeleton, SkeletonList, Spinner } from '../components'
 import { setConsent, useConsents } from '../consents'
 import { latestProcessed, useAttempts, type AttemptView } from '../data'
-import { formatDate, formatDateTime, formatMetricWithUnit, METRICS, MOVEMENT_LABELS, PHASE_LABELS, readMetric, readMetrics } from '../format'
+import { formatDate, formatDateTime, formatMetricWithUnit, MOVEMENT_LABELS, PHASE_LABELS, readMetric, readMetrics } from '../format'
 import { href, navigate, useRoute } from '../router'
 import { useIsNarrow } from '../useIsNarrow'
+import { useFocusThemes } from '../focus'
+import { noteLanguage } from '../../../supabase/functions/generate-feedback/contract'
+import { phraseOf, readTheme, THEME_KEYS } from './phrase/model'
 import { AttemptPicker } from './notes/AttemptPicker'
 import {
   attemptDay,
@@ -31,11 +34,17 @@ import {
   hasMeasurements,
   historyMeta,
   historyTitle,
+  isPhrasePayload,
+  isThemeTopic,
+  focusLine,
   noteAlert,
   noteText,
   payloadFor,
   payloadLines,
+  phraseShare,
+  progressLine,
   sentCount,
+  topicLabel,
   type FeedbackPayload,
   type NoteAlert,
 } from './notes/model'
@@ -142,7 +151,10 @@ function NotesFor({ attempt, all, narrow, eyebrow, onPick, libraryError }: Notes
   const seq = useRef(0)
   const live = useRef(true)
 
-  const payload = useMemo(() => payloadFor(attempt, all), [attempt, all])
+  const focus = useFocusThemes()
+  const language = typeof navigator !== 'undefined' ? noteLanguage(navigator.language) : 'en'
+  // Phrase attempts also carry earlier sessions of the same view and the dancer's focus themes.
+  const payload = useMemo(() => payloadFor(attempt, all, focus.themes, language), [attempt, all, focus.themes, language])
   const measured = payload !== null && hasMeasurements(payload)
   const values = sentCount(payload)
   const aiAllowed = consents.status === 'ready' && consents.has(AI_CONSENT_SCOPE)
@@ -234,7 +246,7 @@ function NotesFor({ attempt, all, narrow, eyebrow, onPick, libraryError }: Notes
       ? 'No metric values to send for this attempt.'
       : consents.status === 'ready' && !aiAllowed
         ? 'AI practice notes are off. Nothing is sent.'
-        : `Sends ${values} metric ${values === 1 ? 'value' : 'values'}. Never video.`
+        : `Sends ${values} ${payload && isPhrasePayload(payload) ? 'theme' : 'metric'} ${values === 1 ? 'value' : 'values'}. Never video.`
 
   const generateButton = (block: boolean) => {
     const cls = `btn btn-primary${block ? ' btn-lg btn-block' : ''}`
@@ -497,7 +509,13 @@ function NotesAlert({ alert, reviewHref, onRetry, onAllow, busy, canRetry }: Not
 
 /** Every metric is a gap: say why, send nothing. */
 function NothingMeasured({ attempt, reviewHref }: { attempt: AttemptView; reviewHref: string }) {
-  const readings = readMetrics(attempt.metrics, attempt.session.movement_type)
+  const readings =
+    attempt.session.movement_type === 'phrase'
+      ? THEME_KEYS.map((k) => {
+          const r = readTheme(phraseOf(attempt.metrics), k)
+          return { key: k, def: { label: r.info.label }, reason: r.reason }
+        })
+      : readMetrics(attempt.metrics, attempt.session.movement_type)
   return (
     <div className="alert" role="status" data-code="nothing_measured">
       <Icon name="warning" />
@@ -530,6 +548,7 @@ function WhatIsSent({ payload, measured }: { payload: FeedbackPayload | null; me
       <h2 className="t-h3" id="notes-sent-h">
         {title}
       </h2>
+      {payload && isPhrasePayload(payload) && <PhraseIncluded payload={payload} />}
       {payload ? (
         <pre className="well mono v2-notes-pre">{payloadLines(payload).join('\n')}</pre>
       ) : (
@@ -540,6 +559,25 @@ function WhatIsSent({ payload, measured }: { payload: FeedbackPayload | null; me
         No video, images, keypoints, name or email.
       </p>
     </section>
+  )
+}
+
+/** Phrase: which earlier sessions and focus themes go along, in words. */
+function PhraseIncluded({ payload }: { payload: Parameters<typeof phraseShare>[0] }) {
+  const share = phraseShare(payload)
+  return (
+    <ul className="t-small" style={{ display: 'flex', flexDirection: 'column', gap: 4 }} aria-label="Also included">
+      <li>
+        <span style={{ fontWeight: 500 }}>This attempt:</span> six theme values and an event summary
+        {share.earlierAttempts ? `, plus ${share.earlierAttempts} earlier attempt${share.earlierAttempts === 1 ? '' : 's'} of this session` : ''}.
+      </li>
+      <li>
+        <span style={{ fontWeight: 500 }}>Progress:</span> {progressLine(share)}
+      </li>
+      <li>
+        <span style={{ fontWeight: 500 }}>Focus:</span> {focusLine(share)}
+      </li>
+    </ul>
   )
 }
 
@@ -582,18 +620,22 @@ function NoteArticle({ attempt, note, latest, narrow }: NoteArticleProps) {
       <section style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
         <h2 className="t-label">Observations</h2>
         {r.observations.map((o, i) => {
-          const reading = readMetric(attempt.metrics, o.metric)
+          const topic = o.metric
+          // A phrase note is about themes: their value comes from attempt_metrics.phrase.
+          const theme = isThemeTopic(topic) ? readTheme(phraseOf(attempt.metrics), topic) : null
+          const reading = isThemeTopic(topic) ? null : readMetric(attempt.metrics, topic)
+          const valueText = theme ? (theme.value === null ? '—' : `${theme.text}${theme.info.unit.startsWith('°') ? '' : ' '}${theme.info.unit}`) : formatMetricWithUnit(topic as Parameters<typeof formatMetricWithUnit>[0], reading!.value)
           return (
             <div key={`${o.metric}-${i}`} className="well v2-notes-obs">
               <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
                 <span className="mono subtle" style={{ fontSize: 12 }}>
                   {String(i + 1).padStart(2, '0')}
                 </span>
-                <span style={{ fontWeight: 600 }}>{METRICS[o.metric].label}</span>
+                <span style={{ fontWeight: 600 }}>{topicLabel(topic)}</span>
                 <span className="num" title="Measured in this attempt">
-                  {formatMetricWithUnit(o.metric, reading.value)}
+                  {valueText}
                 </span>
-                {reading.phases.length > 0 && (
+                {reading && reading.phases.length > 0 && (
                   <span className="tag" style={{ background: 'var(--surface)' }}>
                     {reading.phases.map((p) => PHASE_LABELS[p] ?? p).join(' + ')}
                   </span>

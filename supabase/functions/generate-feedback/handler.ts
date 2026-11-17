@@ -8,16 +8,25 @@ import {
   FAILURES,
   errorBody,
   isFeedbackResponse,
+  noteLanguage,
   type FailureCode,
   type FeedbackErrorBody,
   type FeedbackResponse,
   type GenerateFeedbackResult,
+  type NoteLanguage,
   // @ts-ignore TS5097: Deno needs the .ts extension
 } from './contract.ts'
 // @ts-ignore TS5097: Deno needs the .ts extension
 import { inputHash } from './hash.ts'
-// @ts-ignore TS5097: Deno needs the .ts extension
-import { buildPayload, hasMeasurements, isMovement, type FeedbackPayload, type MetricsRowLike } from './payload.ts'
+import {
+  buildNotesPayload,
+  hasMeasurements,
+  isMovement,
+  type FeedbackPayload,
+  type MetricsRowLike,
+  type PhraseContextInput,
+  // @ts-ignore TS5097: Deno needs the .ts extension
+} from './payload.ts'
 // @ts-ignore TS5097: Deno needs the .ts extension
 import { PROMPT_VERSION } from './prompt.ts'
 // @ts-ignore TS5097: Deno needs the .ts extension
@@ -90,6 +99,12 @@ export interface Deps {
   loadMetrics(attemptId: string): Promise<MetricsRowLike | null>
   /** Metrics of earlier attempts in the same session, newest first. */
   loadEarlierMetrics(attemptId: string): Promise<MetricsRowLike[]>
+  /**
+   * Phrase attempts only: camera view, earlier sessions of the same movement, view and
+   * dancer (newest first, with their rows) and the dancer's focus themes. Optional context:
+   * a failure sends the notes without it.
+   */
+  loadPhraseContext?(attemptId: string): Promise<PhraseContextInput>
   findCached(attemptId: string, hash: string): Promise<StoredFeedback | null>
   /** created_at of the caller's feedback rows since `sinceIso`. */
   recentFeedbackTimes(sinceIso: string): Promise<string[]>
@@ -108,13 +123,14 @@ export interface HandlerResult {
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
 
-/** Returns the attempt id and the regenerate flag, or null when the body is not valid. */
-export function parseRequest(body: unknown): { attemptId: string; regenerate: boolean } | null {
+/** Returns the attempt id, the regenerate flag and the notes' language, or null when the body is not valid. */
+export function parseRequest(body: unknown): { attemptId: string; regenerate: boolean; language: NoteLanguage } | null {
   if (typeof body !== 'object' || body === null) return null
   const b = body as Record<string, unknown>
   if (typeof b.attempt_id !== 'string' || !UUID_RE.test(b.attempt_id)) return null
   if (b.regenerate !== undefined && typeof b.regenerate !== 'boolean') return null
-  return { attemptId: b.attempt_id, regenerate: b.regenerate === true }
+  if (b.language !== undefined && typeof b.language !== 'string') return null
+  return { attemptId: b.attempt_id, regenerate: b.regenerate === true, language: noteLanguage(b.language) }
 }
 
 export async function handleGenerate(method: string, body: unknown, deps: Deps): Promise<HandlerResult> {
@@ -138,7 +154,15 @@ export async function handleGenerate(method: string, body: unknown, deps: Deps):
     if (!row) return failure('attempt_not_found')
     if (!isMovement(row.movement)) return failure('invalid_request', 'unknown movement')
 
-    const payload = buildPayload(row, await deps.loadEarlierMetrics(attemptId))
+    let phraseContext: PhraseContextInput = {}
+    if (row.movement === 'phrase' && deps.loadPhraseContext) {
+      try {
+        phraseContext = await deps.loadPhraseContext(attemptId)
+      } catch {
+        phraseContext = {}
+      }
+    }
+    const payload = buildNotesPayload(row, await deps.loadEarlierMetrics(attemptId), phraseContext, request.language)
     if (!hasMeasurements(payload)) return failure('nothing_measured')
 
     const hash = await inputHash(payload, PROMPT_VERSION, deps.model)

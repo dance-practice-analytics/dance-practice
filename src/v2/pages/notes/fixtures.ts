@@ -4,6 +4,7 @@
 import type { SessionSummary } from '../../../data/repo'
 import type { AttemptMetricsRow, CameraView, MovementType } from '../../../data/schema'
 import type { ConfidenceLevel, MetricKey, NullReason, Phase } from '../../../metrics/types'
+import { THEME_KEYS, type PhraseEventOut, type PhraseNote, type PhraseNullReason, type PhraseResult, type ThemeKey } from '../../../metrics/phrase'
 import type { AttemptView } from '../../data'
 
 const KEYS: MetricKey[] = ['trunk_inclination_deg', 'pelvis_ankle_offset_norm', 'balance_duration_s', 'knee_tracking_dev_deg', 'turn_count']
@@ -59,6 +60,41 @@ export function metricsRow(attemptId: string, movement: MovementType, values: Pa
   }
   row.confidence = confidence
   return row as unknown as AttemptMetricsRow
+}
+
+export type ThemeSpec = number | null | { value: number | null; level?: ConfidenceLevel; notes?: PhraseNote[]; reason?: PhraseNullReason }
+
+/** A stored phrase result (attempt_metrics.phrase); themes left out are null with 'no_valid_frames'. */
+export function phraseResult(themes: Partial<Record<ThemeKey, ThemeSpec>>, events: PhraseEventOut[] = [], anchor: number | null = null): PhraseResult {
+  const out = {} as PhraseResult['themes']
+  for (const key of THEME_KEYS) {
+    const spec = themes[key]
+    const s = typeof spec === 'object' && spec !== null ? spec : { value: spec ?? null }
+    out[key] =
+      s.value === null || s.value === undefined
+        ? { value: null, parts: {}, confidence: { level: 'low', score: 0, reason: s.reason ?? 'no_valid_frames' } }
+        : { value: s.value, parts: { secret_part: 'S07' }, confidence: { level: s.level ?? 'high', score: 0.9, ...(s.notes ? { notes: s.notes } : {}) } }
+  }
+  return {
+    version: 'mt2-phrase-0.1.0',
+    duration_s: 12.4,
+    tracked_share: 0.97,
+    label_doubt_share: 0,
+    leg_length_m: 0.9,
+    events,
+    anchor,
+    circles: [],
+    themes: out,
+  }
+}
+
+/** A processed phrase attempt (relevé columns null, not_applicable). */
+export function phraseAttempt(id: string, s: SessionSummary, number: number, themes: Partial<Record<ThemeKey, ThemeSpec>>, events: PhraseEventOut[] = []): AttemptView {
+  const a = attempt(id, s, number, {})
+  const row = metricsRow(id, 'phrase', {}) as AttemptMetricsRow & Record<string, unknown>
+  for (const key of KEYS) (row.confidence as Record<string, unknown>)[key] = { level: 'low', score: 0, phases: [], reason: 'not_applicable' }
+  row.phrase = phraseResult(themes, events)
+  return { ...a, metrics: row, status: 'done' }
 }
 
 /**

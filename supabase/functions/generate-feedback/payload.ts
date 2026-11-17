@@ -4,10 +4,24 @@
 // string comes from an allowlist and every number is checked, because attempt_metrics
 // rows are written by the client.
 
-// @ts-ignore TS5097: Deno needs the .ts extension
-import { CONFIDENCE_LEVELS, METRIC_KEYS, type ConfidenceLevel, type MetricKey } from './contract.ts'
+// Phrase attempts (movement 'phrase') have their own payload: ../_shared/phrase.ts.
 
-export const MOVEMENTS = ['releve_balance', 'pirouette'] as const
+// @ts-ignore TS5097: Deno needs the .ts extension
+import { CONFIDENCE_LEVELS, METRIC_KEYS, type ConfidenceLevel, type MetricKey, type NoteLanguage } from './contract.ts'
+import {
+  buildPhrasePayload,
+  phraseHasMeasurements,
+  type PhraseContextInput,
+  type PhrasePayload,
+  // @ts-ignore TS5097: Deno needs the .ts extension
+} from '../_shared/phrase.ts'
+
+export type { PhraseContextInput, PhrasePayload }
+
+/** Movements measured with the five relevé metrics. */
+export const RELEVE_MOVEMENTS = ['releve_balance', 'pirouette'] as const
+export type ReleveMovement = (typeof RELEVE_MOVEMENTS)[number]
+export const MOVEMENTS = [...RELEVE_MOVEMENTS, 'phrase'] as const
 export type Movement = (typeof MOVEMENTS)[number]
 
 export const PHASES = ['prep', 'rise', 'hold', 'turn', 'finish', 'recovery'] as const
@@ -60,6 +74,8 @@ export interface MetricsRowLike {
   turn_count: number | null
   phases: unknown
   confidence: unknown
+  /** Phrase attempts only (jsonb, untrusted). */
+  phrase?: unknown
 }
 
 export interface PayloadMetric {
@@ -81,11 +97,20 @@ export interface PayloadEarlierAttempt {
   metrics: { metric: MetricKey; value: number | null; confidence: ConfidenceLevel }[]
 }
 
-export interface FeedbackPayload {
-  movement: Movement
+export interface RelevePayload {
+  movement: ReleveMovement
   metrics: PayloadMetric[]
   phases: { phase: Phase; duration_s: number }[]
   earlier_attempts: PayloadEarlierAttempt[]
+  /** Set only when the notes should be written in a language other than English. */
+  language?: NoteLanguage
+}
+
+/** What the practice notes are written from: a relevé/pirouette or a phrase payload. */
+export type FeedbackPayload = RelevePayload | (PhrasePayload & { language?: NoteLanguage })
+
+export function isPhrasePayload(p: FeedbackPayload): p is PhrasePayload & { language?: NoteLanguage } {
+  return p.movement === 'phrase'
 }
 
 const round = (v: number, decimals: number) => {
@@ -129,9 +154,9 @@ function metricEntry(row: MetricsRowLike, key: MetricKey): PayloadMetric | null 
   return entry
 }
 
-function phaseDurations(phases: unknown): FeedbackPayload['phases'] {
+function phaseDurations(phases: unknown): RelevePayload['phases'] {
   if (!Array.isArray(phases)) return []
-  const out: FeedbackPayload['phases'] = []
+  const out: RelevePayload['phases'] = []
   for (const p of phases) {
     if (!isRecord(p) || !allowed(PHASES, p.phase)) continue
     const { start, end } = p
@@ -144,10 +169,10 @@ function phaseDurations(phases: unknown): FeedbackPayload['phases'] {
 /**
  * `row` is the attempt the notes are about. `earlier` are attempts of the same session
  * recorded before it, newest first; rows of another movement are ignored.
- * Throws when the movement is not one the app knows.
+ * Throws when the movement is not a relevé or a pirouette (a phrase uses buildPhrasePayload).
  */
-export function buildPayload(row: MetricsRowLike, earlier: MetricsRowLike[] = []): FeedbackPayload {
-  if (!isMovement(row.movement)) throw new Error('unknown movement')
+export function buildPayload(row: MetricsRowLike, earlier: MetricsRowLike[] = []): RelevePayload {
+  if (!allowed(RELEVE_MOVEMENTS, row.movement)) throw new Error('unknown movement')
   const metrics = METRIC_KEYS.map((k) => metricEntry(row, k)).filter((m): m is PayloadMetric => m !== null)
   const keys = metrics.map((m) => m.metric)
   const earlier_attempts = earlier
@@ -163,7 +188,31 @@ export function buildPayload(row: MetricsRowLike, earlier: MetricsRowLike[] = []
   return { movement: row.movement, metrics, phases: phaseDurations(row.phases), earlier_attempts }
 }
 
-/** False when no metric has a value: there is nothing to describe, so the model is not called. */
+/**
+ * The payload of the practice notes for any movement. `ctx` (phrase only) carries the
+ * camera view, the earlier sessions and the focus themes; `language` is added only when
+ * it is not English, so an English note keeps the same input hash.
+ */
+export function buildNotesPayload(
+  row: MetricsRowLike,
+  earlier: MetricsRowLike[] = [],
+  ctx: PhraseContextInput = {},
+  language: NoteLanguage = 'en',
+): FeedbackPayload {
+  const payload: FeedbackPayload = row.movement === 'phrase' ? buildPhrasePayload(row, earlier, ctx) : buildPayload(row, earlier)
+  if (language !== 'en') payload.language = language
+  return payload
+}
+
+/** False when no metric (or theme) has a value: there is nothing to describe, so the model is not called. */
 export function hasMeasurements(payload: FeedbackPayload): boolean {
+  if (isPhrasePayload(payload)) return phraseHasMeasurements(payload)
   return payload.metrics.some((m) => m.value !== null)
+}
+
+/** The ids an observation may be about, with the confidence the function copies into it. */
+export function noteTopics(payload: FeedbackPayload): Map<string, ConfidenceLevel> {
+  return isPhrasePayload(payload)
+    ? new Map(payload.themes.map((t) => [t.theme, t.confidence]))
+    : new Map(payload.metrics.map((m) => [m.metric, m.confidence]))
 }

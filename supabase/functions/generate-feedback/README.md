@@ -9,7 +9,7 @@ Supabase Edge Function (Deno) that turns the metrics of one attempt into neutral
 1. Verifies the JWT and creates the Supabase client with the request's `Authorization` header, so every query runs under the caller's RLS. The service-role key is never used.
 2. Requires an active account-level consent with scope `ai_metrics_only` (`AI_CONSENT_SCOPE`).
 3. Loads the attempt's `attempt_metrics` row, and the metrics of up to 3 earlier attempts of the same session for comparison.
-4. Builds the payload (`payload.ts`): metric id, value, unit, phases and confidence. No ids, labels, file names, subject codes, keypoints, frames or video.
+4. Builds the payload (`payload.ts`): metric id, value, unit, phases and confidence. For a phrase attempt (`../_shared/phrase.ts`): the six theme values with confidence and null reasons, an event summary, theme medians of up to 5 earlier sessions of the same phrase, camera view and dancer (loaded by `../_shared/phraseContext.ts`, owner-filtered under RLS) and the dancer's focus themes. No ids, labels, titles, notes, dates, file names, subject codes, keypoints, frames or video. An optional `language` in the request (e.g. `es`) asks for the notes in that language.
 5. Returns the stored note when one exists for the same `input_hash` (SHA-256 of payload + prompt version + model id from `LLM_MODEL`), unless `regenerate` is set.
 6. Allows 20 notes per user per hour, counted from the user's `feedback` rows.
 7. Calls the model in `LLM_MODEL` with the system prompt in `prompt.ts` and the `FeedbackResponse` JSON schema as `response_format` (`json_schema`, strict); 30-second budget, one retry on a connection error, 429 or 5xx.

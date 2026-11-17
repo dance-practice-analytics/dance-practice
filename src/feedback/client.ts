@@ -13,6 +13,7 @@ import {
   FAILURES,
   FUNCTION_NAME,
   isFeedbackResponse,
+  noteLanguage,
   retryHint,
   type FailureCode,
   type FeedbackResponse,
@@ -107,11 +108,14 @@ async function invokeError(e: unknown): Promise<FeedbackError> {
 export async function generateFeedbackNote(
   supabase: SupabaseClient,
   attemptId: string,
-  options: { regenerate?: boolean } = {},
+  options: { regenerate?: boolean; language?: string } = {},
 ): Promise<FeedbackNote & { cached: boolean }> {
   if (typeof navigator !== 'undefined' && navigator.onLine === false) throw OFFLINE
   const body: GenerateFeedbackRequest = { attempt_id: attemptId }
   if (options.regenerate) body.regenerate = true
+  // The notes are written in the dancer's language when the function supports it (else English).
+  const language = noteLanguage(options.language ?? (typeof navigator !== 'undefined' ? navigator.language : undefined))
+  if (language !== 'en') body.language = language
 
   let data: unknown
   try {
@@ -139,7 +143,7 @@ export async function generateFeedbackNote(
 export async function generateFeedback(
   supabase: SupabaseClient,
   attemptId: string,
-  options: { regenerate?: boolean } = {},
+  options: { regenerate?: boolean; language?: string } = {},
 ): Promise<FeedbackResponse> {
   return (await generateFeedbackNote(supabase, attemptId, options)).response
 }
