@@ -5,6 +5,7 @@
 import type { CSSProperties, ReactNode } from 'react'
 import type { AttemptStatus } from '../../data/schema'
 import { CONFIDENCE_LABELS, STATUS_LABELS, type ConfidenceLevel } from '../format'
+import { href, useRoute } from '../router'
 import { useIsNarrow } from '../useIsNarrow'
 import { Icon, type IconName } from './Icon'
 
@@ -251,7 +252,7 @@ export interface PageHeaderProps {
   subtitle?: ReactNode
   /** Right side on desktop: privacy pill, buttons, segmented controls. */
   actions?: ReactNode
-  /** Right side of the phone header; defaults to nothing (keep it to one or two icon buttons). */
+  /** Right side of the phone header, before the Settings gear; keep it to one icon button or a short tag. */
   mobileActions?: ReactNode
   /** Phone only: a back link shown before the title, e.g. `href({ name: 'library' })`. */
   backHref?: string
@@ -260,11 +261,14 @@ export interface PageHeaderProps {
 /**
  * The header every routed page starts with. Wide screens: eyebrow, `h1.t-h1`,
  * subtitle and actions in a wrapping row (as in Library.dc.html). Under 900px: the
- * sticky `.mhead` bar of the mobile designs with `h1.t-h2`.
+ * sticky `.mhead` bar of the mobile designs with `h1.t-h2`, which always ends with the
+ * Settings gear (the phone bottom bar has no Settings slot).
  */
 export function PageHeader({ title, mobileTitle, eyebrow, subtitle, actions, mobileActions, backHref }: PageHeaderProps) {
   const narrow = useIsNarrow()
+  const route = useRoute()
   if (narrow) {
+    const onSettings = route.name === 'settings'
     return (
       <header className="mhead v2-mhead">
         {backHref && (
@@ -277,6 +281,14 @@ export function PageHeader({ title, mobileTitle, eyebrow, subtitle, actions, mob
           <h1 className="t-h2 v2-clip">{mobileTitle ?? title}</h1>
         </div>
         {mobileActions}
+        <a
+          className={onSettings ? 'btn btn-ghost btn-icon btn-lg v2-mhead-gear active' : 'btn btn-ghost btn-icon btn-lg v2-mhead-gear'}
+          href={href({ name: 'settings' })}
+          aria-label="Settings"
+          aria-current={onSettings ? 'page' : undefined}
+        >
+          <Icon name="gear" style={{ width: 22, height: 22 }} />
+        </a>
       </header>
     )
   }

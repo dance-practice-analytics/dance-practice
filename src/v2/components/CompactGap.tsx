@@ -55,7 +55,7 @@ export function CompactGap({ name, reason, href, detail, style }: CompactGapProp
   )
   if (href) {
     return (
-      <a href={href} title={full} style={{ ...ROW, ...style }}>
+      <a href={href} title={full} style={{ ...ROW, minHeight: 44, ...style }}>
         {body}
       </a>
     )

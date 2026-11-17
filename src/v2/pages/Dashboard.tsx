@@ -4,8 +4,8 @@
 // `profiles.role`; there is no role switch. View-model: ./dashboard/model.ts.
 
 import { useAuth } from '../auth'
-import { EmptyState, ErrorAlert, Icon, PageHeader, Skeleton } from '../components'
-import { latestProcessed, useLibrary } from '../data'
+import { EmptyState, ErrorAlert, PageHeader, Skeleton } from '../components'
+import { useLibrary } from '../data'
 import { href } from '../router'
 import { useIsNarrow } from '../useIsNarrow'
 import { DancerDashboard } from './dashboard/Dancer'
@@ -23,7 +23,6 @@ export function Dashboard() {
   const live = useLiveStatus()
   const data = lib.data
   const researcher = role === 'researcher'
-  const iconSize = { width: 20, height: 20 }
 
   return (
     <>
@@ -34,20 +33,6 @@ export function Dashboard() {
           researcher
             ? 'Study progress, clips that need attention, and recent activity.'
             : 'Your latest practice, how each metric has changed, and what is still processing.'
-        }
-        mobileActions={
-          <>
-            <a
-              className="btn btn-ghost btn-icon btn-lg"
-              href={href({ name: 'chat', attemptId: latestProcessed(data?.attempts)?.id })}
-              aria-label="Ask Mika about your practice"
-            >
-              <Icon name="mika" style={iconSize} />
-            </a>
-            <a className="btn btn-ghost btn-icon btn-lg" href={href({ name: 'import' })} aria-label="Import clips">
-              <Icon name="plus" style={iconSize} />
-            </a>
-          </>
         }
       />
       {lib.error && <ErrorAlert error={lib.error} onRetry={lib.refetch} />}

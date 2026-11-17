@@ -18,7 +18,7 @@ error patterns; `Main.dc.html` shows every component class.
 | --- | --- |
 | `main.tsx` | Entry: loads `fonts.css`, `studio.css`, `v2.css`, mounts `App`. |
 | `App.tsx` | Auth gate → consent gate → `Shell` + routed page. No screen logic. |
-| `Shell.tsx` | Sidebar (≥ 900px) / bottom nav (< 900px). Pages render inside `<main class="v2-main">`. Sidebar: Dashboard, Library, Import, Review, Compare, Progress, Practice notes, Mika, (Study dataset), Settings & data. The phone bar is Home, Library, Import, Progress, Settings (attempt screens light up Library; Mika is in the page header). Processing shows under Import only while the queue has clips (with a count) or while it is open; the phone bar shows the count on Import. |
+| `Shell.tsx` | Sidebar (≥ 900px) / bottom nav (< 900px). Pages render inside `<main class="v2-main">`. Sidebar: Dashboard, Library, Import, Review, Compare, Progress, Practice notes, Mika, (Study dataset), Settings & data. The phone bar is Home, Library, Mika (raised centre button), Import, Progress; the open slot gets a lime pill with a navy icon, and Review / Compare / Practice notes light up Library. Settings is the gear at the top right of every phone header (`PageHeader` adds it). Processing shows under Import only while the queue has clips (with a count) or while it is open; the phone bar shows the count on Import. |
 | `router.ts` | Hash routes: `Route`, `href`, `navigate`, `useRoute`, `parseRoute`. |
 | `auth.ts` | Supabase auth store: `useAuth`, `signIn`, `signUp`, `signOut`, `client()`. |
 | `consents.ts` | `useConsents`, `acceptConsents`, `setConsent` (table `consents`). |

@@ -1,7 +1,7 @@
 // Frame of every signed-in screen (Sidebar.dc.html, BottomNav.dc.html).
 // Wide: 240px sidebar with every destination, Mika included. Under 900px: the page's
-// own `.mhead` (rendered by PageHeader, with the Mika button) and the five-item bottom
-// navigation, where the attempt screens light up Library. Processing is the second half
+// own `.mhead` (rendered by PageHeader, with the Settings gear at the top right) and the
+// five-item bottom navigation (Mika in the middle), where the attempt screens light up Library. Processing is the second half
 // of Import: it appears under Import only while clips are queued or being read (or while open).
 // The role shown is the real profiles.role; the Dancer/Researcher switch on the
 // canvas is a design prop, so here it is a label, not a control.
@@ -23,15 +23,6 @@ interface NavItem {
   researcherOnly?: boolean
 }
 
-/** Screens of one attempt, shown as a "current attempt" sub-item under Library. */
-const ATTEMPT_SCREENS: Partial<Record<RouteName, { label: string; icon: IconName }>> = {
-  review: { label: 'Review', icon: 'review' },
-  compare: { label: 'Compare', icon: 'compare' },
-  notes: { label: 'Practice notes', icon: 'notes' },
-  chat: { label: 'Mika', icon: 'mika' },
-}
-const ATTEMPT_ROUTES = Object.keys(ATTEMPT_SCREENS) as RouteName[]
-
 const SIDE_ITEMS: NavItem[] = [
   { route: { name: 'dashboard' }, label: 'Dashboard', icon: 'home' },
   { route: { name: 'library' }, label: 'Library', icon: 'library' },
@@ -45,14 +36,16 @@ const SIDE_ITEMS: NavItem[] = [
   { route: { name: 'settings' }, label: 'Settings & data', icon: 'settings' },
 ]
 
-// The phone has five slots, the same top level as the sidebar; each one also lights
-// up for the screens reached from it.
-const BOTTOM_ITEMS: (NavItem & { covers: RouteName[] })[] = [
+// The phone has five slots: Home, Library, Mika (the raised centre action), Import and
+// Progress. Each one also lights up for the screens reached from it. Settings is the gear
+// at the top right of every page header (PageHeader), not a slot here.
+const BOTTOM_ITEMS: (NavItem & { covers: RouteName[]; center?: boolean })[] = [
   { route: { name: 'dashboard' }, label: 'Home', icon: 'home', covers: ['dashboard', 'dataset'] },
-  { route: { name: 'library' }, label: 'Library', icon: 'library', covers: ['library', ...ATTEMPT_ROUTES] },
+  // The screens of one attempt (Review, Compare, Practice notes) light up Library.
+  { route: { name: 'library' }, label: 'Library', icon: 'library', covers: ['library', 'review', 'compare', 'notes'] },
+  { route: { name: 'chat' }, label: 'Mika', icon: 'mika', covers: ['chat'], center: true },
   { route: { name: 'import' }, label: 'Import', icon: 'import', covers: ['import', 'processing'] },
   { route: { name: 'progress' }, label: 'Progress', icon: 'progress', covers: ['progress'] },
-  { route: { name: 'settings' }, label: 'Settings', icon: 'settings', covers: ['settings'] },
 ]
 
 /** Clips waiting or being read in this tab. Own component: the queue updates on every frame step. */
@@ -208,7 +201,12 @@ export function Shell({ active, children }: ShellProps) {
             // 'page' only for the exact screen; 'true' when the slot is the open screen's parent.
             const current = it.route.name === active ? 'page' : on ? 'true' : undefined
             return (
-              <a key={it.route.name} href={href(it.route)} className={on ? 'active' : undefined} aria-current={current}>
+              <a
+                key={it.route.name}
+                href={href(it.route)}
+                className={[on ? 'active' : '', it.center ? 'v2-bnav-center' : ''].filter(Boolean).join(' ') || undefined}
+                aria-current={current}
+              >
                 <span className="ic">
                   <Icon name={it.icon} />
                   {it.route.name === 'import' && <QueueCount />}
