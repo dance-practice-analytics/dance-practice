@@ -11,7 +11,7 @@ import { useEffect, useMemo, useState, type ReactNode } from 'react'
 import { compareAttempts, type AttemptComparison, type MetricComparison } from '../../insights'
 import type { PhaseSpan } from '../../metrics/types'
 import type { PoseSeries } from '../../pose/types'
-import { useClip } from '../clips'
+import { useAttemptVideo } from '../videoBackup'
 import { CompactGap, ConfBadge, EmptyState, Icon, ErrorAlert, NoteBox, PageHeader, SkeletonWorkspace } from '../components'
 import { useAttempt, useAttempts, type AttemptView } from '../data'
 import { compactGapReason, formatSeconds, formatTimecode, isCompactGap, MOVEMENT_LABELS, PHASE_LABELS, readMetric } from '../format'
@@ -298,8 +298,8 @@ function Workspace({ a, b, seriesA, seriesB, attempts, pickers, eyebrow, backHre
   countRender('Compare')
   const narrow = useIsNarrow()
   const simple = useViewMode() === 'simple'
-  const clipA = useClip(a.id)
-  const clipB = useClip(b.id)
+  const clipA = useAttemptVideo(a)
+  const clipB = useAttemptVideo(b)
   const [failed, setFailed] = useState<{ a: boolean; b: boolean }>({ a: false, b: false })
   const [asked, setAsked] = useState<AlignMode>('phases')
   const [mode, setMode] = useState<StageMode>('overlay')
@@ -389,6 +389,7 @@ function Workspace({ a, b, seriesA, seriesB, attempts, pickers, eyebrow, backHre
       phases={phasesA}
       label={`A · ${attemptName(a)}`}
       view={view(a)}
+      privacy={clipA?.remote ? 'Backed up · only you can see it' : undefined}
       ariaLabel={`Tracked pose skeleton of A, ${attemptName(a).toLowerCase()}${srcA ? ', drawn over its video' : ', shown without the video'}`}
       placeholder={<span className="t-small">No keypoints are saved for A.</span>}
       onVideoError={() => setFailed((f) => ({ ...f, a: true }))}
@@ -410,6 +411,7 @@ function Workspace({ a, b, seriesA, seriesB, attempts, pickers, eyebrow, backHre
       phases={phasesB}
       label={ghostOnB && sA ? (narrow ? 'B + A ghost' : `B · ${attemptName(b)} + A ghost`) : `B · ${attemptName(b)}`}
       view={view(b)}
+      privacy={clipB?.remote ? 'Backed up · only you can see it' : undefined}
       ariaLabel={`Tracked pose skeleton of B, ${attemptName(b).toLowerCase()}${ghostOnB && sA ? ', with A dashed behind it' : ''}${srcB ? ', drawn over its video' : ', shown without the video'}`}
       placeholder={<span className="t-small">No keypoints are saved for B.</span>}
       onVideoError={() => setFailed((f) => ({ ...f, b: true }))}

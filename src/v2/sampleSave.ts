@@ -1,6 +1,6 @@
 // Saves the first-run sample session (sample.ts) for the signed-in account through the
 // normal repo layer, the same rows a processed clip gets: session → attempts (source
-// study_dataset, so the study_no_video CHECK holds; no subject) → keypoints → metrics
+// study_dataset, no video_path; no subject) → keypoints → metrics
 // → status done. It can be deleted with the normal delete flow. No video exists.
 
 import { createSession, createStudyAttempts, deleteSession, saveMetrics, setAttemptStatus, uploadKeypoints } from '../data/repo'

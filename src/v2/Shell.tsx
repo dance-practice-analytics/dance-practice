@@ -163,7 +163,7 @@ export function Shell({ active, children }: ShellProps) {
 
         <p className="t-caption" style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '0 8px' }}>
           <Icon name="device" size={14} style={{ flex: 'none' }} />
-          Clips stay on this device
+          Clips are processed on this device
         </p>
 
         <div style={{ display: 'flex', flexDirection: 'column', gap: 8, padding: '0 4px' }}>

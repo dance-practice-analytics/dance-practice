@@ -18,7 +18,7 @@ import { useFocusThemes } from '../focus'
 import { PhraseProgress } from './progress/PhraseProgress'
 import { buildPhraseProgress } from './progress/phraseModel'
 
-const MOVEMENTS: MovementType[] = ['releve_balance', 'pirouette', 'phrase']
+const MOVEMENTS: MovementType[] = ['phrase', 'releve_balance', 'pirouette']
 
 export function Progress() {
   const library = useLibrary()

@@ -130,7 +130,7 @@ describe('buildProgress', () => {
   it('opens on the most recently practised movement', () => {
     expect(defaultMovement(sessions)).toBe('releve_balance')
     expect(defaultMovement([pir, s1])).toBe('pirouette')
-    expect(defaultMovement([])).toBe('releve_balance')
+    expect(defaultMovement([])).toBe('phrase')
   })
 })
 

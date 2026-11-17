@@ -12,7 +12,7 @@ import { useCallback, useEffect, useMemo, useState, type ReactNode } from 'react
 import { compareAttempts, type MetricComparison } from '../../insights'
 import type { MetricKey, PhaseSpan } from '../../metrics/types'
 import type { PoseSeries } from '../../pose/types'
-import { useClip } from '../clips'
+import { useAttemptVideo } from '../videoBackup'
 import { Alert, AttemptThumb, CompactGap, EmptyState, ErrorAlert, Icon, MetricCard, metricCardProps, PageHeader, SkeletonWorkspace } from '../components'
 import { latestProcessed, useAttempt, useAttempts, type AttemptView } from '../data'
 import {
@@ -140,7 +140,7 @@ function Workspace({ attempt, series, attempts }: WorkspaceProps) {
   countRender('Review')
   const narrow = useIsNarrow()
   const simple = useViewMode() === 'simple'
-  const clip = useClip(attempt.id)
+  const clip = useAttemptVideo(attempt)
   const [videoFailed, setVideoFailed] = useState(false)
   const [skeletonOn, setSkeletonOn] = useState(true)
   const [loopOn, setLoopOn] = useState(false)
@@ -377,7 +377,13 @@ function Workspace({ attempt, series, attempts }: WorkspaceProps) {
   const disclaimer = (
     <p className="disclaimer">
       <Icon name="device" />
-      {narrow ? 'Processed on this device, not uploaded.' : 'Video processed on this device, not uploaded. Only keypoints and these metrics are saved.'}
+      {clip?.remote
+        ? narrow
+          ? 'Processed on this device; the video is backed up privately.'
+          : 'Video processed on this device and backed up privately to your account (only you can see it). Only keypoints and these metrics are used here.'
+        : narrow
+          ? 'Processed on this device, not uploaded.'
+          : 'Video processed on this device, not uploaded. Only keypoints and these metrics are saved.'}
     </p>
   )
 
@@ -439,6 +445,7 @@ function Workspace({ attempt, series, attempts }: WorkspaceProps) {
       role="lead"
       phases={phases}
       showSkeleton={skeletonOn}
+      privacy={clip?.remote ? 'Backed up · only you can see it' : undefined}
       ariaLabel={`Tracked pose skeleton of ${attemptName(attempt).toLowerCase()}${src ? ', drawn over the video' : ', shown without the video'}`}
       onVideoError={() => setVideoFailed(true)}
       style={{ maxHeight: narrow ? '56vh' : 'min(64vh, 640px)' }}

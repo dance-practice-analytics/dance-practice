@@ -26,9 +26,9 @@ const CHOICES: Choice[] = [
   {
     scope: 'on_device_processing',
     required: true,
-    title: 'I understand study clips are processed on this device and never uploaded.',
+    title: 'I understand clips are processed on this device.',
     detail: 'Processing needs this browser tab open. It works offline.',
-    short: ['Study clips are processed on this device and never uploaded.', ''],
+    short: ['Clips are processed on this device.', ' Videos are uploaded only if I turn on backup.'],
   },
   {
     scope: 'keypoints_and_metrics_storage',
@@ -47,9 +47,9 @@ const CHOICES: Choice[] = [
   {
     scope: 'own_video_upload',
     required: false,
-    title: 'Allow uploading my own videos for backup.',
-    detail: 'Applies to your personal videos only. Study clips can never be uploaded.',
-    short: ['Allow uploading my own videos', ' for backup.'],
+    title: 'Allow backing up my videos.',
+    detail: 'Only the clips you choose at Import, stored privately in your account. Only you can see them; delete them any time in Settings. Never sent to the AI.',
+    short: ['Allow backing up my videos', ' (only the ones I choose).'],
   },
 ]
 
@@ -65,8 +65,8 @@ const INFO: Info[] = [
   {
     icon: 'device',
     title: 'Never leaves this device',
-    items: ['Study video clips', 'Video frames used for pose estimation', 'Your own videos, unless you turn on upload'],
-    summary: 'Study clips and the video frames used for pose estimation. Your own videos too, unless you turn on upload.',
+    items: ['Video frames used for pose estimation', 'Your video clips, unless you turn on backup at Import'],
+    summary: 'The video frames used for pose estimation. Your video clips too, unless you turn on backup at Import.',
   },
   {
     icon: 'lock',

@@ -7,7 +7,7 @@ import { ErrorAlert, Icon, PrivacyPill, Spinner } from '../../components'
 import { href, navigate } from '../../router'
 
 const STEPS = [
-  { title: 'Import a clip', text: 'Pick a video of one movement. The pose is found on this device; the video is never uploaded.' },
+  { title: 'Import a clip', text: 'Pick a video of a phrase or a single movement. The pose is found on this device; the video stays there unless you turn on backup.' },
   { title: 'Review an attempt', text: 'Watch the skeleton over the clip and read what was measured in each phase.' },
   { title: 'Compare two attempts', text: 'Line up two of your own attempts and see how each measurement changed.' },
 ]
@@ -96,7 +96,7 @@ export function Welcome({ narrow }: { narrow: boolean }) {
       </div>
 
       <p className="t-caption">
-        No video at hand? The sample session is three relevé balance attempts made from a synthetic stick figure — no real
+        No video at hand? The sample session is three short attempts (a relevé balance) made from a synthetic stick figure — no real
         dancer, no video, so Review shows the skeleton only. It is labelled “Sample session (synthetic)” and you can delete it
         from the Library at any time.
       </p>

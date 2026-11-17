@@ -64,7 +64,7 @@ export function AccountDeleted() {
               {count(report.rows_left, 'record')} still showed up right after the delete. Ask the project team to check.
             </p>
           )}
-          <p>Video files on this device were never uploaded and aren’t touched. Files you exported are yours to keep or delete.</p>
+          <p>Backed-up videos were deleted with the account; video files on this device aren’t touched. Files you exported are yours to keep or delete.</p>
         </div>
         <button className="btn btn-primary btn-block" type="button" onClick={() => store.set(null)} data-autofocus>
           Done

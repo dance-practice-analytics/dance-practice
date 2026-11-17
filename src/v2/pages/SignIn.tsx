@@ -19,7 +19,7 @@ type Mode = 'signin' | 'signup' | 'reset'
 const PROJECT_SITE = 'https://dance-practice-teal.vercel.app/'
 
 const POINTS: { icon: IconName; text: string }[] = [
-  { icon: 'device', text: 'Pose estimation runs on this device. Study clips are never uploaded.' },
+  { icon: 'device', text: 'Pose estimation runs on this device. Videos are uploaded only if you turn on backup.' },
   { icon: 'lock', text: 'Only keypoints and metrics are saved to your account.' },
   { icon: 'notes', text: 'Practice notes are written from numbers, not images.' },
 ]
@@ -301,7 +301,7 @@ export function SignIn() {
         <p className="t-caption" style={{ textAlign: 'center' }}>
           {signup
             ? 'Next: choose what is stored. Nothing is uploaded until you say so.'
-            : 'Pose estimation runs on this device. Study clips are never uploaded.'}
+            : 'Pose estimation runs on this device. Videos are uploaded only if you turn on backup.'}
         </p>
       </main>
     )

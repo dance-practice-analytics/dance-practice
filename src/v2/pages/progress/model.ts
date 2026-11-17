@@ -416,10 +416,10 @@ function excludedLine(e: ExcludedSession, names: SessionNames, now: Date): Exclu
   return { sessionId: e.sessionId, what: parts.join(' · '), reason: exclusionText(e.reason) }
 }
 
-/** The movement to open on: the one practised most recently, else relevé balance. */
+/** The movement to open on: the one practised most recently, else phrase. */
 export function defaultMovement(sessions: readonly SessionSummary[]): MovementType {
   // `sessions` is newest first.
-  return sessions[0]?.movement_type ?? 'releve_balance'
+  return sessions[0]?.movement_type ?? 'phrase'
 }
 
 // ---------- the table (the chart's accessible equivalent) ----------

@@ -43,6 +43,8 @@ export interface SyncedStageProps {
   showSkeleton?: boolean
   label?: string
   view?: string
+  /** Privacy pill text (e.g. for a backed-up video); default: on this device. */
+  privacy?: string
   ariaLabel?: string
   /** Centred on the stage when there is neither video nor pose. */
   placeholder?: ReactNode
@@ -56,7 +58,7 @@ export interface SyncedStageProps {
 type FrameMeta = { mediaTime: number }
 
 export function SyncedStage(props: SyncedStageProps) {
-  const { clock, series, src, role, ghost, phases, showSkeleton = true, label, view, ariaLabel, placeholder, onVideoError, style, children } = props
+  const { clock, series, src, role, ghost, phases, showSkeleton = true, label, view, privacy, ariaLabel, placeholder, onVideoError, style, children } = props
   const toLocal = props.toLocal ?? identity
   const toClock = props.toClock ?? identity
   const slopeAt = props.slopeAt ?? one
@@ -184,6 +186,7 @@ export function SyncedStage(props: SyncedStageProps) {
       showSkeleton={showSkeleton}
       label={label}
       view={view}
+      privacy={privacy}
       timecode={series ? `${formatTimecode(shown)} / ${formatTimecode(end)}` : undefined}
       phase={phase ? PHASE_LABELS[phase.phase] : undefined}
       noTrackingLabel={outsideTrim ? 'Outside the trim' : undefined}

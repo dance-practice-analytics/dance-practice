@@ -2,20 +2,35 @@
 // Design: Import.dc.html, ImportMobile.dc.html; error patterns in States.dc.html.
 // Files are opened locally: header, fingerprint (SHA-256) and thumbnail are read on
 // this device and only rows (name, fingerprint, length, tags) go to Supabase. The
-// clips are registered in clips.ts and handed to the on-device pipeline.
+// clips are registered in clips.ts and handed to the on-device pipeline. With the
+// opt-in "Back up video to your account" switch on, each processed clip's video is
+// then uploaded to the private videos bucket (videoBackup.ts); off by default.
 
 import { Fragment, useCallback, useEffect, useMemo, useRef, useState, type DragEvent, type ReactNode } from 'react'
 import { baseName, clipNumberOrNull } from '../../data/clipFile'
 import { attemptTrim } from '../../data/repo'
-import { CAMERA_VIEWS, MOVEMENT_TYPES, NOTE_MAX_CHARS, type CameraView, type MovementType } from '../../data/schema'
+import type { ApiError } from '../../api/errors'
+import { dataError } from '../../data/repo'
+import { CAMERA_VIEWS, NOTE_MAX_CHARS, type CameraView, type MovementType } from '../../data/schema'
 import { client } from '../auth'
 import { registerClip } from '../clips'
+import { setConsent, useConsents } from '../consents'
 import { Alert, ErrorAlert, Icon, NoteBox, PageHeader, PrivacyPill, StatusPill } from '../components'
 import { invalidate, useLibrary } from '../data'
 import { formatDate, MOVEMENT_CHOICE_LABELS, MOVEMENT_LABELS } from '../format'
 import { enqueue, type PipelineJob } from '../pipeline'
 import { href, navigate } from '../router'
 import { useIsNarrow } from '../useIsNarrow'
+import {
+  backupProblem,
+  formatStorage,
+  queueBackups,
+  STORAGE_BUDGET_BYTES,
+  usedBytes,
+  useStorageUsage,
+  VIDEO_MAX_BYTES,
+  type StorageUsage,
+} from '../videoBackup'
 import './import/import.css'
 import {
   checkRows,
@@ -52,6 +67,27 @@ interface Row extends ClipDraft {
 
 const VIEW_SHORT: Record<CameraView, string> = { front: 'Front', side: 'Side', diagonal: 'Diagonal' }
 const MOVEMENT_SHORT: Record<MovementType, string> = { releve_balance: 'Relevé', pirouette: 'Pirouette', phrase: 'Phrase' }
+/** Phrase first: the study movement is a contemporary phrase; relevé and pirouette stay available. */
+const MOVEMENT_ORDER: readonly MovementType[] = ['phrase', 'releve_balance', 'pirouette']
+
+// The movement of the last import, so a dancer who works on one movement doesn't re-pick it.
+const LAST_MOVEMENT_KEY = 'dpa:import:lastMovement'
+function lastMovement(): MovementType {
+  try {
+    const v = localStorage.getItem(LAST_MOVEMENT_KEY)
+    if (v && (MOVEMENT_ORDER as readonly string[]).includes(v)) return v as MovementType
+  } catch {
+    // Storage blocked: fall back to the default.
+  }
+  return 'phrase'
+}
+function rememberMovement(m: MovementType): void {
+  try {
+    localStorage.setItem(LAST_MOVEMENT_KEY, m)
+  } catch {
+    // Not important enough to report.
+  }
+}
 
 let nextRowId = 0
 
@@ -71,7 +107,7 @@ function newRow(file: File, sessionDate: string | null): Row {
     thumb: null,
     height: null,
     subject: tags.subject,
-    movement: tags.movement ?? 'releve_balance',
+    movement: tags.movement ?? lastMovement(),
     view: tags.view ?? 'front',
     recordedOn: sessionDate ?? localDate(file.lastModified),
     clipNumber: tags.clipNumber,
@@ -92,6 +128,29 @@ export function Import() {
   const [sessionDate, setSessionDate] = useState<string | null>(null)
   const [sessionNote, setSessionNote] = useState('')
   const [skipped, setSkipped] = useState(0)
+  // Optional video backup: off for every new import; turning it on records the consent.
+  const consents = useConsents()
+  const [backup, setBackup] = useState(false)
+  const [backupBusy, setBackupBusy] = useState(false)
+  const [backupError, setBackupError] = useState<ApiError | null>(null)
+  const [backupRefused, setBackupRefused] = useState<{ title: string; detail: string } | null>(null)
+  const usage = useStorageUsage(library.data)
+  const toggleBackup = async (on: boolean) => {
+    setBackupError(null)
+    setBackupRefused(null)
+    if (on && !consents.has('own_video_upload')) {
+      setBackupBusy(true)
+      try {
+        await setConsent('own_video_upload', true)
+      } catch (e) {
+        setBackupError(dataError(e))
+        return
+      } finally {
+        setBackupBusy(false)
+      }
+    }
+    setBackup(on)
+  }
   const noteTooLong = [...sessionNote.trim()].length > NOTE_MAX_CHARS
 
   const patch = useCallback((id: string, change: Partial<Row>) => {
@@ -150,12 +209,28 @@ export function Import() {
 
   async function submit() {
     if (busy || !library.data || noteTooLong) return
+    const fresh = rows.filter((r) => checks.get(r.id)?.kind === 'ready')
+    // Library duplicates processed again get a backup only if they don't have one yet.
+    const backedUp = new Set(library.data.attempts.filter((a) => a.video_path).map((a) => a.id))
+    const again = rows.filter((r) => {
+      const check = checks.get(r.id)
+      return check?.kind === 'duplicate' && check.reprocess && !backedUp.has(check.known.attemptId)
+    })
+    setBackupRefused(null)
+    if (backup) {
+      // Refused up front, before anything is created, so the user can decide.
+      const problem = backupProblem(
+        [...fresh, ...again].map((r) => ({ name: r.name, size: r.file.size, type: r.file.type })),
+        usage.data,
+      )
+      if (problem) return setBackupRefused(problem)
+    }
     setBusy(true)
     setNotice(null)
     const jobs: PipelineJob[] = []
+    const toBackUp: { attemptId: string; file: File; name: string }[] = []
     let failed = 0
     try {
-      const fresh = rows.filter((r) => checks.get(r.id)?.kind === 'ready')
       const outcomes = await createImport(client(), source, groupIntoSessions(alignTakeDates(fresh)), library.data.sessions, sessionNote)
       const changes = new Map<string, Partial<Row> | null>()
       for (const row of fresh) {
@@ -163,6 +238,8 @@ export function Import() {
         if (res?.ok) {
           registerClip(res.attempt.id, row.file)
           jobs.push({ attemptId: res.attempt.id, movement: row.movement, clipName: row.name, trim: rowTrim(row).range })
+          if (backup) toBackUp.push({ attemptId: res.attempt.id, file: row.file, name: row.name })
+          rememberMovement(row.movement)
           changes.set(row.id, null)
         } else {
           failed++
@@ -175,6 +252,7 @@ export function Import() {
         if (check?.kind !== 'duplicate' || !check.reprocess) continue
         registerClip(check.known.attemptId, row.file)
         jobs.push({ attemptId: check.known.attemptId, movement: check.known.movement, clipName: row.name, trim: check.known.trim ?? null })
+        if (backup && !backedUp.has(check.known.attemptId)) toBackUp.push({ attemptId: check.known.attemptId, file: row.file, name: row.name })
         changes.set(row.id, null)
       }
       setRows((list) =>
@@ -186,6 +264,8 @@ export function Import() {
       )
     } finally {
       invalidate()
+      // Queued first, so each upload starts as soon as that clip's processing is done.
+      if (toBackUp.length > 0) queueBackups(toBackUp)
       if (jobs.length > 0) enqueue(jobs)
       setBusy(false)
     }
@@ -204,12 +284,26 @@ export function Import() {
         title="Import clips"
         mobileTitle="Import"
         subtitle="Add several clips at once. Tag each with a subject code, movement and camera view before processing."
-        actions={<PrivacyPill />}
+        actions={backup ? <PrivacyPill>Processed on this device · video backup on</PrivacyPill> : <PrivacyPill />}
       />
 
       {library.error && <ErrorAlert error={library.error} onRetry={library.refetch} />}
 
       <SourceStep source={source} onChange={setSource} narrow={narrow} />
+      <BackupSwitch
+        on={backup}
+        busy={backupBusy}
+        narrow={narrow}
+        onChange={(on) => void toggleBackup(on)}
+        usage={usage.data}
+        usageFailed={usage.error}
+      />
+      {backupError && <ErrorAlert error={backupError} />}
+      {backupRefused && (
+        <Alert title={backupRefused.title} role="alert">
+          {backupRefused.detail}
+        </Alert>
+      )}
       <FileStep onFiles={addFiles} narrow={narrow} />
 
       {skipped > 0 && (
@@ -240,9 +334,10 @@ export function Import() {
       )}
 
       {rows.length === 0 && (
-        <NoteBox title="Clips stay on this device.">
-          Only a clip label made from the subject code and clip number (never the file name), a fingerprint, the length and the tags are saved to
-          your account; the video is read here and never sent.
+        <NoteBox title={backup ? 'Clips are processed on this device, then backed up.' : 'Clips stay on this device.'}>
+          {backup
+            ? 'A clip label made from the subject code and clip number (never the file name), a fingerprint, the length and the tags are saved to your account. After processing, each video is stored privately in your account: only you can see it, and you can delete it any time in Settings.'
+            : 'Only a clip label made from the subject code and clip number (never the file name), a fingerprint, the length and the tags are saved to your account; the video is read here and not uploaded.'}
         </NoteBox>
       )}
 
@@ -330,10 +425,9 @@ function SourceStep({ source, onChange, narrow }: { source: ImportSource; onChan
             <span style={{ fontWeight: 600 }}>Study dataset</span>
             <span className="t-small muted">
               {narrow
-                ? 'Local files · never uploaded'
-                : 'Local files from the study drive. Processed on this device and never uploaded — this can’t be changed.'}
+                ? 'Local files · processed here'
+                : 'Local files from the study drive. Processed on this device; uploaded only if you turn on backup below.'}
             </span>
-            {!narrow && <PrivacyPill style={{ alignSelf: 'flex-start', marginTop: 6 }}>Never uploaded</PrivacyPill>}
           </span>
         </label>
         <label className={isStudy ? 'choice' : 'choice on'} style={narrow ? { padding: 14 } : undefined}>
@@ -341,32 +435,62 @@ function SourceStep({ source, onChange, narrow }: { source: ImportSource; onChan
           <span style={{ display: 'flex', flexDirection: 'column', gap: narrow ? 2 : 4 }}>
             <span style={{ fontWeight: 600 }}>My own video</span>
             <span className="t-small muted">
-              {narrow ? 'Processed here · stays on this phone' : 'Your personal practice footage. Processed on this device, the same way as study clips.'}
+              {narrow ? 'Processed here · on this phone' : 'Your personal practice footage. Processed on this device, the same way as study clips.'}
             </span>
-            {!narrow && (
-              <span className="tag" style={{ alignSelf: 'flex-start', marginTop: 6 }}>
-                Upload · off
-              </span>
-            )}
           </span>
         </label>
       </fieldset>
-
-      {isStudy ? (
-        narrow && <PrivacyPill style={{ alignSelf: 'flex-start' }}>Study clips can’t be uploaded</PrivacyPill>
-      ) : (
-        // The optional backup of a personal video is not built: shown, but not operable.
-        <label className="card" style={{ padding: 14, display: 'flex', gap: 12, alignItems: 'center' }}>
-          <span style={{ flex: 1, display: 'flex', flexDirection: 'column' }}>
-            <span style={{ fontWeight: 500 }}>Back up videos to my account</span>
-            <span className="t-caption" id="v2-imp-backup-why">
-              Off — backup isn’t available in this version. Videos stay on this {narrow ? 'phone' : 'device'}.
-            </span>
-          </span>
-          <input className="switch" type="checkbox" role="switch" checked={false} disabled readOnly aria-describedby="v2-imp-backup-why" style={{ opacity: 0.5, cursor: 'not-allowed' }} />
-        </label>
-      )}
     </>
+  )
+}
+
+/** The opt-in backup switch (off for every new import) with the account's storage use. */
+function BackupSwitch(props: {
+  on: boolean
+  busy: boolean
+  narrow: boolean
+  onChange(on: boolean): void
+  usage: StorageUsage | null
+  usageFailed: boolean
+}) {
+  const { on, busy, narrow, onChange, usage, usageFailed } = props
+  const used = usage ? usedBytes(usage) : null
+  const share = used === null ? 0 : Math.min(1, used / STORAGE_BUDGET_BYTES)
+  return (
+    <section className="card" style={{ padding: 14, display: 'flex', flexDirection: 'column', gap: 10 }} aria-label="Video backup">
+      <label style={{ display: 'flex', gap: 12, alignItems: 'center' }}>
+        <span style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: 2 }}>
+          <span style={{ fontWeight: 500 }}>Back up video to your account</span>
+          <span className="t-caption" id="v2-imp-backup-why">
+            {on
+              ? `On · after processing, each video is stored privately in your account. Only you can see it; delete it any time in Settings. Up to ${formatStorage(VIDEO_MAX_BYTES)} per video.`
+              : `Off · videos stay on this ${narrow ? 'phone' : 'device'}. Turn on to watch them later without choosing the file again.`}
+          </span>
+        </span>
+        <input
+          className="switch"
+          type="checkbox"
+          role="switch"
+          checked={on}
+          disabled={busy}
+          aria-busy={busy || undefined}
+          aria-describedby="v2-imp-backup-why v2-imp-backup-use"
+          onChange={(e) => onChange(e.target.checked)}
+        />
+      </label>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+        <div className="v2-imp-usage" aria-hidden="true">
+          <span style={{ width: `${(share * 100).toFixed(1)}%` }} />
+        </div>
+        <span className="t-caption num" id="v2-imp-backup-use">
+          {used !== null
+            ? `Storage used: ${formatStorage(used)} of about ${formatStorage(STORAGE_BUDGET_BYTES)}${usage && usage.videoFiles > 0 ? ` · ${usage.videoFiles} ${usage.videoFiles === 1 ? 'video' : 'videos'} backed up` : ''}`
+            : usageFailed
+              ? 'Storage use couldn’t be checked right now.'
+              : 'Checking storage use…'}
+        </span>
+      </div>
+    </section>
   )
 }
 
@@ -503,7 +627,7 @@ function FileStep({ onFiles, narrow }: { onFiles(files: File[], skipped?: number
           {folderButton('btn-sm')}
         </p>
         <p className="t-caption">
-          MP4 or MOV (H.264) · up to 60 s each · file names like <span className="mono">S05_releve_side_01.mp4</span> fill the tags and clip number for you ·{' '}
+          MP4 or MOV (H.264) · file names like <span className="mono">S05_releve_side_01.mp4</span> fill the tags and clip number for you ·{' '}
           <span className="mono">D01_att3_f.mp4</span> (f, s, d) links the cameras of one take
         </p>
       </div>
@@ -720,7 +844,7 @@ function BulkApply({ label, source, disabled, onApply }: { label: string; source
       </select>
       <select className="input input-sm" aria-label="Movement for selected" style={{ width: 150 }} value={movement} onChange={(e) => setMovement(e.target.value)}>
         <option value="">Movement…</option>
-        {MOVEMENT_TYPES.map((m) => (
+        {MOVEMENT_ORDER.map((m) => (
           <option key={m} value={m}>
             {MOVEMENT_CHOICE_LABELS[m]}
           </option>
@@ -857,7 +981,7 @@ function TagTable({ rows, checks, source, selectedCount, patch, remove, onSelect
                       disabled={!editable}
                       onChange={(e) => patch(row.id, { movement: e.target.value as MovementType })}
                     >
-                      {MOVEMENT_TYPES.map((m) => (
+                      {MOVEMENT_ORDER.map((m) => (
                         <option key={m} value={m}>
                           {MOVEMENT_CHOICE_LABELS[m]}
                         </option>
@@ -987,7 +1111,7 @@ function TagCards({ rows, checks, source, patch, remove, onApplyAll }: TagProps 
                 <Seg
                   label={`Movement for ${row.name}`}
                   value={row.movement}
-                  options={MOVEMENT_TYPES.map((m) => [m, MOVEMENT_SHORT[m]] as const)}
+                  options={MOVEMENT_ORDER.map((m) => [m, MOVEMENT_SHORT[m]] as const)}
                   onChange={(movement) => patch(row.id, { movement })}
                 />
                 <Seg

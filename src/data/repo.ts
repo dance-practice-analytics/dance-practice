@@ -436,7 +436,7 @@ export function storedClipFields(clip: Pick<StudyClipInput, 'clip_name' | 'clip_
 }
 
 function studyRow(sessionId: string, clip: StudyClipInput, sha: string): StudyAttemptInsert {
-  // Written out field by field: a study clip never gets a video_path, whatever the caller passes.
+  // Written out field by field. video_path starts null; only the opt-in backup sets it, after the upload.
   return {
     session_id: sessionId,
     source: 'study_dataset',

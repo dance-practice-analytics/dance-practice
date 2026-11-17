@@ -50,7 +50,7 @@ export function Dashboard() {
             </a>
           }
         >
-          Import study clips or a video of your own. Study clips are processed on this device and never uploaded.
+          Import study clips or a video of your own. Clips are processed on this device; a video is uploaded only if you turn on backup.
         </EmptyState>
       ) : researcher ? (
         <ResearcherDashboard data={data} notes={notes} live={live} />

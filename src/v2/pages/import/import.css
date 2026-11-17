@@ -20,3 +20,7 @@
 .v2-imp-trim-fields .field{display:flex;flex-direction:column;gap:4px}
 .v2-imp-trim-fields .input{width:96px}
 .v2-imp-takes{margin:4px 0;display:flex;flex-direction:column;gap:2px}
+
+/* Storage use under the backup switch: a neutral meter, no colour meaning. */
+.v2-imp-usage{height:6px;border-radius:3px;background:var(--line);overflow:hidden}
+.v2-imp-usage>span{display:block;height:100%;background:var(--text-2)}

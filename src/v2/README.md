@@ -26,6 +26,7 @@ error patterns; `Main.dc.html` shows every component class.
 | `data.ts` | Read hooks: `useLibrary`, `useSessions`, `useAttempts`, `useAttempt`, `useSubjects`, `invalidate`. |
 | `clips.ts` | Local videos picked in this tab: `registerClip`, `useClip`, `relink`, … |
 | `pipeline.ts` | On-device processing queue: `enqueue`, `pause`, `resume`, `cancel`, `usePipeline`, … |
+| `videoBackup.ts` | Opt-in video backup: `queueBackups`, `useBackups`, `retryBackup`, `useAttemptVideo`, `useStorageUsage`, `backupProblem`, `deleteAllBackedUpVideos`. |
 | `format.ts` | Metric catalogue, labels, number / time formatting, `readMetric`, `frameAt`, `phaseAt`. |
 | `useIsNarrow.ts` | `useIsNarrow()` — true under 900px. |
 | `focus.ts` | `useFocusThemes()`, `saveFocus(themes)`: the dancer's up to three phrase focus themes (table `user_preferences`, owner-only RLS). |
@@ -179,9 +180,9 @@ readMetric(row, key): { key, def, value: number | null, confidence: 'high'|'medi
 
 `value === null` always comes with a `reason` sentence. Show the gap; never 0.
 
-## Clips (`clips.ts`) — local video only
+## Clips (`clips.ts`) — local video
 
-Study clips are never uploaded, so the video exists only as a `File` in this tab. After
+Unless the user backed it up (below), the video exists only as a `File` in this tab. After
 a reload the registry is empty while keypoints and metrics remain in Supabase.
 
 ```ts
@@ -191,8 +192,37 @@ relink(file, attempts): Promise<string | null>       // re-picked file → attem
 releaseClip(attemptId)                               // after deleting an attempt
 ```
 
-`objectUrl` goes to `<VideoStage src>`. Nothing in v2 may send a file, a frame or a
-canvas capture anywhere.
+`objectUrl` goes to `<VideoStage src>`. Nothing in v2 may send a frame or a canvas
+capture anywhere; the only file that leaves the device is the opt-in backup below.
+
+## Video backup (`videoBackup.ts`, FR-3.2, FR-3.9)
+
+Decision of 2026-11-17: the IRB approved storing study videos (reported by the user).
+Import has a "Back up video to your account" switch, **off for every import**; turning it
+on records the optional consent `own_video_upload` (now worded "Allow backing up my
+videos", for study and own clips). With it on, Import checks the batch first
+(`backupProblem`: MP4/MOV/M4V/WebM, at most 50 MB per file, and the account's videos +
+keypoints must stay under ~1 GB, the free plan) and refuses with a sentence if it doesn't
+fit. Then `queueBackups` holds each file until its processing finishes `done` and uploads
+it with progress (XHR to the Storage object endpoint, `x-upsert` so a retry overwrites) to
+`videos/{uid}/{attempt_id}.{ext}`, then sets `attempts.video_path`. Failed uploads show
+"Try again" on Processing (`processing/BackupNotice.tsx`) and retry on the `online` event.
+The queue lives in memory: keep the tab open until it is done. It is not the IndexedDB
+offline queue (that one never holds video).
+
+```ts
+useAttemptVideo(attempt): { objectUrl: string | null; remote: boolean } | null
+  // local file of this tab → else a 1-hour signed URL of the backup (objectUrl null while
+  // it loads) → else null, and Review / Compare show the relink flow as before.
+useStorageUsage(version) / loadStorageUsage(db): { videoFiles, videoBytes, keypointBytes }
+deleteAllBackedUpVideos(db)   // Settings → "Delete videos": files + video_path; keypoints stay
+```
+
+DB (migration `20261117030000_video_backup.sql`): CHECK `study_no_video` dropped; CHECK
+`video_path_own_folder` (`{owner_id}/{id}.%`); bucket `videos` private, 50 MB, video MIME
+types; storage insert/update policies need the owner's folder and an attempt of the owner
+(either source). Delete attempt / session / all data remove `video_path` files; Delete
+account empties the user's folder in both buckets. The LLM never receives video.
 
 ## Pipeline (`pipeline.ts`)
 
@@ -288,7 +318,8 @@ themes (`left_right_labels_uncertain`) and mark events `side_uncertain`.
   `src/metrics/phraseAlign.ts` → `buildEventTimeMap` in `compare/align.ts`).
 - Progress (`progress/phraseModel.ts`, `PhraseProgress.tsx`) and the Dashboard
   (`dashboard/PhraseTiles.tsx`) chart phrase themes only against phrase attempts.
-- Import reads `D01_att3_d.mp4`-style names (view letter f/s/d) as a phrase.
+- Import reads `D01_att3_d.mp4`-style names (view letter f/s/d) as a phrase. The movement of a
+  name without one defaults to the last movement imported, else `phrase` (listed first).
 - Phone: `PhraseTimeline compact` has 44 px events (at least 24 px wide), a 56 px label
   column and three axis labels; theme cards are one per row under 420 px. Library tiles
   read a phrase's themes for "Done / Hard to see / Not seen" (`tileKind`); the Library
@@ -599,8 +630,9 @@ workers; the script stops the daemon after the build.
 - **Gaps stay gaps.** Missing or low-confidence tracking is a gap, a dashed line or a
   hatched band with its reason — never interpolated, never 0. The skeleton is only ever
   drawn from pose data.
-- **Video never leaves the device.** Study clips are local files (blob URLs); nothing in
-  v2 sends video, frames or canvas captures anywhere. Only the publishable key is in the
+- **Video leaves the device only by the opt-in backup.** Clips are local files (blob
+  URLs); the one exception is `videoBackup.ts` when the user turns backup on at Import
+  (private bucket, owner only). Never frames or canvas captures. Only the publishable key is in the
   browser; no service-role key; no new env vars. The AI model (Gemini or Grok) is called
   only from the Edge Functions `generate-feedback` and `mika-chat`, with metrics JSON only.
 - **No real people.** Subjects are codes S01–S12; no names, no real footage, no

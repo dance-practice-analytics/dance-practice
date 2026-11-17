@@ -24,6 +24,7 @@ import { Settings } from './pages/Settings'
 import { SignIn } from './pages/SignIn'
 import { flushQueue, refreshPending, startAutoRetry } from './offline/uploadQueue'
 import { resetPipeline } from './pipeline'
+import { resetBackups } from './videoBackup'
 import { navigate, useRoute, type Route } from './router'
 import { Shell } from './Shell'
 import { useTheme } from './theme'
@@ -104,6 +105,7 @@ function Gate() {
   useEffect(() => {
     if (auth.status !== 'signedOut') return
     resetPipeline()
+    resetBackups()
     releaseAllClips()
   }, [auth.status])
 

@@ -1,7 +1,7 @@
-// Videos picked in this tab, by attempt. Study clips are never uploaded, so the file
-// only exists here: after a reload the registry is empty while keypoints and metrics
-// are still in Supabase, and the user re-picks the file (`relink`) to see the video.
-// Nothing in this module talks to a server.
+// Videos picked in this tab, by attempt. Unless the user turned on backup at Import
+// (videoBackup.ts), the file only exists here: after a reload the registry is empty
+// while keypoints and metrics are still in Supabase, and the user re-picks the file
+// (`relink`) to see the video. Nothing in this module talks to a server.
 
 import { useSyncExternalStore } from 'react'
 import { sha256Hex } from '../data/clipFile'

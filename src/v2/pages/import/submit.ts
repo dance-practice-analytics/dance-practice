@@ -2,7 +2,8 @@
 // written: a de-identified clip name (never the local file name, FR-3.2.5), clip
 // number, fingerprint, length, tags, the optional trim (FR-3.2.7) and the optional
 // session note. The clip itself is
-// registered in clips.ts (memory of this tab) and never sent anywhere.
+// registered in clips.ts (memory of this tab); it is uploaded only by the opt-in
+// backup (videoBackup.ts), after processing.
 
 import type { SupabaseClient } from '@supabase/supabase-js'
 import { ApiError } from '../../../api/errors'
@@ -31,8 +32,8 @@ const DUPLICATE = () =>
   new ApiError(409, 'duplicate_clip', 'This clip is already in your library.', 'Open the earlier import, or delete it to import again.')
 
 /**
- * Attempts for a personal video that stays on the device: source 'user_upload' with no
- * video_path (the optional backup upload isn't built). The repo only has the study
+ * Attempts for a personal video: source 'user_upload' with no video_path yet (the
+ * opt-in backup sets it after processing). The repo only has the study
  * variant, so this mirrors it one row at a time; the unique (owner, SHA-256) index
  * answers 23505 for a repeated file.
  */

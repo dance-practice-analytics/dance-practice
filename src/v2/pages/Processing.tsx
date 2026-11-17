@@ -18,6 +18,8 @@ import { href } from '../router'
 import { useOfflineQueue } from '../offline/uploadQueue'
 import { useIsNarrow } from '../useIsNarrow'
 import { useThumb } from './import/probe'
+import { useBackups } from '../videoBackup'
+import { BackupNotice } from './processing/BackupNotice'
 import { OfflineNotice } from './processing/OfflineNotice'
 import {
   batchCounts,
@@ -82,6 +84,7 @@ function metaOf(attempt: AttemptView | undefined, item?: PipelineItem): string {
 export function Processing() {
   const narrow = useIsNarrow()
   const pipe = usePipeline()
+  const backups = useBackups()
   const attempts = useAttempts()
   useSyncExternalStore(subscribeDismissed, () => dismissVersion)
   const [show, setShow] = useState(previewOn)
@@ -162,11 +165,13 @@ export function Processing() {
   }
   const chooseAgain = () => fileInput.current?.click()
 
+  // With the opt-in backup on, the videos of this queue are uploaded after processing.
+  const backingUp = backups.length > 0
   const header = (
     <PageHeader
       title="Processing"
       subtitle="Pose estimation runs in this browser. Keep this tab open; it pauses if the computer sleeps."
-      actions={<PrivacyPill />}
+      actions={<PrivacyPill>{backingUp ? 'Processed on this device · video backup on' : undefined}</PrivacyPill>}
       backHref={href({ name: 'import' })}
     />
   )
@@ -176,6 +181,7 @@ export function Processing() {
       <>
         {header}
         <OfflineNotice />
+        <BackupNotice />
         {attempts.error && <ErrorAlert error={attempts.error} onRetry={attempts.refetch} />}
         {attempts.loading ? (
           <SkeletonList rows={3} label="Loading queue" />
@@ -324,6 +330,7 @@ export function Processing() {
   const notices = (
     <>
       <OfflineNotice />
+      <BackupNotice />
       {attempts.error && <ErrorAlert error={attempts.error} onRetry={attempts.refetch} />}
       {orphans.length > 0 && (
         <Alert
@@ -361,7 +368,7 @@ export function Processing() {
     return (
       <>
         {header}
-        <PrivacyPill style={{ alignSelf: 'flex-start' }}>Processing on this phone · video not uploaded</PrivacyPill>
+        <PrivacyPill style={{ alignSelf: 'flex-start' }}>{backingUp ? 'Processing on this phone · video backup on' : 'Processing on this phone · video not uploaded'}</PrivacyPill>
         {preview}
         {batch}
         {notices}

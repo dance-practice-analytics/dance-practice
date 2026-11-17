@@ -136,7 +136,7 @@ export interface AttemptRow {
   clip_number: number | null
   /** The dancer's own note on this attempt (FR-3.5.7). Never sent to the AI functions. */
   note: string | null
-  /** Storage path in the videos bucket; always null for study_dataset (CHECK study_no_video). */
+  /** Storage path in the videos bucket ({owner}/{attempt}.{ext}); set only by the opt-in backup (CHECK video_path_own_folder). */
   video_path: string | null
   video_sha256: string | null
   duration_s: number | null

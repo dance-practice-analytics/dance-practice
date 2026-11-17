@@ -20,6 +20,7 @@ import { CONSENT_VERSION, setConsent, useConsents, type ConsentScope } from '../
 import { invalidate, useLibrary, type AttemptView } from '../data'
 import { MOVEMENT_LABELS, chosenName, formatBytes, formatDate } from '../format'
 import { resetPipeline } from '../pipeline'
+import { deleteAllBackedUpVideos, formatStorage, resetBackups, STORAGE_BUDGET_BYTES, usedBytes, useStorageUsage } from '../videoBackup'
 import { setThemePref, useThemePref, type ThemePref } from '../theme'
 import { useIsNarrow } from '../useIsNarrow'
 import { showAccountDeleted } from './AccountDeleted'
@@ -222,6 +223,7 @@ export function Settings() {
   const consents = useConsents()
   const library = useLibrary()
   const facts = useStorageFacts(library.data)
+  const usage = useStorageUsage(library.data)
   const attempts = library.data?.attempts ?? []
 
   // Privacy choices
@@ -336,6 +338,7 @@ export function Settings() {
     try {
       const report = await runDeleteAll(client(), typed)
       resetPipeline()
+      resetBackups()
       releaseAllClips()
       dropUrls()
       setFiles(null)
@@ -402,6 +405,7 @@ export function Settings() {
     try {
       const report = await deleteAccount(client(), accTyped)
       resetPipeline()
+      resetBackups()
       releaseAllClips()
       dropUrls()
       // Shown in place of the sign-in screen once the local session is gone.
@@ -412,6 +416,27 @@ export function Settings() {
       setAccBusy(false)
     }
   }
+
+  // Backed-up videos (opt-in at Import): delete them all, keep everything else.
+  const [videosBusy, setVideosBusy] = useState(false)
+  const [videosError, setVideosError] = useState<ApiError | null>(null)
+  const [videosNote, setVideosNote] = useState<string | null>(null)
+  const deleteVideos = async () => {
+    setVideosBusy(true)
+    setVideosError(null)
+    setVideosNote(null)
+    try {
+      const { files } = await deleteAllBackedUpVideos(client())
+      setVideosNote(`Deleted ${plural(files, 'backed-up video')}. Keypoints, measurements and the files on this device are unchanged.`)
+      invalidate()
+      usage.reload()
+    } catch (e) {
+      setVideosError(dataError(e))
+    } finally {
+      setVideosBusy(false)
+    }
+  }
+  const backedUp = attempts.filter((a) => a.video_path).length
 
   const processed = attempts.filter((a) => a.metrics !== null).length
   const notesCount = facts.data?.feedbackSets ?? 0
@@ -459,8 +484,12 @@ export function Settings() {
           onChange={(next) => void toggleConsent('ai_metrics_only', next)}
         />
         <SwitchRow
-          title="Back up my own videos"
-          caption={narrow ? 'Never study clips' : 'Personal videos only. Study clips can never be uploaded.'}
+          title="Allow video backup"
+          caption={
+            narrow
+              ? 'Only clips you choose at Import'
+              : 'Stores the videos you choose at Import privately in your account. Only you can see them. Never sent to the AI.'
+          }
           checked={consents.has('own_video_upload')}
           busy={busyScope === 'own_video_upload'}
           onChange={(next) => void toggleConsent('own_video_upload', next)}
@@ -517,7 +546,15 @@ export function Settings() {
         <dt className="muted">Practice notes{facts.data ? ` · ${plural(notesCount, 'set')}` : ''}</dt>
         <dd>{facts.data ? 'saved to account' : facts.loading ? 'Counting…' : 'Couldn’t be counted'}</dd>
         <dt className="muted">Video clips</dt>
-        <dd>this device only · never uploaded</dd>
+        <dd className="num">
+          {backedUp > 0
+            ? `${plural(backedUp, 'video')} backed up${usage.data ? ` · ${formatStorage(usage.data.videoBytes)}` : ''} · the rest on this device only`
+            : 'this device only · backup is off unless you turn it on at Import'}
+        </dd>
+        <dt className="muted">Storage used</dt>
+        <dd className="num">
+          {usage.data ? `${formatStorage(usedBytes(usage.data))} of about ${formatStorage(STORAGE_BUDGET_BYTES)}` : usage.error ? 'Couldn’t be checked' : 'Counting…'}
+        </dd>
       </dl>
       {facts.error && <ErrorAlert error={facts.error} onRetry={facts.refetch} />}
       <p className="t-caption">A size is shown only where the app records one (keypoint files).</p>
@@ -575,11 +612,41 @@ export function Settings() {
   const busyIcon = (kind: typeof exporting, icon: ReactNode) => (exporting === kind && kind !== null ? <Spinner /> : icon)
 
   const accountWhat =
-    'Removes your sign-in account and profile with everything above: sessions, keypoints, metrics, notes and consent choices. Can’t be undone.'
+    'Removes your sign-in account and profile with everything above: sessions, keypoints, metrics, notes, backed-up videos and consent choices. Can’t be undone.'
   const passwordStatus = pwDone && (
     <p className="t-caption" role="status">
       Your password was changed.
     </p>
+  )
+
+  const videosRow = (
+    <>
+      <div style={{ display: 'flex', flexWrap: 'wrap', gap: 12, alignItems: 'center' }}>
+        <div style={{ flex: '1 1 300px', display: 'flex', flexDirection: 'column' }}>
+          <span style={{ fontWeight: 600 }}>Delete backed-up videos</span>
+          <span className="t-caption" id="del-vid-what">
+            Removes every video stored in your account. Keypoints and measurements stay; Review then asks for the file on this device.
+          </span>
+        </div>
+        <button
+          className="btn btn-secondary"
+          type="button"
+          aria-describedby="del-vid-what"
+          disabled={videosBusy || (backedUp === 0 && !(usage.data && usage.data.videoFiles > 0))}
+          aria-busy={videosBusy || undefined}
+          onClick={() => void deleteVideos()}
+        >
+          {videosBusy ? <Spinner /> : <Icon name="trash" />}
+          Delete videos
+        </button>
+      </div>
+      {videosNote && (
+        <p className="t-small muted" role="status">
+          {videosNote}
+        </p>
+      )}
+      {videosError && <ErrorAlert error={videosError} />}
+    </>
   )
 
   const dataWide = (
@@ -629,11 +696,13 @@ export function Settings() {
       </div>
       {attemptReportView()}
       <div className="hr" />
+      {videosRow}
+      <div className="hr" />
       <div style={{ display: 'flex', flexWrap: 'wrap', gap: 12, alignItems: 'center' }}>
         <div style={{ flex: '1 1 300px', display: 'flex', flexDirection: 'column' }}>
           <span style={{ fontWeight: 600 }}>Delete all my data</span>
           <span className="t-caption">
-            Removes keypoints, metrics, notes, sessions and consent choices. Can’t be undone. The sign-in account stays; use
+            Removes keypoints, metrics, notes, backed-up videos, sessions and consent choices. Can’t be undone. The sign-in account stays; use
             Delete account to remove it too.
           </span>
         </div>
@@ -713,7 +782,10 @@ export function Settings() {
       {labelsCheck}
       {exportStatus}
       {attemptReportView()}
-      <p className="t-caption">Video stays on this phone and is never synced.</p>
+      <div className="card" style={{ padding: 14, display: 'flex', flexDirection: 'column', gap: 10 }}>
+        {videosRow}
+      </div>
+      <p className="t-caption">Videos stay on this phone unless you turn on backup at Import.</p>
       <p className="t-caption" id="del-acc-what">
         Delete account: {accountWhat.charAt(0).toLowerCase() + accountWhat.slice(1)}
       </p>
