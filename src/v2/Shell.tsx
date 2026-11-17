@@ -161,9 +161,9 @@ export function Shell({ active, children }: ShellProps) {
 
         <PendingUploads />
 
-        <p className="t-caption" style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '0 8px' }}>
-          <Icon name="device" size={14} style={{ flex: 'none' }} />
-          Clips are processed on this device
+        <p className="t-caption" style={{ display: 'flex', alignItems: 'flex-start', gap: 6, padding: '0 8px' }}>
+          <Icon name="device" size={14} style={{ flex: 'none', marginTop: 2 }} />
+          <span>Clips stay on this device unless you back them up</span>
         </p>
 
         <div style={{ display: 'flex', flexDirection: 'column', gap: 8, padding: '0 4px' }}>
