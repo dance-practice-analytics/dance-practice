@@ -1,9 +1,9 @@
-// CORS for the web app (dev server, GitHub Pages) and the Capacitor WebView.
+// CORS for the web app (dev server, Vercel) and the Capacitor WebView. Shared by mika-chat.
 
 export const DEFAULT_ALLOWED_ORIGINS = [
   'http://localhost:5173', // npm run dev
   'http://localhost:4173', // npm run preview
-  'https://dance-practice-analytics.github.io', // GitHub Pages
+  'https://dance-practice-teal.vercel.app', // Vercel: site at /, app at /app/
   'capacitor://localhost', // Capacitor iOS
   'https://localhost', // Capacitor Android (default androidScheme)
   'http://localhost', // Capacitor Android with androidScheme http

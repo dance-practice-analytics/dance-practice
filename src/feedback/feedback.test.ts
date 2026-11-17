@@ -514,7 +514,7 @@ describe('cors', () => {
   const allowed = allowedOrigins('https://notes.example.org/, ,https://staging.example.org')
 
   it('allows the web app, the dev server and the Capacitor origins', () => {
-    for (const origin of ['http://localhost:5173', 'https://dance-practice-analytics.github.io', 'capacitor://localhost', 'https://localhost']) {
+    for (const origin of ['http://localhost:5173', 'https://dance-practice-teal.vercel.app', 'capacitor://localhost', 'https://localhost']) {
       expect(corsHeaders(origin, allowed)['Access-Control-Allow-Origin']).toBe(origin)
     }
     expect(corsHeaders('https://notes.example.org', allowed)['Access-Control-Allow-Origin']).toBe('https://notes.example.org')
