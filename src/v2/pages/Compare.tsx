@@ -30,6 +30,10 @@ import { createClock, type Clock } from './review/clock'
 import { attemptName, comparisonInput, describeAttempt, sessionName } from './review/labels'
 import { RelinkOverlay } from './review/Relink'
 import { CAMERA_WORDS, filmedFromLabel } from './review/StageInfo'
+import { CameraSwitch, DIAGONAL_HINT, NOT_FILMED } from './review/CameraSwitch'
+import { clampTime, handOff, sharedViews, takeHandoff, viewsOfTake } from './review/takes'
+import { usePrefetchSeries } from './review/prefetchTake'
+import type { CameraView } from '../../data/schema'
 import { isSampleAttempt } from '../sampleMarkers'
 import './review/review.css'
 import { SyncedStage } from './review/SyncedStage'
@@ -315,6 +319,36 @@ function Workspace({ a, b, seriesA, seriesB, attempts, pickers, eyebrow, backHre
   }, [durA, fpsA])
   useEffect(() => () => clock.pause(), [clock])
   useTransportKeys(clock)
+  // Arrived from the camera switch: the same moment of both takes, playing if it was.
+  useEffect(() => {
+    const h = takeHandoff(`${a.id}:${b.id}`)
+    if (!h) return
+    clock.setRate(h.rate)
+    clock.seek(clampTime(h.time, durA))
+    if (h.playing) clock.play()
+  }, [clock, a.id, b.id, durA])
+
+  // One camera switch for both: a camera is offered when A's and B's takes both have it.
+  const sameView = a.session.camera_view && a.session.camera_view === b.session.camera_view ? a.session.camera_view : null
+  const shared = useMemo(() => sharedViews(a, b, attempts), [a, b, attempts])
+  const unavailable = useMemo(() => {
+    const va = viewsOfTake(a, attempts)
+    const vb = viewsOfTake(b, attempts)
+    const out: Partial<Record<CameraView, string>> = {}
+    for (const v of ['front', 'side', 'diagonal'] as const) {
+      if (shared[v]) continue
+      out[v] = !va[v] && !vb[v] ? NOT_FILMED : !va[v] ? `${NOT_FILMED} for A` : !vb[v] ? `${NOT_FILMED} for B` : 'A and B would be the same clip'
+    }
+    return out
+  }, [a, b, attempts, shared])
+  usePrefetchSeries(Object.values(shared).flatMap((p) => (p ? [p.a, p.b].filter((x) => x.id !== a.id && x.id !== b.id && x.status === 'done').map((x) => x.id) : [])))
+  const switchTo = (v: CameraView) => {
+    const pair = shared[v]
+    if (!pair) return
+    const { time, playing, rate } = clock.get()
+    handOff({ time, playing, rate, target: `${pair.a.id}:${pair.b.id}` })
+    navigate({ name: 'compare', a: pair.a.id, b: pair.b.id }, { replace: true })
+  }
 
   // Two phrase attempts are lined up on their matched events instead of phases.
   const phrasePair = a.session.movement_type === 'phrase' && b.session.movement_type === 'phrase'
@@ -338,8 +372,8 @@ function Workspace({ a, b, seriesA, seriesB, attempts, pickers, eyebrow, backHre
   const ghostOnB = !narrow || mode === 'overlay'
   // One video keeps time: A's when it is on screen, otherwise B's.
   const aLeads = showA && srcA !== null
-  // Where the camera stood (set at import), not an angle to switch to.
-  const view = (x: AttemptView) => filmedFromLabel(x.session.camera_view, narrow)
+  // Each stage names its camera only when A and B were filmed from different ones; otherwise the switch says it.
+  const view = (x: AttemptView) => (sameView ? undefined : filmedFromLabel(x.session.camera_view, narrow))
   const stageStyle = { maxHeight: narrow ? '50vh' : 'min(56vh, 520px)' }
   // "Choose the file again" sits on each stage; when A's stage is hidden (phone, B or
   // Overlay mode) B's stage asks for A's file too.
@@ -454,6 +488,17 @@ function Workspace({ a, b, seriesA, seriesB, attempts, pickers, eyebrow, backHre
         </div>
       )}
 
+      <CameraSwitch
+        current={sameView}
+        unavailable={unavailable}
+        onPick={switchTo}
+        hint={
+          sameView
+            ? `A and B switch camera together, at the same moment. ${DIAGONAL_HINT}`
+            : `A and B were filmed from different cameras. ${DIAGONAL_HINT}`
+        }
+        narrow={narrow}
+      />
       {narrow ? (
         <>
           {stageA}
@@ -492,6 +537,12 @@ function Workspace({ a, b, seriesA, seriesB, attempts, pickers, eyebrow, backHre
         phrase={phrasePair ? { a: phraseA, b: phraseB, alignment } : null}
       />
 
+      {sameView && Object.values(shared).some(Boolean) && (
+        <p className="v2-cam-source" style={{ marginBottom: -12 }}>
+          <Icon name="camera" size={14} />
+          Values below come from the {CAMERA_WORDS[sameView].toLowerCase()} camera of A and B.
+        </p>
+      )}
       {phrasePair ? (
         <PhraseDifferences
           a={phraseA}
@@ -722,7 +773,7 @@ function pairExplanation(comparison: AttemptComparison): ReactNode {
   if (comparison.reason?.code === 'different_camera_view') {
     return (
       <NoteBox title="These attempts were filmed from different camera views.">
-        The same pose reads differently from the front and from the side, so their measurements aren’t compared. Pick two attempts with the same view to see differences.
+        The same pose reads differently from the front and from the side, so their measurements aren’t compared. Switch both to one camera above, or pick two attempts with the same view, to see differences.
       </NoteBox>
     )
   }

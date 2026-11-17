@@ -245,12 +245,23 @@ times stay those of the original clip and `series.durationS` stays the whole cli
 `series.trim` says which part was processed. `frameAt` returns null outside it and the
 Review timeline shows it as a `trimmed` band, so Review and relinking need no offset.
 
-Camera position (`sessions.camera_view`): where the one camera stood, set at import. The stage
-pill says "Filmed from: Diagonal" (`filmedFromLabel` in `pages/review/StageInfo.tsx`); under
-the Review stage `StageInfo` explains it can't be turned and lets the dancer correct it
-(`updateSession(client(), id, { camera_view })`, the whole session). Metrics don't depend on
-it; Compare, Progress and Mika's phrase progress group by it. The same block says why only
-the skeleton shows when the video isn't on this device.
+Camera position (`sessions.camera_view`) and the camera switch (FR-3.5, FR-3.6): one session
+holds the clips of one camera position. The clips of **one take filmed by several cameras**
+are linked without an extra column: same subject, movement, recording date and take number
+(`attempts.clip_number`), different camera (`pages/review/takes.ts`: `takeKey`, `viewsOfTake`,
+`sharedViews`). Import fills these from `D01_att3_f/_s/_d` names (one date per dataset take,
+`alignTakeDates`), and the dancer links other clips by typing the same take number ("Take no."
+column; `linkedTakes` lists the linked takes under the table and flags a camera given twice).
+Review and Compare show `CameraSwitch` over the stage ("Front · Diagonal · Side", 44 px on
+phones, ←/→ between options): a camera that didn't film the take is `aria-disabled` with the
+tooltip "Not filmed from this camera"; switching navigates (replace) to that camera's attempt
+and hands the playhead over (`handOff` / `takeHandoff`: time, play state, rate). The other
+cameras' keypoints are fetched in the background (`prefetchTake.ts`), so the switch is instant.
+The measurements say "Values from the diagonal camera of this take". In Compare the switch moves
+A and B together and offers only cameras both takes have; the stage pills name the camera only
+when A and B differ. "Correct" (secondary, Review) opens `StageInfo`, which changes the whole
+session's `camera_view` (`updateSession`). The same block says why only the skeleton shows when
+the video isn't on this device.
 
 Reference attempt (FR-3.6.6): `attempts.is_reference`, one per movement and subject (a
 trigger clears the previous one). `setReferenceAttempt(client(), id, on)` then

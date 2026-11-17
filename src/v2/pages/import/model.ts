@@ -315,3 +315,82 @@ export function findSession<S extends SessionLike>(sessions: readonly S[], group
     ) ?? null
   )
 }
+
+// ---------- one take, several cameras (FR-3.5, FR-3.6) ----------
+//
+// The clips of one take filmed by several cameras are linked by subject, movement,
+// recording date and take number (attempts.clip_number), each in the session of its own
+// camera position (see ../review/takes.ts). `D01_att3_f/_s/_d` names fill all of that;
+// for other clips the dancer types the same take number on the clips of one take.
+
+/** 'd01_att3' for `D01_att3_f.mp4`: the take a dataset clip belongs to; null for other names. */
+export function datasetTakeStem(name: string): string | null {
+  const stem = baseName(name)
+    .replace(/\.[a-z0-9]{2,4}$/i, '')
+    .toLowerCase()
+    .split(/[\s_\-.,()[\]]+/)
+    .filter(Boolean)
+    .join('_')
+  const m = DATASET_CLIP.exec(stem)
+  return m ? stem.slice(0, stem.lastIndexOf('_')) : null
+}
+
+/**
+ * Cameras of one dataset take can have saved their files on different days (a card read
+ * the next morning). They are one take, so they get one date — the earliest — or they would
+ * land on different days and not be linked. Rows of other names keep their own date.
+ */
+export function alignTakeDates<T extends Pick<ClipDraft, 'name' | 'recordedOn'>>(rows: readonly T[]): T[] {
+  const earliest = new Map<string, string>()
+  for (const r of rows) {
+    const stem = datasetTakeStem(r.name)
+    if (!stem) continue
+    const seen = earliest.get(stem)
+    if (!seen || r.recordedOn < seen) earliest.set(stem, r.recordedOn)
+  }
+  return rows.map((r) => {
+    const stem = datasetTakeStem(r.name)
+    const date = stem ? earliest.get(stem) : undefined
+    return date && date !== r.recordedOn ? { ...r, recordedOn: date } : r
+  })
+}
+
+export interface TakeLink {
+  key: string
+  take: number
+  subject: string | null
+  movement: MovementType
+  /** Cameras of this take in the list, in front · diagonal · side order. */
+  views: CameraView[]
+  /** Cameras that appear more than once: only one clip per camera can belong to a take. */
+  repeated: CameraView[]
+  rowIds: string[]
+}
+
+const VIEW_ORDER: readonly CameraView[] = ['front', 'diagonal', 'side']
+
+/**
+ * Takes in the list filmed from more than one camera (or with one camera twice), by
+ * subject, movement, date and take number — the same rule Review uses to link them.
+ */
+export function linkedTakes(rows: readonly Pick<ClipDraft, 'id' | 'name' | 'subject' | 'movement' | 'view' | 'recordedOn' | 'clipNumber'>[]): TakeLink[] {
+  const groups = new Map<string, TakeLink & { counts: Map<CameraView, number> }>()
+  for (const r of alignTakeDates(rows)) {
+    if (r.clipNumber === null) continue
+    const key = [r.subject ?? '-', r.movement, r.recordedOn, r.clipNumber].join('|')
+    let g = groups.get(key)
+    if (!g) {
+      g = { key, take: r.clipNumber, subject: r.subject, movement: r.movement, views: [], repeated: [], rowIds: [], counts: new Map() }
+      groups.set(key, g)
+    }
+    g.rowIds.push(r.id)
+    g.counts.set(r.view, (g.counts.get(r.view) ?? 0) + 1)
+  }
+  const out: TakeLink[] = []
+  for (const { counts, ...g } of groups.values()) {
+    g.views = VIEW_ORDER.filter((v) => counts.has(v))
+    g.repeated = VIEW_ORDER.filter((v) => (counts.get(v) ?? 0) > 1)
+    if (g.views.length > 1 || g.repeated.length > 0) out.push(g)
+  }
+  return out.sort((x, y) => (x.subject ?? '').localeCompare(y.subject ?? '') || x.take - y.take)
+}

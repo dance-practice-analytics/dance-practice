@@ -26,7 +26,7 @@ import {
   readMetrics,
   STATUS_LABELS,
 } from '../format'
-import { href, useRoute } from '../router'
+import { href, navigate, useRoute } from '../router'
 import { useIsNarrow } from '../useIsNarrow'
 import { useViewMode, ViewModeSwitch } from '../viewMode'
 import { AttemptNote } from './review/AttemptNote'
@@ -35,7 +35,11 @@ import { createClock, type Clock } from './review/clock'
 import { attemptName, comparisonInput, describeAttempt, neighbourInSession, sessionName } from './review/labels'
 import { ReferenceTag, ReferenceToggle } from './review/ReferenceToggle'
 import { RelinkOverlay } from './review/Relink'
-import { CAMERA_WORDS, filmedFromLabel, StageInfo } from './review/StageInfo'
+import { CAMERA_WORDS, StageInfo } from './review/StageInfo'
+import { CameraSwitch, DIAGONAL_HINT, NOT_FILMED } from './review/CameraSwitch'
+import { cameraCount, clampTime, handOff, takeHandoff, viewsOfTake } from './review/takes'
+import { usePrefetchSeries } from './review/prefetchTake'
+import type { CameraView } from '../../data/schema'
 import { isSampleAttempt } from '../sampleMarkers'
 import './review/review.css'
 import { SyncedStage } from './review/SyncedStage'
@@ -150,6 +154,15 @@ function Workspace({ attempt, series, attempts }: WorkspaceProps) {
     return c
   }, [duration, fps])
   useEffect(() => () => clock.pause(), [clock])
+  // Arrived from the camera switch: the same moment of the take, playing if it was.
+  useEffect(() => {
+    const h = takeHandoff(attempt.id)
+    if (!h) return
+    clock.setRate(h.rate)
+    clock.seek(clampTime(h.time, duration))
+    if (h.playing) clock.play()
+  }, [clock, attempt.id, duration])
+  const [correcting, setCorrecting] = useState(false)
 
   const session = attempt.session
   const inSession = useMemo(() => attempts.filter((a) => a.session_id === attempt.session_id), [attempts, attempt.session_id])
@@ -195,8 +208,29 @@ function Workspace({ attempt, series, attempts }: WorkspaceProps) {
   const compareLabel = reference ? 'Compare with reference' : other ? `Compare with attempt ${other.number}` : 'Compare'
   const notesHref = href({ name: 'notes', attemptId: attempt.id })
   const chatHref = href({ name: 'chat', attemptId: attempt.id })
-  // Where the camera stood (set at import), not a view the dancer can switch to.
+  // Where the camera stood (set at import); other cameras of the same take are one switch away.
   const view = session.camera_view ? `${CAMERA_WORDS[session.camera_view]} camera` : null
+  const takeViews = useMemo(() => viewsOfTake(attempt, attempts), [attempt, attempts])
+  const cameras = cameraCount(takeViews)
+  usePrefetchSeries(Object.values(takeViews).flatMap((x) => (x && x.id !== attempt.id && x.status === 'done' ? [x.id] : [])))
+  const switchTo = (v: CameraView) => {
+    const target = takeViews[v]
+    if (!target || target.id === attempt.id) return
+    const { time, playing, rate } = clock.get()
+    handOff({ time, playing, rate, target: target.id })
+    navigate({ name: 'review', attemptId: target.id }, { replace: true })
+  }
+  const unavailable: Partial<Record<CameraView, string>> = {}
+  for (const v of ['front', 'side', 'diagonal'] as const) {
+    if (!takeViews[v]) unavailable[v] = session.camera_view ? NOT_FILMED : 'Set where this camera stood first'
+  }
+  const sourceNote =
+    session.camera_view && cameras > 1 ? (
+      <p className="v2-cam-source">
+        <Icon name="camera" size={14} />
+        Values from the {CAMERA_WORDS[session.camera_view].toLowerCase()} camera of this take.
+      </p>
+    ) : null
 
   const subtitle = [
     view,
@@ -305,6 +339,7 @@ function Workspace({ attempt, series, attempts }: WorkspaceProps) {
         </h2>
         <ViewModeSwitch />
       </div>
+      {sourceNote}
       <p className="t-caption">
         {focus.themes.length ? 'Your focus themes come first. ' : 'Tick “My focus” on up to three themes to see them first. '}
         {other ? `Each one next to attempt ${other.number}.` : ''}
@@ -332,6 +367,7 @@ function Workspace({ attempt, series, attempts }: WorkspaceProps) {
         </h2>
         <ViewModeSwitch />
       </div>
+      {sourceNote}
       {other && <p className="t-caption">Each one next to attempt {other.number}.</p>}
       {narrow ? <div className="v2-rev-mgrid">{cards}</div> : cards}
       {session.movement_type === 'releve_balance' && <p className="t-caption">Turns are counted for pirouettes only.</p>}
@@ -403,7 +439,6 @@ function Workspace({ attempt, series, attempts }: WorkspaceProps) {
       role="lead"
       phases={phases}
       showSkeleton={skeletonOn}
-      view={filmedFromLabel(session.camera_view, narrow)}
       ariaLabel={`Tracked pose skeleton of ${attemptName(attempt).toLowerCase()}${src ? ', drawn over the video' : ', shown without the video'}`}
       onVideoError={() => setVideoFailed(true)}
       style={{ maxHeight: narrow ? '56vh' : 'min(64vh, 640px)' }}
@@ -413,13 +448,31 @@ function Workspace({ attempt, series, attempts }: WorkspaceProps) {
   )
 
   const sample = isSampleAttempt(attempt)
+  const cameraSwitch = (
+    <CameraSwitch
+      current={session.camera_view}
+      unavailable={unavailable}
+      onPick={switchTo}
+      onCorrect={sample ? undefined : () => setCorrecting((c) => !c)}
+      correctLabel={session.camera_view ? 'Correct' : 'Set camera'}
+      hint={
+        !session.camera_view
+          ? `Where the camera stood wasn’t set at import. ${DIAGONAL_HINT}`
+          : cameras > 1
+            ? `Same take and moment from ${cameras} cameras. ${DIAGONAL_HINT}`
+            : `This take was filmed from one camera. ${DIAGONAL_HINT}`
+      }
+      narrow={narrow}
+    />
+  )
   const stageInfo = (
     <StageInfo
       sessionId={session.id}
       view={session.camera_view}
       attemptCount={inSession.length}
       videoMissing={!clip && !videoFailed && !sample}
-      readOnly={sample}
+      editing={correcting && !sample}
+      onEditingChange={setCorrecting}
     />
   )
 
@@ -462,6 +515,7 @@ function Workspace({ attempt, series, attempts }: WorkspaceProps) {
       {loopOn && phases.length > 0 && <LoopBinder clock={clock} phases={phases} />}
       {narrow ? (
         <>
+          {cameraSwitch}
           {stage}
           {stageInfo}
           {relink}
@@ -478,6 +532,7 @@ function Workspace({ attempt, series, attempts }: WorkspaceProps) {
       ) : (
         <div className="v2-rev-cols">
           <section className="v2-rev-main" aria-label="Video and timelines">
+            {cameraSwitch}
             {stage}
             {stageInfo}
             {relink}

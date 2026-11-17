@@ -22,6 +22,9 @@ import {
   countChecks,
   formatLength,
   groupIntoSessions,
+  alignTakeDates,
+  linkedTakes,
+  type TakeLink,
   localDate,
   parseTags,
   rowTrim,
@@ -153,7 +156,7 @@ export function Import() {
     let failed = 0
     try {
       const fresh = rows.filter((r) => checks.get(r.id)?.kind === 'ready')
-      const outcomes = await createImport(client(), source, groupIntoSessions(fresh), library.data.sessions, sessionNote)
+      const outcomes = await createImport(client(), source, groupIntoSessions(alignTakeDates(fresh)), library.data.sessions, sessionNote)
       const changes = new Map<string, Partial<Row> | null>()
       for (const row of fresh) {
         const res = outcomes.get(row.id)
@@ -259,6 +262,8 @@ export function Import() {
               onApply={applyToSelected}
             />
           )}
+
+          <TakeLinks links={linkedTakes(rows.filter((r) => taggable(checks.get(r.id))))} />
 
           <SessionStep
             date={sessionDate ?? rows[0].recordedOn}
@@ -498,7 +503,8 @@ function FileStep({ onFiles, narrow }: { onFiles(files: File[], skipped?: number
           {folderButton('btn-sm')}
         </p>
         <p className="t-caption">
-          MP4 or MOV (H.264) · up to 60 s each · file names like <span className="mono">S05_releve_side_01.mp4</span> fill the tags and clip number for you
+          MP4 or MOV (H.264) · up to 60 s each · file names like <span className="mono">S05_releve_side_01.mp4</span> fill the tags and clip number for you ·{' '}
+          <span className="mono">D01_att3_f.mp4</span> (f, s, d) links the cameras of one take
         </p>
       </div>
     </section>
@@ -589,13 +595,43 @@ function ClipNumberInput({ row, patch, disabled, width }: { row: Row; patch: Tag
       min={1}
       max={999}
       step={1}
-      aria-label={`Clip number for ${row.name}`}
+      aria-label={`Take number for ${row.name}`}
       placeholder="—"
       style={{ width: width ?? 72 }}
       value={row.clipNumber ?? ''}
       disabled={disabled}
       onChange={(e) => patch(row.id, { clipNumber: clipNumberOrNull(e.target.value === '' ? null : Number(e.target.value)) })}
     />
+  )
+}
+
+// ---------- same take, several cameras ----------
+
+const VIEW_NAME: Record<CameraView, string> = { front: 'Front', side: 'Side', diagonal: 'Diagonal' }
+
+/** Which clips in the list are one take filmed from several cameras (linked in Review and Compare). */
+function TakeLinks({ links }: { links: TakeLink[] }) {
+  if (links.length === 0) return null
+  const repeated = links.filter((l) => l.repeated.length > 0)
+  return (
+    <NoteBox title="Same take, different cameras" icon="camera">
+      <span className="v2-imp-takes" role="list">
+        {links.map((l) => (
+          <span role="listitem" key={l.key}>
+            <span className="mono">{[l.subject, `take ${l.take}`].filter(Boolean).join(' · ')}</span>: {l.views.map((v) => VIEW_NAME[v]).join(' · ')}
+          </span>
+        ))}
+      </span>
+      <span className="t-caption">
+        In Review and Compare you can switch between these cameras at the same moment. To link other clips, give them the same take number.
+      </span>
+      {repeated.length > 0 && (
+        <span className="t-caption" style={{ display: 'block' }}>
+          {repeated.map((l) => `Take ${l.take} has more than one ${l.repeated.map((v) => VIEW_NAME[v].toLowerCase()).join(' and ')} clip`).join('; ')}: only one clip per camera
+          is shown when switching. Check the take numbers or camera views.
+        </span>
+      )}
+    </NoteBox>
   )
 }
 
@@ -753,7 +789,9 @@ function TagTable({ rows, checks, source, selectedCount, patch, remove, onSelect
               </th>
               <th scope="col">File</th>
               <th scope="col">Length</th>
-              <th scope="col">Clip no.</th>
+              <th scope="col" title="Clips with the same take number, subject and movement from different cameras are one take">
+                Take no.
+              </th>
               <th scope="col">Subject</th>
               <th scope="col">Movement</th>
               <th scope="col">Camera view</th>

@@ -61,6 +61,23 @@ test('review: skeleton stage, measurements, phases and the relink card', async (
   await stage.getByRole('button', { name: 'Pause' }).click()
 })
 
+test('review: the camera switch names the camera and says why another is unavailable', async ({ page }) => {
+  await openReleveReview(page)
+  const m = main(page)
+  const cams = m.getByRole('group', { name: 'Camera' })
+  await expect(cams.getByRole('button')).toHaveCount(3)
+  await expect(cams.getByRole('button', { pressed: true })).toHaveCount(1)
+  await expect(m.getByText('Diagonal gives the steadiest values.', { exact: false }).first()).toBeVisible()
+  // Every camera that isn't on screen either opens its clip of the take or says it wasn't filmed.
+  for (const b of await cams.getByRole('button', { pressed: false }).all()) {
+    if ((await b.getAttribute('aria-disabled')) === 'true') await expect(b).toHaveAttribute('title', /Not filmed from this camera|Set where/)
+  }
+  // "Correct" stays available, one step away.
+  await m.getByRole('button', { name: /^Correct/ }).click()
+  await expect(m.getByRole('group', { name: 'Correct where the camera stood' })).toBeVisible()
+  await m.getByRole('button', { name: 'Cancel' }).click()
+})
+
 test('review: the attempt note autosaves, survives a reload and is put back', async ({ page }) => {
   await openReleveReview(page)
   const note = main(page).getByRole('textbox', { name: 'My note on this attempt' })

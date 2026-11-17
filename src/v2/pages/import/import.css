@@ -19,3 +19,4 @@
 .v2-imp-trim-fields{display:flex;flex-wrap:wrap;gap:8px;align-items:flex-end}
 .v2-imp-trim-fields .field{display:flex;flex-direction:column;gap:4px}
 .v2-imp-trim-fields .input{width:96px}
+.v2-imp-takes{margin:4px 0;display:flex;flex-direction:column;gap:2px}
