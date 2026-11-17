@@ -17,9 +17,13 @@
     "e2e:ui": "playwright test --ui",
     "e2e:v2": "playwright test -c playwright.v2.config.ts",
     "check:rls": "node scripts/rls-check.mjs",
-    "deploy": "node scripts/deploy-vercel.mjs"
+    "deploy": "node scripts/deploy-vercel.mjs",
+    "cap:sync": "node scripts/android-build.mjs --sync",
+    "android:build": "node scripts/android-build.mjs"
   },
   "dependencies": {
+    "@capacitor/android": "8.6.2",
+    "@capacitor/core": "8.6.2",
     "@mediapipe/tasks-vision": "^1.2.3",
     "@supabase/supabase-js": "^2.119.0",
     "react": "^19.3.1",
@@ -28,6 +32,7 @@
   },
   "devDependencies": {
     "@axe-core/playwright": "^4.14.0",
+    "@capacitor/cli": "8.6.2",
     "@playwright/test": "^1.64.1",
     "@types/react": "^19.3.0",
     "@types/react-dom": "^19.3.0",
