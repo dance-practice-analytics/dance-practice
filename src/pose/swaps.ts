@@ -84,10 +84,59 @@ function exchange(landmarks: Landmark[] | null): Landmark[] | null {
  * Only neighbouring frames are compared: across a gap, or a frame whose torso is not
  * tracked, the rotation in between is unknown and nothing is changed. Positions are
  * never altered, only which side they are filed under.
+ *
+ * A relabeled stretch longer than MAX_SWAP_S is put back as the tracker gave it. The
+ * chain only knows "same as the previous frame or not": when the swap back is missed (it
+ * happens gradually while the dancer is edge-on, or the torso is weak for a moment), every
+ * later frame stays exchanged until the next gap. Tracker swaps are short glitches, so a
+ * long stretch says the chain lost track, not that the tracker did.
  */
 export function unswapLeftRight(series: PoseSeries): PoseSeries {
+  return capRelabeled({ ...series, frames: chainUnswap(series) })
+}
+
+/**
+ * Puts back, as the tracker gave them, the labels of every relabeled stretch longer than
+ * MAX_SWAP_S (see unswapLeftRight). Works on a stored series too, since frames keep their
+ * `relabeled` mark, so keypoints saved before the cap existed are read the same way.
+ * Returns the series itself when nothing changes.
+ */
+export function capRelabeled(series: PoseSeries): PoseSeries {
+  const maxRun = Math.max(1, Math.round(MAX_SWAP_S * (series.fps || 30)))
+  let frames: PoseFrame[] | null = null
+  let i = 0
+  const n = series.frames.length
+  while (i < n) {
+    if (!series.frames[i].relabeled) {
+      i++
+      continue
+    }
+    let j = i
+    while (j < n && series.frames[j].relabeled) j++
+    if (j - i > maxRun) {
+      frames ??= series.frames.slice()
+      for (let k = i; k < j; k++) {
+        const f: PoseFrame = { ...series.frames[k], image: exchange(series.frames[k].image), world: exchange(series.frames[k].world) }
+        delete f.relabeled
+        frames[k] = f
+      }
+    }
+    i = j
+  }
+  return frames ? { ...series, frames } : series
+}
+
+/**
+ * Longest relabeled stretch kept, s. Checked against a multi-camera reference (numbers
+ * only, kept outside the repository): the tracker's own labels were mostly right and wrong
+ * only in short stretches, while the uncapped chain could leave more than half of a clip
+ * exchanged after one missed swap-back.
+ */
+export const MAX_SWAP_S = 1
+
+function chainUnswap(series: PoseSeries): PoseFrame[] {
   let prev: Landmark[] | null = null
-  const frames: PoseFrame[] = series.frames.map((frame) => {
+  return series.frames.map((frame) => {
     const w = frame.world
     if (!torsoSeen(w)) {
       prev = null
@@ -101,5 +150,4 @@ export function unswapLeftRight(series: PoseSeries): PoseSeries {
     prev = w
     return frame
   })
-  return { ...series, frames }
 }

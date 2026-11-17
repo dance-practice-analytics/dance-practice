@@ -194,6 +194,11 @@ pirouettes, but it is a known limit.
   MediaPipe swaps. One false relabel was seen on the clips: a one-frame tracker glitch
   (1014-1, frame 190) where the torso collapses and the hip labels cross. Harmless for a
   relevé, but in a turn it would add the swap note.
+  Later check on real phrase recordings against a multi-camera reference (numbers only,
+  kept outside the repository): the chain sometimes missed the swap back, after which
+  every later frame stayed exchanged. Since then a relabeled stretch longer than
+  `MAX_SWAP_S` (1 s) is put back as the tracker gave it (`capRelabeled`, also applied to
+  stored keypoints by the phrase engine, mt2-phrase-0.2.0); short glitches are still undone.
 - **Rise-end timing**: the two-step heel climb of the tracker may be a stick-figure
   artifact.
 - **Frame seek**: checked in desktop Chrome on an H.264 clip at 30 fps. Phone recordings

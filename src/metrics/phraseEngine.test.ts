@@ -122,6 +122,27 @@ describe('computePhrase', () => {
     for (const g of gestures) expect(g.side_uncertain).toBe(true)
   })
 
+  it('reads stored keypoints whose unswapper lost track as the tracker labelled them', () => {
+    // Stored series where a missed swap-back left frames 30 onwards exchanged and marked relabeled.
+    const clean = phraseSeries(phrase(), 13)
+    const swappedAll = swapLabels(clean)
+    const stored: PoseSeries = {
+      ...clean,
+      frames: clean.frames.map((f, i) => (i >= 30 ? { ...swappedAll.frames[i], relabeled: true as const } : f)),
+    }
+    const r = computePhrase(stored)
+    expect(r.version).toBe(PHRASE_ALGORITHM_VERSION)
+    expect(r.label_doubt_share).toBe(0)
+    expect(r.themes).toEqual(result.themes)
+    expect(r.events.filter((e) => e.kind === 'gesture').map((g) => g.side)).toEqual(['right', 'left'])
+    // A short relabeled glitch (under MAX_SWAP_S) is kept as the unswapper left it.
+    const glitch: PoseSeries = {
+      ...clean,
+      frames: clean.frames.map((f, i) => (i >= 30 && i < 35 ? { ...f, relabeled: true as const } : f)),
+    }
+    expect(computePhrase(glitch).themes).toEqual(result.themes)
+  })
+
   it('stays well under the storage limit', () => {
     expect(JSON.stringify(result).length).toBeLessThan(64_000)
   })

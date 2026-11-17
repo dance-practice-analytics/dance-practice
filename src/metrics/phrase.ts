@@ -15,6 +15,7 @@
 // the side-dependent values carry the note `left_right_labels_uncertain`, one confidence
 // level lower, and events say `side_uncertain`.
 
+import { capRelabeled } from '../pose/swaps'
 import type { PoseSeries } from '../pose/types'
 import { LM } from '../pose/types'
 import { confidenceLevel } from './engine'
@@ -26,8 +27,11 @@ import type { ConfidenceLevel } from './types'
 /**
  * Bump when a definition or threshold changes (FR-3.4.9).
  * 0.1.0: first version, thresholds from the synthetic phrase dancer and one study dancer (numbers only).
+ * 0.2.0: keypoints are read through capRelabeled (src/pose/swaps.ts): a relabeled stretch longer than
+ *        MAX_SWAP_S goes back to the tracker's labels, so one missed swap-back no longer flips the
+ *        sides for the rest of the clip (stored keypoints included).
  */
-export const PHRASE_ALGORITHM_VERSION = 'mt2-phrase-0.1.0'
+export const PHRASE_ALGORITHM_VERSION = 'mt2-phrase-0.2.0'
 
 export const THEME_KEYS = ['knee_over_toes', 'head_lead', 'neck_range', 'upper_body_curve', 'arm_reach', 'circle_completion'] as const
 export type ThemeKey = (typeof THEME_KEYS)[number]
@@ -323,7 +327,8 @@ export function anchorIndex(events: readonly PhraseEventOut[]): number | null {
 
 // ---------- all together ----------
 
-export function computePhrase(series: PoseSeries): PhraseResult {
+export function computePhrase(input: PoseSeries): PhraseResult {
+  const series = capRelabeled(input)
   const n = series.frames.length
   const tracked = series.frames.filter((f) => f.world).length
   const duration = n ? Math.max(series.frames[n - 1].t - series.frames[0].t + 1 / (series.fps || 30), 0) : 0

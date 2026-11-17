@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest'
 import { decodeSeries, encodeSeries, KEYPOINTS_FORMAT, PRECISION } from './codec'
 import { clampFps, DEFAULT_TARGET_FPS, MIN_TRIM_S, normalizeTrim, planFrames, SEEK_OFFSET_S, toPoseFrame, trimProblem } from './frames'
 import { ONE_EURO_DEFAULTS, ONE_EURO_WORLD, OneEuroFilter, smoothSeries } from './oneEuro'
-import { looksSwapped, unswapLeftRight } from './swaps'
+import { capRelabeled, looksSwapped, MAX_SWAP_S, unswapLeftRight } from './swaps'
 import { LANDMARK_COUNT, LM, type Landmark, type PoseFrame, type PoseSeries } from './types'
 
 // Everything here is synthetic: seeded numbers, no footage.
@@ -455,6 +455,33 @@ describe('unswapLeftRight', () => {
     expect(relabeled(unswapLeftRight(weak))).toEqual([])
   })
 
+  it('puts a relabeled stretch longer than MAX_SWAP_S back as the tracker gave it', () => {
+    const max = Math.round(MAX_SWAP_S * FPS)
+    // A jump the chain reads as a swap with no swap back: without the cap the rest of the clip would stay exchanged.
+    const n = max + 40
+    const lost = Array.from({ length: n - 10 }, (_, k) => k + 10)
+    const raw = series(Array.from({ length: n }, () => 0), lost)
+    const out = unswapLeftRight(raw)
+    expect(relabeled(out)).toEqual([])
+    for (let i = 0; i < n; i++) expect(out.frames[i].world![LM.leftShoulder].x).toBeCloseTo(raw.frames[i].world![LM.leftShoulder].x, 9)
+    // A tracker glitch up to the limit is still undone.
+    const short = Array.from({ length: max }, (_, k) => k + 10)
+    expect(relabeled(unswapLeftRight(series(Array.from({ length: n }, () => 0), short)))).toEqual(short)
+  })
+
+  it('capRelabeled undoes long relabeled stretches of a stored series and leaves the rest', () => {
+    const max = Math.round(MAX_SWAP_S * FPS)
+    const n = 2 * max + 20
+    const stored = unswapLeftRight(series(Array.from({ length: n }, () => 0), [3, 4]))
+    expect(capRelabeled(stored)).toBe(stored)
+    // Mark a long stretch as relabeled, the way an older unswapper could have stored it.
+    const long = { ...stored, frames: stored.frames.map((f, i) => (i >= 10 && i < 10 + max + 5 ? { ...f, image: f.image && [...f.image].reverse(), world: f.world && [...f.world].reverse(), relabeled: true as const } : f)) }
+    const back = capRelabeled(long)
+    expect(relabeled(back)).toEqual([3, 4])
+    expect(back.frames[12].world![LM.leftShoulder]).toEqual(long.frames[12].world![LM.rightShoulder])
+    expect(back.frames[12].image![LM.leftHip]).toEqual(long.frames[12].image![LM.rightHip])
+    expect(long.frames[12].relabeled).toBe(true)
+  })
   it('looksSwapped is the 90° rule on a rigid torso', () => {
     expect(looksSwapped(torso(89), torso(0))).toBe(false)
     expect(looksSwapped(torso(91), torso(0))).toBe(true)
