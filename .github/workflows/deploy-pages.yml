@@ -6,9 +6,8 @@ name: Deploy to GitHub Pages
 #   Secrets and variables → Actions → Variables:
 #     VITE_SUPABASE_URL, VITE_SUPABASE_PUBLISHABLE_KEY
 
+# Manual only: the app is published on Vercel and Pages is not enabled for this repo.
 on:
-  push:
-    branches: [main]
   workflow_dispatch:
 
 permissions:
