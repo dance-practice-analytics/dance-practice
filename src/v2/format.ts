@@ -2,7 +2,7 @@
 // grades: values, units and plain differences between two of the dancer's own attempts.
 
 import type { AttemptMetricsRow, AttemptStatus, CameraView, MovementType } from '../data/schema'
-import type { ConfidenceLevel, MetricKey, MetricNote, NullReason, Phase, PhaseSpan } from '../metrics/types'
+import type { ClipNote, ConfidenceLevel, MetricKey, MetricNote, NullReason, Phase, PhaseSpan } from '../metrics/types'
 import type { PoseFrame, PoseSeries } from '../pose/types'
 import {
   formatValue,
@@ -126,6 +126,32 @@ export function isCompactGap(reason: string | null | undefined): boolean {
 export const METRIC_NOTE_TEXT: Record<MetricNote, string> = {
   left_right_swap_corrected: 'A left/right swap in the tracking was corrected.',
   tracking_lost_in_turn: 'Tracking was lost for part of the turn; rotation in that gap isn’t counted.',
+}
+
+/** Remarks about the clip as a whole (`confidence[metric].clip_notes`), in neutral words. */
+export const CLIP_NOTE_TEXT: Record<ClipNote, string> = {
+  multiple_lifts_detected: 'This clip seems to hold more than one attempt; only the first one was measured.',
+}
+
+/** For a code this version doesn't know (a newer metrics engine). */
+export const CLIP_NOTE_FALLBACK = 'The measuring step left a remark about this clip, so the values may describe only part of it.'
+
+/**
+ * The clip remarks of a metrics row, as sentences, each once. The engine copies the same
+ * codes onto every computed metric, so they are collected across all of them.
+ */
+export function clipNotesOf(row: AttemptMetricsRow | null | undefined): string[] {
+  const conf = row?.confidence as Record<string, { clip_notes?: unknown } | undefined> | null | undefined
+  if (!conf || typeof conf !== 'object') return []
+  const codes = new Set<string>()
+  for (const entry of Object.values(conf)) {
+    const list = entry?.clip_notes
+    if (!Array.isArray(list)) continue
+    for (const c of list) if (typeof c === 'string' && c) codes.add(c)
+  }
+  const texts = new Set<string>()
+  for (const c of codes) texts.add(Object.hasOwn(CLIP_NOTE_TEXT, c) ? CLIP_NOTE_TEXT[c as ClipNote] : CLIP_NOTE_FALLBACK)
+  return [...texts]
 }
 
 // ---------- numbers ----------

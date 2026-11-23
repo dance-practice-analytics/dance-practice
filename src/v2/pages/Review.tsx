@@ -13,7 +13,7 @@ import { compareAttempts, type MetricComparison } from '../../insights'
 import type { MetricKey, PhaseSpan } from '../../metrics/types'
 import type { PoseSeries } from '../../pose/types'
 import { useAttemptVideo } from '../videoBackup'
-import { Alert, AttemptThumb, CompactGap, EmptyState, ErrorAlert, Icon, MetricCard, metricCardProps, PageHeader, SkeletonWorkspace } from '../components'
+import { Alert, AttemptThumb, CompactGap, EmptyState, ErrorAlert, Icon, MetricCard, metricCardProps, NoteBox, PageHeader, SkeletonWorkspace } from '../components'
 import { latestProcessed, useAttempt, useAttempts, type AttemptView } from '../data'
 import {
   differenceText,
@@ -24,6 +24,7 @@ import {
   isCompactGap,
   MOVEMENT_LABELS,
   readMetrics,
+  clipNotesOf,
   STATUS_LABELS,
 } from '../format'
 import { href, navigate, useRoute } from '../router'
@@ -169,6 +170,13 @@ function Workspace({ attempt, series, attempts }: WorkspaceProps) {
   const other = useMemo(() => neighbourInSession(attempt, inSession), [attempt, inSession])
   const phases = attempt.metrics?.phases?.length ? attempt.metrics.phases : NO_PHASES
   const readings = readMetrics(attempt.metrics, session.movement_type)
+  // Remarks about the whole clip (e.g. more than one attempt in it), shown once above the values.
+  const clipNotes = clipNotesOf(attempt.metrics)
+  const clipNoteBoxes = clipNotes.map((text) => (
+    <NoteBox key={text} title="About this clip:">
+      {text}
+    </NoteBox>
+  ))
   // Phrase attempts (movement 'phrase') show events and theme measures instead of phases and the relevé measures.
   const isPhrase = session.movement_type === 'phrase'
   const phrase = isPhrase ? phraseOf(attempt.metrics) : null
@@ -340,6 +348,7 @@ function Workspace({ attempt, series, attempts }: WorkspaceProps) {
         <ViewModeSwitch />
       </div>
       {sourceNote}
+      {clipNoteBoxes}
       <p className="t-caption">
         {focus.themes.length ? 'Your focus themes come first. ' : 'Tick “My focus” on up to three themes to see them first. '}
         {other ? `Each one next to attempt ${other.number}.` : ''}
@@ -368,6 +377,7 @@ function Workspace({ attempt, series, attempts }: WorkspaceProps) {
         <ViewModeSwitch />
       </div>
       {sourceNote}
+      {clipNoteBoxes}
       {other && <p className="t-caption">Each one next to attempt {other.number}.</p>}
       {narrow ? <div className="v2-rev-mgrid">{cards}</div> : cards}
       {session.movement_type === 'releve_balance' && <p className="t-caption">Turns are counted for pirouettes only.</p>}
