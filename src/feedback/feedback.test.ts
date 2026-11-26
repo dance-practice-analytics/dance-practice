@@ -280,7 +280,7 @@ describe('system prompt', () => {
     for (const rule of ['never grades technique', 'scores, ratings, grades', 'medical or injury advice', 'other dancers', 'uncertain', 'not measured', DISCLAIMER]) {
       expect(SYSTEM_PROMPT).toContain(rule)
     }
-    expect(PROMPT_VERSION).toBe('practice-notes-v2')
+    expect(PROMPT_VERSION).toBe('practice-notes-v3')
   })
 })
 

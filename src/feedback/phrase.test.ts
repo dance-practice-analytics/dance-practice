@@ -511,14 +511,14 @@ describe('parseFeedback on phrase notes', () => {
 
 describe('prompts', () => {
   it('practice notes v2 explain the phrase themes, progress and focus, and keep the never-grade rules', () => {
-    expect(PROMPT_VERSION).toBe('practice-notes-v2')
+    expect(PROMPT_VERSION).toBe('practice-notes-v3')
     for (const rule of [
       'never grades technique',
       'scores, ratings, grades',
       'do not call anything good, bad, correct, wrong, better, worse, improved',
       'medical or injury advice',
       'never call a change progress, an improvement, a decline or a regression',
-      'your arm reach went from 1.27 to 1.33 arm lengths across three sessions',
+      'your distal expansion went from 1.27 to 1.33 arm lengths across three sessions',
       'you could pay attention to',
       'focus_themes',
       'left_right_labels_uncertain',
@@ -533,13 +533,13 @@ describe('prompts', () => {
   })
 
   it('Mika v2 covers phrases with the same rules', () => {
-    expect(MIKA_PROMPT_VERSION).toBe('mika-v2')
+    expect(MIKA_PROMPT_VERSION).toBe('mika-v3')
     for (const rule of [
       'Never call anything good, bad, correct',
       'Never give a score',
       'Never give medical',
       'never progress, improvement, decline or regression',
-      'your arm reach went from 1.27 to 1.33 arm lengths across three sessions',
+      'your distal expansion went from 1.27 to 1.33 arm lengths across three sessions',
       'focus_themes',
       'side_uncertain',
       'left_right_labels_uncertain',
@@ -556,9 +556,9 @@ describe('Mika with a phrase attempt', () => {
   it('builds a context with theme names, events, progress and focus — never ids or titles', async () => {
     const ctx = await loadPhraseContext(fakeDb(tables()), UID, ATTEMPT)
     const c = buildMikaContext({ row: ROW, number: 3 }, { row: EARLIER_ROW, number: 2 }, [], ctx)
-    expect(c.attempts[0].themes?.find((t) => t.theme === 'arm_reach')).toMatchObject({ name: 'Arm reach', value: 1.33, confidence: 'high' })
+    expect(c.attempts[0].themes?.find((t) => t.theme === 'arm_reach')).toMatchObject({ name: 'Distal expansion (arm reach)', value: 1.33, confidence: 'high' })
     expect(c.attempts[1].label).toBe('Attempt 2')
-    expect(c.phrase?.focus_themes).toEqual(['Arm reach', 'Head leads the arms (timing)', 'Neck movement range'])
+    expect(c.phrase?.focus_themes).toEqual(['Distal expansion (arm reach)', 'Head leads the arms (timing)', 'Neck movement range'])
     expect(c.phrase?.progress.map((s) => s.sessions_before)).toEqual([3, 2, 1])
     expect(c.phrase?.events.counts.gesture).toBe(2)
     const text = buildContextBlock(c)
@@ -612,7 +612,7 @@ describe('screens: what is shared for a phrase', () => {
     expect(p.progress[0].themes.find((t) => t.theme === 'arm_reach')?.median).toBe(1.27)
     expect(sentCount(payload)).toBe(2)
     const share = phraseShare(p)
-    expect(share).toEqual({ sessions: 1, earlierAttempts: 0, focus: ['Arm reach'], view: 'diagonal' })
+    expect(share).toEqual({ sessions: 1, earlierAttempts: 0, focus: ['Distal expansion (arm reach)'], view: 'diagonal' })
     expect(progressLine(share)).toBe('Theme medians of 1 earlier session (same phrase, dancer and diagonal view).')
     const lines = payloadLines(payload).join('\n')
     expect(lines).toContain('focus_themes: arm_reach')
@@ -627,7 +627,7 @@ describe('screens: what is shared for a phrase', () => {
     expect(ctx.phrase?.focus).toBe('Focus themes: Neck movement range.')
     expect(ctx.phrase?.events).toContain('2 leg gestures')
     const q = suggestedQuestions(a0, all, ['arm_reach'])
-    expect(q[0]).toBe('How did my arm reach change across sessions?')
+    expect(q[0]).toBe('How did my distal expansion (arm reach) change across sessions?')
     expect(q.join(' ')).not.toMatch(/better|best|good|correct/i)
   })
 })

@@ -461,7 +461,7 @@ isNotConnected(e)                                // 404 (not deployed) or missin
 - Tests: `pages/chat/mika.test.ts` (validation, context, prompt, rate limit, handler with
   fakes, client). `index.ts` is the Deno wiring and is not run by Vitest.
 
-### Phrase attempts in the AI features (prompts `practice-notes-v2`, `mika-v2`)
+### Phrase attempts in the AI features (prompts `practice-notes-v3`, `mika-v3`)
 
 For a `phrase` attempt both functions send, instead of the relevé metrics
 (`supabase/functions/_shared/phrase.ts`, allowlisted and rounded like `buildPayload`):
@@ -481,8 +481,8 @@ For a `phrase` attempt both functions send, instead of the relevé metrics
 
 Never sent: titles, notes, dates, labels, file names, subject codes, ids, keypoints, video.
 Practice notes also take an optional `language` (the browser's, `en es fr pt de it`); it is
-added to the payload only when not English. The prompts explain each theme in dance-class
-words, ask for neutral change over time ("your arm reach went from 1.27 to 1.33 arm lengths
+added to the payload only when not English. v3 only renames the arm reach theme to "Distal expansion (arm reach)", the mentor's term; the key stays `arm_reach`. The prompts explain each theme in dance-class
+words, ask for neutral change over time ("your distal expansion went from 1.27 to 1.33 arm lengths
 across three sessions"), suggestions as options for attention tied to the focus themes, and
 say that uncertain values are named as uncertain and not interpreted. Relevé payloads are
 unchanged. `validate.ts` rejects notes with scores, grades or verdict words (good/bad,

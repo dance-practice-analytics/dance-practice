@@ -101,12 +101,12 @@ export const THEMES: Record<ThemeKey, ThemeInfo> = {
   },
   arm_reach: {
     key: 'arm_reach',
-    label: 'Arm reach',
+    label: 'Distal expansion (arm reach)',
     unit: 'arm lengths',
     unitShort: ' arm lengths',
     decimals: 2,
     about:
-      'How far the wrists reach from the middle of the shoulders, in arm lengths (90th percentile over the clip, mean of both arms). Above 1 means the shoulders travel with the reach.',
+      'How far the movement expands out through the hands: the distance from the middle of the shoulders to the wrists, in arm lengths (90th percentile over the clip, mean of both arms). Above 1 means the shoulders travel with the reach.',
     bestViews: ['front', 'diagonal'],
     viewNote: 'Best seen from the front or the diagonal.',
     more: 'further',

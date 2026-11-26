@@ -79,10 +79,11 @@ export const THEME_DEFINITIONS: Record<ThemeKey, { name: string; unit: string; d
       'How far the head and upper back curl towards the chest at the largest moment. The tracking has no points along the spine, so this mixes the curve of the neck and of the upper back.',
   },
   arm_reach: {
-    name: 'Arm reach',
+    name: 'Distal expansion (arm reach)',
     unit: 'arm lengths',
     decimals: 2,
-    measures: 'How far the wrists reach from the middle of the shoulders, in arm lengths. Above 1 means the shoulders travel with the reach.',
+    measures:
+      'How far the movement expands out through the hands: the distance from the middle of the shoulders to the wrists, in arm lengths. Above 1 means the shoulders travel with the reach.',
   },
   circle_completion: {
     name: 'Circle completion',
