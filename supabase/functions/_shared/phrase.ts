@@ -1,5 +1,5 @@
 // What the AI functions send about a phrase attempt (movement 'phrase', FR-3.7.2, NFR-1/2):
-// the six theme values with confidence and null reasons, a compact event summary, the same
+// the seven theme values with confidence and null reasons, a compact event summary, the same
 // theme values for earlier attempts of the session, a progress context (medians per earlier
 // session of the same movement, camera view and dancer) and the dancer's focus themes.
 //
@@ -31,6 +31,7 @@ export const PHRASE_NULL_REASONS = [
   'no_valid_frames',
   'no_paired_onsets',
   'no_circle_detected',
+  'no_both_feet_down',
   'unknown',
 ] as const
 export type PhraseNullReason = (typeof PHRASE_NULL_REASONS)[number]
@@ -90,6 +91,13 @@ export const THEME_DEFINITIONS: Record<ThemeKey, { name: string; unit: string; d
     unit: 'degrees swept',
     decimals: 0,
     measures: 'The largest circle an arm or a leg drew around its shoulder or hip, as the angle swept. 360 degrees is a full circle.',
+  },
+  parallel_feet: {
+    name: 'Parallel feet',
+    unit: 'degrees',
+    decimals: 1,
+    measures:
+      'While both feet are on the floor, the angle between where the two feet point, seen from above. 0 degrees is parallel; a positive value means the toes point apart, a negative value that they point towards each other. The sign is a direction, not a verdict.',
   },
 }
 

@@ -106,6 +106,7 @@ export const EXPORT_METRICS = [
   { metric: 'balance_duration_s', unit: 's' },
   { metric: 'knee_tracking_dev_deg', unit: 'deg' },
   { metric: 'turn_count', unit: 'turns' },
+  { metric: 'feet_angle_deg', unit: 'deg_signed' },
 ] as const
 export type ExportMetricKey = (typeof EXPORT_METRICS)[number]['metric']
 
@@ -268,7 +269,7 @@ const COLS = {
   attempt_keypoints: 'attempt_id, frame_count, size_bytes, model, created_at',
   attempt_metrics:
     'attempt_id, movement, trunk_inclination_deg, pelvis_ankle_offset_norm, balance_duration_s, ' +
-    'knee_tracking_dev_deg, turn_count, phases, confidence, algorithm_version, computed_at, phrase',
+    'knee_tracking_dev_deg, turn_count, feet_angle_deg, phases, confidence, algorithm_version, computed_at, phrase',
   feedback: 'id, attempt_id, model, prompt_version, response, created_at',
   consents: 'id, subject_id, scope, form_reference, granted_on, revoked_on, created_at',
 } as const

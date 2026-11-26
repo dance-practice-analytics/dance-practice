@@ -66,6 +66,18 @@ function Drawing({ metric }: { metric: MetricKey }) {
           <path d="M22 26L22 20M22 26L28 27" {...MEASURED} />
         </>
       )
+    case 'feet_angle_deg':
+      // Both feet from above, heels at the bottom: the dashed lines are parallel, the accent the
+      // direction each foot points (here slightly apart at the toes), the arc the angle between them.
+      return (
+        <>
+          <path d="M22 54V12M42 54V12" {...GUIDE} />
+          <ellipse cx="20" cy="34" rx="6" ry="17" transform="rotate(-9 22 52)" {...LINE} />
+          <ellipse cx="44" cy="34" rx="6" ry="17" transform="rotate(9 42 52)" {...LINE} />
+          <path d="M22 52L17 20M42 52L47 20" {...MEASURED} strokeWidth={2} />
+          <path d="M18.5 30A22 22 0 0 0 22 29.4M42 29.4A22 22 0 0 0 45.5 30" {...GUIDE} strokeDasharray="none" />
+        </>
+      )
   }
 }
 

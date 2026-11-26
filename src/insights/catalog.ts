@@ -100,6 +100,20 @@ export const METRIC_CATALOG: Record<MetricKey, MetricInfo> = {
     lessWord: 'fewer',
     moreWord: 'more',
   },
+  feet_angle_deg: {
+    key: 'feet_angle_deg',
+    label: 'Parallel feet',
+    unit: '° between the feet',
+    unitShort: '°',
+    decimals: 1,
+    scale: 1,
+    displayDecimals: 1,
+    movements: ['releve_balance'],
+    description:
+      'On relevé, the angle between where your two feet point, seen from above. 0° is parallel; a positive value means the toes point apart, a negative value that they point towards each other.',
+    lessWord: 'toes more towards each other',
+    moreWord: 'toes more apart',
+  },
 }
 
 export const METRIC_KEYS = Object.keys(METRIC_CATALOG) as MetricKey[]

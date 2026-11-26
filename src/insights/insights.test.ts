@@ -90,9 +90,12 @@ const row = (c: ReturnType<typeof compareAttempts>, key: MetricKey) => c.rows.fi
 
 describe('catalog', () => {
   it('keys are the attempt_metrics columns and turn count is pirouette only', () => {
-    expect(METRIC_KEYS).toEqual(['trunk_inclination_deg', 'pelvis_ankle_offset_norm', 'balance_duration_s', 'knee_tracking_dev_deg', 'turn_count'])
+    expect(METRIC_KEYS).toEqual(['trunk_inclination_deg', 'pelvis_ankle_offset_norm', 'balance_duration_s', 'knee_tracking_dev_deg', 'turn_count', 'feet_angle_deg'])
     expect(metricsForMovement('releve_balance')).not.toContain('turn_count')
     expect(metricsForMovement('pirouette')).toContain('turn_count')
+    // Parallel feet is a relevé measure only.
+    expect(metricsForMovement('releve_balance')).toContain('feet_angle_deg')
+    expect(metricsForMovement('pirouette')).not.toContain('feet_angle_deg')
   })
 
   it('formats values and signed differences, never -0 and never 0 for a gap', () => {

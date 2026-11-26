@@ -54,6 +54,12 @@ export const METRIC_DEFINITIONS: Record<MetricKey, { name: string; unit: string;
     unit: 'turns',
     measures: 'Rotations completed, counted in quarter turns (pirouette only).',
   },
+  feet_angle_deg: {
+    name: 'Parallel feet',
+    unit: 'degrees',
+    measures:
+      'On relevé, the angle between where the two feet point, seen from above. 0 degrees is parallel; a positive value means the toes point apart, a negative value that they point towards each other. The sign is a direction, not a verdict. Always low confidence: one camera does not see depth well.',
+  },
 }
 
 export const MOVEMENT_NAMES: Record<string, string> = {

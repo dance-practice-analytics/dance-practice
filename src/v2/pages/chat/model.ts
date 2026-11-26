@@ -6,7 +6,7 @@ import { buildPhrasePayload } from '../../../../supabase/functions/_shared/phras
 import { median } from '../../../insights'
 import type { Confidence } from '../../components'
 import type { AttemptView } from '../../data'
-import { formatMetricWithUnit, formatNumber, PHASE_LABELS, readMetrics, withUnit, type MetricReading } from '../../format'
+import { formatMetricWithUnit, formatNumber, PHASE_LABELS, readMetric, readMetrics, withUnit, type MetricReading } from '../../format'
 import { earlierAttempts, focusLine, phraseContextFor, phraseShare, progressLine, type PhraseShare } from '../notes/model'
 import { orderThemes, phraseOf, readTheme, THEMES, type ThemeKey, type ThemeReading } from '../phrase/model'
 
@@ -126,11 +126,12 @@ export function previousAttempt(attempt: AttemptView, all: readonly AttemptView[
 export function chatContext(attempt: AttemptView, all: readonly AttemptView[], scope: ChatScope, focus: readonly ThemeKey[] = []): ChatContext {
   const movement = attempt.session.movement_type
   if (movement === 'phrase') return phraseChatContext(attempt, all, scope, focus)
-  const readings = readMetrics(attempt.metrics, movement)
+  // A metric the row predates (added in a later engine version) has nothing to share: leave it out.
+  const readings = readMetrics(attempt.metrics, movement).filter((r) => !r.outdated)
 
   if (scope === 'attempt') {
     const prev = previousAttempt(attempt, all)
-    const before = prev ? readMetrics(prev.metrics, movement) : []
+    const before = prev ? readings.map((r) => readMetric(prev.metrics, r.key)) : []
     const rows = readings.map((r, i): SharedRow => {
       const earlier = before[i]
       const parts = [r.value === null ? 'Not measured' : formatMetricWithUnit(r.key, r.value)]
@@ -155,7 +156,7 @@ export function chatContext(attempt: AttemptView, all: readonly AttemptView[], s
   }
 
   const session = all.filter((a) => a.session_id === attempt.session_id && a.metrics !== null)
-  const perAttempt = session.map((a) => readMetrics(a.metrics, movement))
+  const perAttempt = session.map((a) => readings.map((r) => readMetric(a.metrics, r.key)))
   const rows = readings.map((r, i): SharedRow => {
     const column = perAttempt.map((list) => list[i])
     const values = column.flatMap((c) => (c.value === null ? [] : [c.value]))
@@ -204,8 +205,9 @@ export function suggestedQuestions(attempt: AttemptView, all: readonly AttemptVi
   if (attempt.session.movement_type === 'phrase') return phraseQuestions(attempt, all, focus)
   const prev = previousAttempt(attempt, all)
   const readings = readMetrics(attempt.metrics, attempt.session.movement_type)
-  const low = readings.filter((r) => r.value !== null && r.confidence === 'low')
-  const missing = readings.filter((r) => r.value === null)
+  // A metric that is low by design, or missing only because the row predates it, has a fixed answer: don't suggest it.
+  const low = readings.filter((r) => r.value !== null && r.confidence === 'low' && !r.alwaysLow)
+  const missing = readings.filter((r) => r.value === null && !r.outdated)
   const out: string[] = []
   if (prev) out.push(`What changed since attempt ${prev.number}?`)
   out.push('Which phase varied most?', 'What could I practise next?')

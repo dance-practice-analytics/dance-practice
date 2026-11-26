@@ -25,6 +25,7 @@ export function computeAttempt(series: PoseSeries, movement: Movement): AttemptR
     balance_duration_s: null,
     knee_tracking_dev_deg: null,
     turn_count: null,
+    feet_angle_deg: null,
     phases: [],
     confidence,
     algorithm_version: PHRASE_ALGORITHM_VERSION,

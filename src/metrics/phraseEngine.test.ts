@@ -98,6 +98,20 @@ describe('computePhrase', () => {
     expect(still.themes.head_lead.confidence.reason).toBe('no_paired_onsets')
   })
 
+  it('parallel feet: 0° for parallel feet, the opening between the feet when turned out, never above low', () => {
+    const parallel = computePhrase(phraseSeries(() => STAND, 4)).themes.parallel_feet
+    expect(parallel.value as number).toBeCloseTo(0, 1)
+    expect(parallel.confidence.level).toBe('low')
+    expect(parallel.parts.both_feet_down_s as number).toBeGreaterThan(3)
+    // 15° outwards on each foot: 30° between the feet, toes apart (+).
+    const open = computePhrase(phraseSeries(() => ({ ...STAND, turnoutDeg: 15 }), 4)).themes.parallel_feet
+    expect(open.value as number).toBeCloseTo(30, 0)
+    expect(open.confidence.level).toBe('low')
+    // Turned in: toes towards each other (−).
+    expect(computePhrase(phraseSeries(() => ({ ...STAND, turnoutDeg: -5 }), 4)).themes.parallel_feet.value as number).toBeCloseTo(-10, 0)
+    expect(DEPTH_LIMITED.has('parallel_feet')).toBe(true)
+  })
+
   it('a clip without any pose is all gaps with reason no_pose', () => {
     const s = phraseSeries(() => STAND, 2)
     const empty = { ...s, frames: s.frames.map((f) => ({ t: f.t, image: null, world: null })) }

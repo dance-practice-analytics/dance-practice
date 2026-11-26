@@ -19,7 +19,8 @@ import { capRelabeled } from '../pose/swaps'
 import type { PoseSeries } from '../pose/types'
 import { LM } from '../pose/types'
 import { confidenceLevel } from './engine'
-import { bodySignals, detectEvents, GESTURE_OFF, type BodySignals, type EventKind, type PhraseEvent } from './events'
+import { BOTH_DOWN_MAX, bodySignals, detectEvents, GESTURE_OFF, type BodySignals, type EventKind, type PhraseEvent } from './events'
+import { FEET_LANDMARKS, feetAngleDeg } from './feet'
 import { armReach, circles, headLead, headMotion, headTrunk, quantile, signedKneeDev, type CircleRun } from './expressive'
 import { LEG, median, meanVisibility, seen, VIS_MIN } from './signals'
 import type { ConfidenceLevel } from './types'
@@ -33,10 +34,12 @@ import type { ConfidenceLevel } from './types'
  * 0.3.0: knee_over_toes and circle_completion never rise above low confidence (DEPTH_LIMITED): both
  *        depend on depth, which one camera does not measure well enough (checked against a calibrated
  *        multi-camera reference, numbers only; see CALIBRATION.md).
+ * 0.4.0: new theme parallel_feet (mentor review, task 14; feet.ts): signed angle between the feet on
+ *        every frame with both feet on the floor. Depth-limited like knee_over_toes. Other themes unchanged.
  */
-export const PHRASE_ALGORITHM_VERSION = 'mt2-phrase-0.3.0'
+export const PHRASE_ALGORITHM_VERSION = 'mt2-phrase-0.4.0'
 
-export const THEME_KEYS = ['knee_over_toes', 'head_lead', 'neck_range', 'upper_body_curve', 'arm_reach', 'circle_completion'] as const
+export const THEME_KEYS = ['knee_over_toes', 'head_lead', 'neck_range', 'upper_body_curve', 'arm_reach', 'circle_completion', 'parallel_feet'] as const
 export type ThemeKey = (typeof THEME_KEYS)[number]
 
 export type PhraseNullReason =
@@ -52,6 +55,8 @@ export type PhraseNullReason =
   | 'no_paired_onsets'
   /** No arm or leg circle of at least CIRCLE_MIN_DEG. */
   | 'no_circle_detected'
+  /** No frame with both feet on the floor (parallel feet is read only there). */
+  | 'no_both_feet_down'
 
 export type PhraseNote =
   /** Left/right labels look swapped in part of the measured frames. */
@@ -140,7 +145,7 @@ const SIDE_DEPENDENT: ReadonlySet<ThemeKey> = new Set(['knee_over_toes', 'upper_
  * of a limb around its joint. From one camera, depth comes from the pose model's guess, so these values
  * are shown (never hidden or filled in) but their confidence is capped at low.
  */
-export const DEPTH_LIMITED: ReadonlySet<ThemeKey> = new Set(['knee_over_toes', 'circle_completion'])
+export const DEPTH_LIMITED: ReadonlySet<ThemeKey> = new Set(['knee_over_toes', 'circle_completion', 'parallel_feet'])
 
 const HEAD_TRUNK = [LM.leftEar, LM.rightEar, LM.leftShoulder, LM.rightShoulder, LM.leftHip, LM.rightHip]
 const ARMS = [LM.leftShoulder, LM.rightShoulder, LM.leftElbow, LM.rightElbow, LM.leftWrist, LM.rightWrist]
@@ -305,6 +310,36 @@ function circleTheme(series: PoseSeries, found: PhraseCircle[]): ThemeResult {
   )
 }
 
+/**
+ * Parallel feet: median signed angle between the feet (feet.ts: 0 parallel, > 0 toes apart) over every
+ * frame with both feet on the floor (lowest points within BOTH_DOWN_MAX leg lengths): standing, pliés and
+ * relevés on both feet.
+ */
+function feetTheme(series: PoseSeries, sig: BodySignals): ThemeResult {
+  const frames: number[] = []
+  for (let i = 0; i < series.frames.length; i++) {
+    const r = sig.footRaise.left[i]
+    if (nn(r) && Math.abs(r) < BOTH_DOWN_MAX) frames.push(i)
+  }
+  if (!frames.length) return unavailable('no_both_feet_down')
+  const vals: number[] = []
+  for (const i of frames) {
+    const a = feetAngleDeg(series.frames[i].world)
+    if (nn(a)) vals.push(a)
+  }
+  return measured(
+    round(median(vals), 10),
+    {
+      p5_deg: round(quantile(vals, 0.05), 10),
+      p95_deg: round(quantile(vals, 0.95), 10),
+      both_feet_down_s: round(frames.length / series.fps),
+      frames: vals.length,
+    },
+    coverage(series, FEET_LANDMARKS, frames),
+    'no_valid_frames',
+  )
+}
+
 // ---------- events ----------
 
 function eventOut(e: PhraseEvent, sig: BodySignals, margin: number): PhraseEventOut {
@@ -381,6 +416,7 @@ export function computePhrase(input: PoseSeries): PhraseResult {
     upper_body_curve: curveTheme(series, ht),
     arm_reach: reachTheme(series),
     circle_completion: sig.leg ? circleTheme(series, found) : unavailable('no_leg_length'),
+    parallel_feet: sig.leg ? feetTheme(series, sig) : unavailable('no_leg_length'),
   }
   // Never trust swapped sides silently.
   if (doubt !== null && doubt > LABEL_DOUBT_SHARE) {

@@ -261,7 +261,7 @@ describe('datasetCsv', () => {
     expect(lean.some((c) => c.endsWith('_start_s'))).toBe(false)
     expect(lean.slice(0, 3)).toEqual(['subject_code', 'clip', 'movement'])
     const full = datasetCsvColumns({ confidence: true, phases: true })
-    expect(full.length).toBe(lean.length + 10 + 12)
+    expect(full.length).toBe(lean.length + 12 + 12)
     const csv = datasetCsv(doc, clipOf, { confidence: false, phases: false })
     expect(csv.split('\r\n')[0]).toBe(lean.join(','))
   })

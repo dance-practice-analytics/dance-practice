@@ -15,6 +15,7 @@
 //   value carries the clip note `multiple_lifts_detected`.
 
 import type { Landmark, PoseSeries } from '../pose/types'
+import { FEET_LANDMARKS, feetAngleDeg } from './feet'
 import { segmentPhases, type Segmentation } from './phases'
 import { HIPS, LEG, SHOULDERS, VIS_MIN, angleDeg, meanVisibility, median, mid, seen, sub, type Side } from './signals'
 import type {
@@ -34,8 +35,10 @@ import type {
  * 1.2.0 (calibration, src/metrics/CALIBRATION.md): parallel-relevé tie on floor-referenced
  * heel lift with a 2% tolerance (was raw heel y, exact); swap jump 90° (was 135°); upstream,
  * left/right swaps undone before smoothing, world One-Euro beta 0.7, seeks 2 ms into a frame.
+ * 1.3.0 (mentor review): new metric feet_angle_deg (parallel feet, relevé only, feet.ts), capped at
+ * low confidence with the note depth_limited. The other metrics are unchanged.
  */
-export const ALGORITHM_VERSION = 'mt2-metrics-1.2.0'
+export const ALGORITHM_VERSION = 'mt2-metrics-1.3.0'
 
 /** Confidence bands (SDD 5.5). */
 export const CONFIDENCE_HIGH = 0.8
@@ -67,6 +70,7 @@ export const METRIC_PHASES: Record<MetricKey, Phase[]> = {
   balance_duration_s: ['hold'],
   knee_tracking_dev_deg: ['prep', 'finish'],
   turn_count: ['turn'],
+  feet_angle_deg: ['hold'],
 }
 
 export function confidenceLevel(score: number): ConfidenceLevel {
@@ -285,9 +289,17 @@ export function computeMetrics(series: PoseSeries, movement: Movement): AttemptM
       'knee_not_bent',
     )
     out.turn_count = turnCount(series, seg)
+    out.feet_angle_deg = medianMetric(series, seg, 'feet_angle_deg', FEET_LANDMARKS, feetAngleDeg)
+    // The foot direction is mostly the tracker's depth guess from one camera (feet.ts): never above low.
+    const feet = out.feet_angle_deg
+    if (feet.value !== null) {
+      feet.confidence = { ...feet.confidence, level: 'low', notes: [...(feet.confidence.notes ?? []), 'depth_limited'] }
+    }
   }
   // Applies whatever the tracking was like.
   if (movement !== 'pirouette') out.turn_count = unavailable('turn_count', 'not_applicable')
+  // Parallel feet is a relevé measure: in a pirouette one foot is off the floor.
+  if (movement !== 'releve_balance') out.feet_angle_deg = unavailable('feet_angle_deg', 'not_applicable')
 
   const confidence = {} as Record<MetricKey, MetricConfidence>
   // The clip was not split: say on every value that it describes the first of several lifts.
@@ -304,6 +316,7 @@ export function computeMetrics(series: PoseSeries, movement: Movement): AttemptM
     balance_duration_s: out.balance_duration_s.value,
     knee_tracking_dev_deg: out.knee_tracking_dev_deg.value,
     turn_count: out.turn_count.value,
+    feet_angle_deg: out.feet_angle_deg.value,
     phases: seg.segments.map((s) => ({
       phase: s.phase,
       start: frames[s.i0].t,

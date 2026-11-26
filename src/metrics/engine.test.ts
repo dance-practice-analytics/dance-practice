@@ -232,6 +232,7 @@ describe('metrics against known values', () => {
         'balance_duration_s',
         'knee_tracking_dev_deg',
         'turn_count',
+        'feet_angle_deg',
         'phases',
         'confidence',
         'algorithm_version',
@@ -586,6 +587,26 @@ describe('confidence', () => {
     expect(low.trunk_inclination_deg).toBeCloseTo(8, 6)
     expect(low.confidence.trunk_inclination_deg.level).toBe('low')
     expect(low.confidence.trunk_inclination_deg.score).toBeCloseTo((HOLD_FINISH_FRAMES - 55) / HOLD_FINISH_FRAMES, 9)
+  })
+})
+
+describe('parallel feet (feet_angle_deg)', () => {
+  it('reads the parallel feet of the relevé as 0°, from the hold, capped at low confidence', () => {
+    const m = computeMetrics(releve(), 'releve_balance')
+    expect(m.feet_angle_deg).toBeCloseTo(0, 6)
+    // Fully visible, but the foot direction rests on depth: low whatever the score, and it says why.
+    expect(m.confidence.feet_angle_deg).toMatchObject({ level: 'low', score: 1, phases: ['hold'], notes: ['depth_limited'] })
+    expect(m.algorithm_version).toBe('mt2-metrics-1.3.0')
+  })
+
+  it('is not applicable to a pirouette, and a gap is null with a reason, never 0', () => {
+    const p = computeMetrics(pirouette(24), 'pirouette')
+    expect(p.feet_angle_deg).toBeNull()
+    expect(p.confidence.feet_angle_deg.reason).toBe('not_applicable')
+    // Toes untracked through the whole clip.
+    const hidden = computeMetrics(releve(() => ({ vis: { [LM.leftFootIndex]: 0.1, [LM.rightFootIndex]: 0.1 } })), 'releve_balance')
+    expect(hidden.feet_angle_deg).toBeNull()
+    expect(hidden.confidence.feet_angle_deg.reason).toBeTruthy()
   })
 })
 

@@ -28,7 +28,7 @@ const MAX_RETRIES = 1
 const MAX_TOKENS = 8000
 
 const METRIC_COLUMNS =
-  'attempt_id, movement, trunk_inclination_deg, pelvis_ankle_offset_norm, balance_duration_s, knee_tracking_dev_deg, turn_count, phases, confidence, phrase'
+  'attempt_id, movement, trunk_inclination_deg, pelvis_ankle_offset_norm, balance_duration_s, knee_tracking_dev_deg, turn_count, feet_angle_deg, phases, confidence, phrase'
 const FEEDBACK_COLUMNS = 'id, attempt_id, model, prompt_version, created_at, response'
 
 async function askModel(llm: Llm, payload: FeedbackPayload): Promise<ModelOutcome> {

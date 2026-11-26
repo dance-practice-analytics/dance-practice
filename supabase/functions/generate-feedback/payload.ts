@@ -42,7 +42,7 @@ export const NULL_REASONS = [
 ] as const
 export type NullReason = (typeof NULL_REASONS)[number]
 
-export const METRIC_NOTES = ['left_right_swap_corrected', 'tracking_lost_in_turn'] as const
+export const METRIC_NOTES = ['left_right_swap_corrected', 'tracking_lost_in_turn', 'depth_limited'] as const
 export type MetricNote = (typeof METRIC_NOTES)[number]
 
 export const METRIC_UNITS: Record<MetricKey, string> = {
@@ -51,6 +51,7 @@ export const METRIC_UNITS: Record<MetricKey, string> = {
   balance_duration_s: 'seconds',
   knee_tracking_dev_deg: 'degrees',
   turn_count: 'turns',
+  feet_angle_deg: 'degrees, signed',
 }
 
 const DECIMALS: Record<MetricKey, number> = {
@@ -59,6 +60,7 @@ const DECIMALS: Record<MetricKey, number> = {
   balance_duration_s: 2,
   knee_tracking_dev_deg: 1,
   turn_count: 2,
+  feet_angle_deg: 1,
 }
 
 /** How many earlier attempts of the same session are sent for comparison. */
@@ -72,6 +74,8 @@ export interface MetricsRowLike {
   balance_duration_s: number | null
   knee_tracking_dev_deg: number | null
   turn_count: number | null
+  /** Optional: rows computed before mt2-metrics-1.3.0 and older callers don't have it. */
+  feet_angle_deg?: number | null
   phases: unknown
   confidence: unknown
   /** Phrase attempts only (jsonb, untrusted). */
@@ -136,10 +140,15 @@ function metricValue(row: MetricsRowLike, key: MetricKey): number | null {
 function metricEntry(row: MetricsRowLike, key: MetricKey): PayloadMetric | null {
   const conf = isRecord(row.confidence) && isRecord(row.confidence[key]) ? (row.confidence[key] as Record<string, unknown>) : {}
   const reason = allowed(NULL_REASONS, conf.reason) ? conf.reason : undefined
-  // Turn count does not exist for a relevé balance; it is left out instead of reported as missing.
+  // Turn count does not exist for a relevé balance, nor parallel feet for a pirouette; they are left out
+  // instead of reported as missing.
   if (reason === 'not_applicable' || (key === 'turn_count' && row.movement !== 'pirouette')) return null
+  if (key === 'feet_angle_deg' && row.movement !== 'releve_balance') return null
 
   const value = metricValue(row, key)
+  // A row computed before this metric existed has no entry for it: nothing to say, so leave it out.
+  const predates = isRecord(row.confidence) && Object.keys(row.confidence).length > 0 && !isRecord(row.confidence[key])
+  if (value === null && predates) return null
   const entry: PayloadMetric = {
     metric: key,
     unit: METRIC_UNITS[key],

@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { attempt, session } from '../notes/fixtures'
+import { readMetric } from '../../format'
 import { chatContext, previousAttempt, suggestedQuestions } from './model'
 
 const s = session('s1', '2026-11-04')
@@ -45,6 +46,15 @@ describe('chatContext', () => {
       ['3 attempts · median 8.4° · 1 flagged low · 1 not measured', 'low'],
     ])
     expect(c.note).toBe('Values for all 3 analyzed attempts in this session, with their confidence.')
+  })
+})
+
+describe('a row computed before parallel feet existed (mt2-metrics-1.3.0)', () => {
+  it('leaves the metric out of what is shared and says on Review that it was added later', () => {
+    expect(chatContext(a2, all, 'attempt').rows.map((r) => r.key)).not.toContain('feet_angle_deg')
+    const reading = readMetric(a2.metrics, 'feet_angle_deg')
+    expect(reading).toMatchObject({ value: null, outdated: true, confidence: 'none' })
+    expect(reading.reason).toBe('Added after this clip was processed; process it again to see this.')
   })
 })
 

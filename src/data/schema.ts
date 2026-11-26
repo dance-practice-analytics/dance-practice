@@ -221,6 +221,8 @@ export interface AttemptMetricsRow {
   balance_duration_s: number | null
   knee_tracking_dev_deg: number | null
   turn_count: number | null
+  /** Added in migration 20261126000000; null on rows computed before mt2-metrics-1.3.0 (optional for older fixtures). */
+  feet_angle_deg?: number | null
   phases: PhaseSpan[]
   confidence: MetricConfidence
   algorithm_version: string
@@ -237,6 +239,7 @@ export interface AttemptMetricsInsert {
   balance_duration_s?: number | null
   knee_tracking_dev_deg?: number | null
   turn_count?: number | null
+  feet_angle_deg?: number | null
   phases?: PhaseSpan[]
   confidence?: MetricConfidence
   algorithm_version: string

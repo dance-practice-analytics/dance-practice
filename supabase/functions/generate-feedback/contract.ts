@@ -29,6 +29,7 @@ export const METRIC_KEYS = [
   'balance_duration_s',
   'knee_tracking_dev_deg',
   'turn_count',
+  'feet_angle_deg',
 ] as const
 export type MetricKey = (typeof METRIC_KEYS)[number]
 
@@ -36,7 +37,7 @@ export type MetricKey = (typeof METRIC_KEYS)[number]
  * Theme ids of a phrase attempt (attempt_metrics.phrase.themes, src/metrics/phrase.ts
  * THEME_KEYS; a test keeps them equal). A phrase note's observations are about these.
  */
-export const PHRASE_THEME_KEYS = ['knee_over_toes', 'head_lead', 'neck_range', 'upper_body_curve', 'arm_reach', 'circle_completion'] as const
+export const PHRASE_THEME_KEYS = ['knee_over_toes', 'head_lead', 'neck_range', 'upper_body_curve', 'arm_reach', 'circle_completion', 'parallel_feet'] as const
 export type PhraseThemeKey = (typeof PHRASE_THEME_KEYS)[number]
 
 /** What one observation is about: a relevé metric or a phrase theme. */

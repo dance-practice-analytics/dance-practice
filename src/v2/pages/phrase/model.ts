@@ -125,6 +125,20 @@ export const THEMES: Record<ThemeKey, ThemeInfo> = {
     more: 'more',
     less: 'less',
   },
+  parallel_feet: {
+    key: 'parallel_feet',
+    label: 'Parallel feet',
+    unit: '°',
+    unitShort: '°',
+    decimals: 1,
+    about:
+      'While both feet are on the floor, the angle seen from above between where the two feet point. 0° means parallel; a positive value means the toes point apart, a negative value that they point towards each other. Median over every frame with both feet down.',
+    bestViews: ['diagonal', 'side'],
+    viewNote: 'Best seen from the diagonal. It depends on depth, which one camera can’t measure reliably, so it is always low confidence: read it as rough.',
+    more: 'more apart at the toes',
+    less: 'more towards each other at the toes',
+    sign: (v) => (Math.abs(v) < 0.05 ? 'feet parallel' : v > 0 ? 'toes apart' : 'toes towards each other'),
+  },
 }
 
 export const PHRASE_NULL_TEXT: Record<PhraseNullReason, string> = {
@@ -134,6 +148,7 @@ export const PHRASE_NULL_TEXT: Record<PhraseNullReason, string> = {
   no_valid_frames: 'The landmarks this needs weren’t tracked well enough in this clip.',
   no_paired_onsets: 'No arm movement had a head movement starting close to it, so the timing couldn’t be paired.',
   no_circle_detected: 'No arm or leg circle of at least a third of a turn was found in this clip.',
+  no_both_feet_down: 'Both feet were never on the floor together in this clip, so there was nothing to compare.',
 }
 
 export const PHRASE_NOTE_TEXT: Record<PhraseNote, string> = {
@@ -199,6 +214,8 @@ function details(key: ThemeKey, parts: Record<string, number | string | null>): 
       const plane = typeof parts.plane === 'string' ? `${parts.plane} plane` : ''
       return [`${limb}, ${plane}${typeof parts.at_s === 'number' ? ` at ${formatTimecode(parts.at_s as number)}` : ''}`, `Closure ${n('closure', 2)} limb lengths · ${n('circles', 0)} circle(s) found`]
     }
+    case 'parallel_feet':
+      return [`Range ${n('p5_deg', 1, '°')} to ${n('p95_deg', 1, '°')} (5th to 95th percentile)`, `Both feet down for ${n('both_feet_down_s', 1, ' s')}`]
   }
 }
 
@@ -215,7 +232,17 @@ export function readTheme(phrase: PhraseResult | null, key: ThemeKey, view?: Cam
     shown,
     text: shown === null ? NO_VALUE : formatNumber(shown, info.decimals),
     confidence: value === null ? 'none' : (t?.confidence.level ?? 'low'),
-    reason: value === null ? (reasonCode ? PHRASE_NULL_TEXT[reasonCode] : phrase ? 'Not measured in this clip.' : 'This attempt hasn’t been processed as a phrase yet.') : null,
+    reason:
+      value === null
+        ? reasonCode
+          ? PHRASE_NULL_TEXT[reasonCode]
+          : phrase && !t
+            ? // Computed before this theme existed (e.g. parallel feet, mt2-phrase-0.4.0).
+              'Added after this clip was processed; process it again to see this.'
+            : phrase
+              ? 'Not measured in this clip.'
+              : 'This attempt hasn’t been processed as a phrase yet.'
+        : null,
     reasonCode,
     notes: (t?.confidence.notes ?? []).map((n) => PHRASE_NOTE_TEXT[n] ?? n),
     signText: shown !== null && info.sign ? info.sign(shown) : null,

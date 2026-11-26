@@ -716,7 +716,7 @@ export function downloadKeypoints(client: SupabaseClient, attemptId: string): Pr
 
 const METRIC_COLS =
   'attempt_id, owner_id, movement, trunk_inclination_deg, pelvis_ankle_offset_norm, balance_duration_s, ' +
-  'knee_tracking_dev_deg, turn_count, phases, confidence, algorithm_version, computed_at, phrase'
+  'knee_tracking_dev_deg, turn_count, feet_angle_deg, phases, confidence, algorithm_version, computed_at, phrase'
 
 /** A value that could not be measured is stored as null, never as zero. */
 const measured = (n: number | null | undefined) => (typeof n === 'number' && Number.isFinite(n) ? n : null)
@@ -735,6 +735,7 @@ export function saveMetrics(client: SupabaseClient, attemptId: string, metrics: 
       balance_duration_s: measured(metrics.balance_duration_s),
       knee_tracking_dev_deg: measured(metrics.knee_tracking_dev_deg),
       turn_count: measured(metrics.turn_count),
+      feet_angle_deg: measured(metrics.feet_angle_deg),
       phases: metrics.phases ?? [],
       confidence: metrics.confidence ?? {},
       algorithm_version: metrics.algorithm_version,

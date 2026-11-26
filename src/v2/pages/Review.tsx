@@ -61,6 +61,7 @@ const NARROW_UNIT: Record<MetricKey, string> = {
   balance_duration_s: 's',
   knee_tracking_dev_deg: '°',
   turn_count: 'turns',
+  feet_angle_deg: '°',
 }
 
 export function Review() {

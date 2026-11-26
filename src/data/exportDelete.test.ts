@@ -485,7 +485,7 @@ describe('exportAll', () => {
     expect(a2.metrics_run).toBeNull()
     expect(a2.phases).toBeNull()
     expect(a2.keypoints).toBeNull()
-    expect(a2.metrics).toHaveLength(5)
+    expect(a2.metrics).toHaveLength(6)
     for (const m of a2.metrics) expect(m).toMatchObject({ value: null, null_reason: 'processing_failed', confidence_level: null, confidence_score: null })
     for (const m of a3.metrics) expect(m).toMatchObject({ value: null, null_reason: 'not_processed' })
     expect(a3.fps).toBeNull()
@@ -669,7 +669,7 @@ describe('metrics CSV', () => {
       'session_id,subject_code,movement,recorded_on,camera_view,attempt_id,attempt_source,attempt_status,' +
         'attempt_created_at,metric,unit,value,null_reason,confidence_level,confidence_score,algorithm_version,computed_at',
     )
-    expect(rows).toHaveLength(1 + 4 * 5)
+    expect(rows).toHaveLength(1 + 4 * 6)
     for (const r of rows) expect(r).toHaveLength(METRICS_CSV_COLUMNS.length)
     expect(rows[1].join(',')).toBe(
       `ses-1,S01,releve_balance,2026-11-10,front,att-1,study_dataset,done,${at(21)},trunk_inclination_deg,deg,3.2,,high,0.91,0.1.0,${at(40)}`,
@@ -752,7 +752,7 @@ describe('metrics CSV', () => {
     )
     const [header, ...rows] = parseCsv(metricsCsv(doc))
     const col = (name: string) => header.indexOf(name)
-    expect(rows).toHaveLength(5)
+    expect(rows).toHaveLength(6)
     for (const r of rows) expect(r).toHaveLength(header.length)
     expect(rows[0][col('session_id')]).toBe('ses, "1"')
     // NaN is not a measurement.

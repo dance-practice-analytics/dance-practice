@@ -126,6 +126,7 @@ export function isCompactGap(reason: string | null | undefined): boolean {
 export const METRIC_NOTE_TEXT: Record<MetricNote, string> = {
   left_right_swap_corrected: 'A left/right swap in the tracking was corrected.',
   tracking_lost_in_turn: 'Tracking was lost for part of the turn; rotation in that gap isn’t counted.',
+  depth_limited: 'Where the feet point depends on depth, which one camera can’t measure reliably, so this is always low confidence: read it as rough.',
 }
 
 /** Remarks about the clip as a whole (`confidence[metric].clip_notes`), in neutral words. */
@@ -288,6 +289,10 @@ export interface MetricReading {
   reason: string | null
   /** Qualifiers on a computed value. */
   notes: string[]
+  /** The row was computed before this metric existed (no entry in its confidence): nothing to say about it. */
+  outdated: boolean
+  /** The metric is capped at low confidence by design (`depth_limited`), so "low" says nothing about this clip. */
+  alwaysLow: boolean
 }
 
 interface StoredConfidence {
@@ -302,12 +307,16 @@ interface StoredConfidence {
 export function readMetric(row: AttemptMetricsRow | null | undefined, key: MetricKey): MetricReading {
   const def = METRICS[key]
   if (!row) {
-    return { key, def, value: null, confidence: 'none', score: null, phases: [], reason: 'Not processed yet.', notes: [] }
+    return { key, def, value: null, confidence: 'none', score: null, phases: [], reason: 'Not processed yet.', notes: [], outdated: false, alwaysLow: false }
   }
   const raw = row[key]
   const value = isNum(raw) ? raw : null
-  const conf = ((row.confidence ?? {}) as Record<string, StoredConfidence>)[key] ?? {}
+  const stored = ((row.confidence ?? {}) as Record<string, StoredConfidence>)[key]
+  const conf = stored ?? {}
+  const outdated = value === null && stored === undefined && !!row.confidence && Object.keys(row.confidence).length > 0
   return {
+    outdated,
+    alwaysLow: (conf.notes ?? []).includes('depth_limited'),
     key,
     def,
     value,
@@ -315,8 +324,15 @@ export function readMetric(row: AttemptMetricsRow | null | undefined, key: Metri
     score: isNum(conf.score) ? conf.score : null,
     phases: conf.phases ?? [],
     reason:
-      value === null ? (conf.reason ? NULL_REASON_TEXT[conf.reason] : 'Not available for this attempt.') : null,
-    notes: (conf.notes ?? []).map((n) => METRIC_NOTE_TEXT[n]),
+      value === null
+        ? conf.reason
+          ? NULL_REASON_TEXT[conf.reason]
+          : outdated
+            ? // The row was computed before this measurement existed (e.g. parallel feet, mt2-metrics-1.3.0).
+              'Added after this clip was processed; process it again to see this.'
+            : 'Not available for this attempt.'
+        : null,
+    notes: (conf.notes ?? []).map((n) => METRIC_NOTE_TEXT[n]).filter(Boolean),
   }
 }
 

@@ -14,6 +14,7 @@ export type MetricKey =
   | 'balance_duration_s'
   | 'knee_tracking_dev_deg'
   | 'turn_count'
+  | 'feet_angle_deg'
 
 /** Why a metric is null. Machine-readable; the UI turns it into the dancer-facing sentence. */
 export type NullReason =
@@ -42,6 +43,8 @@ export type MetricNote =
   | 'left_right_swap_corrected'
   /** Frames are missing inside the turn; rotation during the gap cannot be seen. */
   | 'tracking_lost_in_turn'
+  /** The value rests on the tracker's depth guess, which one camera measures poorly: confidence is capped at low. */
+  | 'depth_limited'
 
 /** Qualifiers that come from the clip as a whole, not from one metric's frames. */
 export type ClipNote =
@@ -80,6 +83,8 @@ export interface AttemptMetrics {
   knee_tracking_dev_deg: number | null
   /** Turns in quarter steps, unsigned; pirouette only. */
   turn_count: number | null
+  /** Degrees, −180..180, signed: angle between the feet seen from above; 0 = parallel, > 0 toes apart, < 0 toes together. Relevé only. */
+  feet_angle_deg: number | null
   phases: PhaseSpan[]
   confidence: Record<MetricKey, MetricConfidence>
   algorithm_version: string
