@@ -326,6 +326,15 @@ themes (`left_right_labels_uncertain`) and mark events `side_uncertain`.
   trend card is relevé / pirouette only.
 - Compare on a phone (relevé, pirouette) adds a phase list under the ribbons (A and B
   lengths, tap to seek), since short phases are only slivers on the shared time axis.
+- Compare **Overlay** (desktop: "Side by side | Overlay"; phone: the middle tab): one stage,
+  B underneath, A's layer (a `SyncedStage` with `transparent`, `tone="ghost"`,
+  `videoOpacity`) passed as B's `underlay`, so it sits over B's video and under B's
+  skeleton and pills. The slider sets A's video opacity only; both skeletons stay drawn
+  (A dashed, B solid). "Line up the bodies" applies one CSS transform per pair from
+  `matchTransform` (`pages/compare/overlay.ts`: medians of the hip midpoint and torso
+  length over frames with the trunk seen ≥ 0.6, scale capped 0.5–2), disabled with a reason
+  when either clip has no such frame or the clips have different shapes. The overlay
+  stage is width-limited to B's exact aspect ratio, so the layer maps point for point.
 
 ## Shared components (`components/`, import from `'../components'`)
 
@@ -359,7 +368,9 @@ No component fetches data. All copy is passed in.
   PoseFrame | null; width?: number; height?: number; videoRef?: Ref<HTMLVideoElement>;
   videoProps?: VideoHTMLAttributes; showSkeleton?: boolean; label?; view?; timecode?;
   phase?; privacy?: string | false; chrome?: boolean; noTrackingLabel?; ariaLabel?;
-  placeholder?: ReactNode; children?; style? }` — dark stage. With `src` it plays the
+  placeholder?: ReactNode; children?; style?; tone?: 'main' | 'ghost'; transparent?;
+  videoOpacity?; underlay?: ReactNode }` — dark stage (`transparent`, `tone`,
+  `videoOpacity`, `underlay`: Compare's overlay layer). With `src` it plays the
   local video (muted, `playsInline`; you drive it through `videoRef`: `play()`,
   `pause()`, `currentTime`) and draws the skeleton from `frame.image` as SVG scaled to
   the video box (`width`/`height` = `series.width/height`). Without `src` the skeleton

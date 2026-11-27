@@ -6,6 +6,10 @@
 // by a TimeMap (compare/align.ts): phase by phase when both have phases, otherwise by
 // share of clip length — and the screen says which. Every value, difference and sentence
 // in the table comes from `compareAttempts`. Descriptive only: no better or worse.
+//
+// Layout: side by side (B with A's skeleton as a ghost) or Overlay (mentor review, task 15):
+// A's layer — its video at an adjustable opacity and its dashed skeleton — inside B's stage,
+// optionally moved once so the two bodies line up (compare/overlay.ts).
 
 import { useEffect, useMemo, useState, type ReactNode } from 'react'
 import { compareAttempts, type AttemptComparison, type MetricComparison } from '../../insights'
@@ -26,6 +30,7 @@ import { phraseOf } from './phrase/model'
 import { PhraseDifferences } from './phrase/PhraseDifferences'
 import { PhraseTimeline } from './phrase/PhraseTimeline'
 import { choosePair } from './compare/pick'
+import { blendText, matchTransform, MATCH_UNAVAILABLE_TEXT, transformCss } from './compare/overlay'
 import { createClock, type Clock } from './review/clock'
 import { attemptName, comparisonInput, describeAttempt, sessionName } from './review/labels'
 import { RelinkOverlay } from './review/Relink'
@@ -293,6 +298,7 @@ interface WorkspaceProps {
 }
 
 type StageMode = 'a' | 'overlay' | 'b'
+type Layout = 'side' | 'overlay'
 
 function Workspace({ a, b, seriesA, seriesB, attempts, pickers, eyebrow, backHref }: WorkspaceProps) {
   countRender('Compare')
@@ -303,6 +309,10 @@ function Workspace({ a, b, seriesA, seriesB, attempts, pickers, eyebrow, backHre
   const [failed, setFailed] = useState<{ a: boolean; b: boolean }>({ a: false, b: false })
   const [asked, setAsked] = useState<AlignMode>('phases')
   const [mode, setMode] = useState<StageMode>('overlay')
+  const [layout, setLayout] = useState<Layout>('side')
+  // Overlay: how opaque A's video is over B's, and whether A's picture is moved onto B's body.
+  const [blend, setBlend] = useState(0.5)
+  const [lineUp, setLineUp] = useState(false)
 
   const sA = seriesA && seriesA.frames.length > 0 ? seriesA : null
   const sB = seriesB && seriesB.frames.length > 0 ? seriesB : null
@@ -367,14 +377,23 @@ function Workspace({ a, b, seriesA, seriesB, attempts, pickers, eyebrow, backHre
 
   const srcA = clipA && !failed.a ? clipA.objectUrl : null
   const srcB = clipB && !failed.b ? clipB.objectUrl : null
-  const showA = !narrow || mode === 'a'
-  const showB = !narrow || mode !== 'a'
-  const ghostOnB = !narrow || mode === 'overlay'
+  // Overlay: one stage, A's layer (its video at `blend` opacity and its dashed skeleton) inside B's.
+  const overlayOn = narrow ? mode === 'overlay' : layout === 'overlay'
+  const showA = !overlayOn && (!narrow || mode === 'a')
+  const showB = overlayOn || !narrow || mode === 'b'
+  const ghostOnB = !narrow && !overlayOn
+  const match = useMemo(() => matchTransform(sA, sB), [sA, sB])
+  const lined = overlayOn && lineUp && typeof match !== 'string'
   // One video keeps time: A's when it is on screen, otherwise B's.
-  const aLeads = showA && srcA !== null
+  const aLeads = (showA || overlayOn) && srcA !== null
   // Each stage names its camera only when A and B were filmed from different ones; otherwise the switch says it.
   const view = (x: AttemptView) => (sameView ? undefined : filmedFromLabel(x.session.camera_view, narrow))
-  const stageStyle = { maxHeight: narrow ? '50vh' : 'min(56vh, 520px)' }
+  const maxStage = narrow ? '50vh' : 'min(56vh, 520px)'
+  const stageStyle = { maxHeight: maxStage }
+  // The overlay stage keeps B's exact shape (limited by width, not height), so A's layer
+  // covers B's picture point for point and lining up lands where it should.
+  const ratioB = sB && sB.width > 0 && sB.height > 0 ? sB.width / sB.height : 16 / 9
+  const overlayStyle = { maxWidth: `calc(${maxStage} * ${ratioB.toFixed(4)})`, marginInline: 'auto' }
   // "Choose the file again" sits on each stage; when A's stage is hidden (phone, B or
   // Overlay mode) B's stage asks for A's file too.
   const missingA = !clipA ? [{ attempt: a, name: 'A' }] : []
@@ -398,6 +417,33 @@ function Workspace({ a, b, seriesA, seriesB, attempts, pickers, eyebrow, backHre
       <RelinkOverlay missing={missingA} attempts={attempts} describe={describeAttempt} />
     </SyncedStage>
   )
+  // A's layer inside B's stage: over B's video, under B's skeleton and pills. Clicks pass through.
+  const layerA = overlayOn && (
+    <div
+      style={{
+        position: 'absolute',
+        inset: 0,
+        pointerEvents: 'none',
+        transformOrigin: '0 0',
+        transform: lined && typeof match !== 'string' ? transformCss(match) : undefined,
+      }}
+    >
+      <SyncedStage
+        clock={clock}
+        series={sA}
+        src={srcA}
+        role="lead"
+        phases={phasesA}
+        chrome={false}
+        tone="ghost"
+        transparent
+        videoOpacity={blend}
+        ariaLabel={`Tracked pose skeleton of A, ${attemptName(a).toLowerCase()}, dashed${srcA ? `, with its video at ${Math.round(blend * 100)}% over B’s` : ''}${lined ? ', moved onto B’s body' : ''}`}
+        onVideoError={() => setFailed((f) => ({ ...f, a: true }))}
+        style={{ height: '100%', aspectRatio: 'auto', borderRadius: 0 }}
+      />
+    </div>
+  )
   const stageB = showB && (
     <SyncedStage
       clock={clock}
@@ -408,14 +454,25 @@ function Workspace({ a, b, seriesA, seriesB, attempts, pickers, eyebrow, backHre
       toClock={map.toA}
       slopeAt={map.slopeAt}
       ghost={ghostOnB && sA ? { series: sA } : null}
+      underlay={layerA}
       phases={phasesB}
-      label={ghostOnB && sA ? (narrow ? 'B + A ghost' : `B · ${attemptName(b)} + A ghost`) : `B · ${attemptName(b)}`}
+      label={
+        overlayOn
+          ? narrow
+            ? 'B + A over it'
+            : `B · ${attemptName(b)} + A over it`
+          : ghostOnB && sA
+            ? narrow
+              ? 'B + A ghost'
+              : `B · ${attemptName(b)} + A ghost`
+            : `B · ${attemptName(b)}`
+      }
       view={view(b)}
       privacy={clipB?.remote ? 'Backed up · only you can see it' : undefined}
       ariaLabel={`Tracked pose skeleton of B, ${attemptName(b).toLowerCase()}${ghostOnB && sA ? ', with A dashed behind it' : ''}${srcB ? ', drawn over its video' : ', shown without the video'}`}
       placeholder={<span className="t-small">No keypoints are saved for B.</span>}
       onVideoError={() => setFailed((f) => ({ ...f, b: true }))}
-      style={stageStyle}
+      style={overlayOn ? overlayStyle : stageStyle}
     >
       <RelinkOverlay missing={missingB} attempts={attempts} describe={describeAttempt} />
     </SyncedStage>
@@ -501,7 +558,16 @@ function Workspace({ a, b, seriesA, seriesB, attempts, pickers, eyebrow, backHre
         }
         narrow={narrow}
       />
-      {narrow ? (
+      {!narrow && (
+        <div className="seg" role="group" aria-label="Video layout" style={{ alignSelf: 'flex-start' }}>
+          {(['side', 'overlay'] as const).map((l) => (
+            <button key={l} type="button" className={layout === l ? 'on' : undefined} aria-pressed={layout === l} onClick={() => setLayout(l)}>
+              {l === 'side' ? 'Side by side' : 'Overlay'}
+            </button>
+          ))}
+        </div>
+      )}
+      {narrow || overlayOn ? (
         <>
           {stageA}
           {stageB}
@@ -511,6 +577,17 @@ function Workspace({ a, b, seriesA, seriesB, attempts, pickers, eyebrow, backHre
           {stageA}
           {stageB}
         </div>
+      )}
+      {overlayOn && (
+        <OverlayControls
+          blend={blend}
+          onBlend={setBlend}
+          hasVideoA={srcA !== null}
+          lineUp={lineUp}
+          onLineUp={setLineUp}
+          unavailable={typeof match === 'string' ? MATCH_UNAVAILABLE_TEXT[match] : null}
+          narrow={narrow}
+        />
       )}
       {[...missingA, ...missingB].some((m) => !isSampleAttempt(m.attempt)) && (
         <p className="v2-rev-stageinfo-line" style={{ marginTop: -4 }}>
@@ -559,6 +636,66 @@ function Workspace({ a, b, seriesA, seriesB, attempts, pickers, eyebrow, backHre
         <Differences comparison={comparison} a={a} b={b} narrow={narrow} simple={simple} />
       )}
     </>
+  )
+}
+
+// ---------- overlay ----------
+
+interface OverlayControlsProps {
+  blend: number
+  onBlend(v: number): void
+  hasVideoA: boolean
+  lineUp: boolean
+  onLineUp(v: boolean): void
+  /** Why the bodies can't be lined up, or null when they can. */
+  unavailable: string | null
+  narrow: boolean
+}
+
+/** The transparency of A's video over B's, and the optional line-up. Both skeletons stay drawn. */
+function OverlayControls({ blend, onBlend, hasVideoA, lineUp, onLineUp, unavailable, narrow }: OverlayControlsProps) {
+  const pct = Math.round(blend * 100)
+  return (
+    <section className="card v2-cmp-overlay" aria-label="Overlay settings" style={{ padding: narrow ? 12 : '12px 16px', display: 'flex', flexDirection: 'column', gap: 10 }}>
+      <label htmlFor="cmp-blend" className="t-small" style={{ display: 'inline-flex', alignItems: 'center', gap: 6, fontWeight: 500 }}>
+        See-through: <AttemptChip side="a" /> video over <AttemptChip side="b" />
+      </label>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+        <span className="t-caption" aria-hidden="true">
+          B
+        </span>
+        <input
+          id="cmp-blend"
+          type="range"
+          min={0}
+          max={100}
+          step={5}
+          value={pct}
+          disabled={!hasVideoA}
+          aria-valuetext={blendText(blend)}
+          onChange={(e) => onBlend(Number(e.target.value) / 100)}
+          style={{ flex: 1, minWidth: 0, accentColor: 'var(--series-b)' }}
+        />
+        <span className="t-caption" aria-hidden="true">
+          A
+        </span>
+        <span className="mono t-small" style={{ minWidth: 44, textAlign: 'right' }} aria-hidden="true">
+          {pct}%
+        </span>
+      </div>
+      <label className="t-small" style={{ display: 'inline-flex', alignItems: 'center', gap: 8, opacity: unavailable ? 0.6 : 1 }}>
+        <input type="checkbox" checked={lineUp && !unavailable} disabled={unavailable !== null} onChange={(e) => onLineUp(e.target.checked)} />
+        Line up the bodies
+      </label>
+      <p className="t-caption">
+        {hasVideoA
+          ? 'A’s video sits on top of B’s at the same aligned moment; slide to make it more or less see-through. '
+          : 'A’s video isn’t on this device, so only its skeleton is drawn over B. '}
+        A’s skeleton is dashed, B’s is solid.{' '}
+        {unavailable ??
+          'Lining up moves and scales A’s whole picture once, so its hips and torso sit on B’s; A’s own movement is unchanged.'}
+      </p>
+    </section>
   )
 }
 

@@ -51,6 +51,12 @@ export interface SyncedStageProps {
   /** Told when the browser can't play the file. */
   onVideoError?(): void
   style?: CSSProperties
+  /** Passed to VideoStage: pills on/off, skeleton style, no stage background (Compare's overlay layer). */
+  chrome?: boolean
+  tone?: 'main' | 'ghost'
+  transparent?: boolean
+  videoOpacity?: number
+  underlay?: ReactNode
   /** Extra content on the stage, above the skeleton (the "Choose the file again" card). */
   children?: ReactNode
 }
@@ -58,7 +64,7 @@ export interface SyncedStageProps {
 type FrameMeta = { mediaTime: number }
 
 export function SyncedStage(props: SyncedStageProps) {
-  const { clock, series, src, role, ghost, phases, showSkeleton = true, label, view, privacy, ariaLabel, placeholder, onVideoError, style, children } = props
+  const { clock, series, src, role, ghost, phases, showSkeleton = true, label, view, privacy, ariaLabel, placeholder, onVideoError, style, chrome, tone, transparent, videoOpacity, underlay, children } = props
   const toLocal = props.toLocal ?? identity
   const toClock = props.toClock ?? identity
   const slopeAt = props.slopeAt ?? one
@@ -193,6 +199,11 @@ export function SyncedStage(props: SyncedStageProps) {
       ariaLabel={ariaLabel}
       placeholder={placeholder}
       style={style}
+      chrome={chrome}
+      tone={tone}
+      transparent={transparent}
+      videoOpacity={videoOpacity}
+      underlay={underlay}
     >
       {children}
     </VideoStage>

@@ -96,6 +96,14 @@ export interface VideoStageProps {
   privacy?: string | false
   /** Set false to hide all pills (thumbnails). The "No tracking" pill still shows. */
   chrome?: boolean
+  /** Draw `frame` in the dashed ghost style instead of the bone skeleton (A's layer in Compare's overlay). */
+  tone?: 'main' | 'ghost'
+  /** No stage background or studio floor: a layer stacked over another stage. */
+  transparent?: boolean
+  /** Opacity of the video only (the skeleton stays fully drawn). Default 1. */
+  videoOpacity?: number
+  /** Drawn over the video and under this stage's skeleton (A's layer in Compare's overlay). */
+  underlay?: ReactNode
   /** Text for the missing-tracking pill. */
   noTrackingLabel?: string
   /** Accessible description of the overlay. */
@@ -121,6 +129,10 @@ export function VideoStage(props: VideoStageProps) {
     phase,
     privacy,
     chrome = true,
+    tone = 'main',
+    transparent = false,
+    videoOpacity = 1,
+    underlay,
     noTrackingLabel = 'No tracking',
     ariaLabel,
     placeholder,
@@ -141,7 +153,7 @@ export function VideoStage(props: VideoStageProps) {
         position: 'relative',
         width: '100%',
         aspectRatio: `${w} / ${h}`,
-        background: 'var(--stage, #070E24)',
+        background: transparent ? 'transparent' : 'var(--stage, #070E24)',
         borderRadius: 12,
         overflow: 'hidden',
         color: BONE,
@@ -156,15 +168,17 @@ export function VideoStage(props: VideoStageProps) {
           muted
           playsInline
           preload="auto"
-          style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'contain', background: 'var(--stage, #070E24)' }}
+          style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'contain', background: transparent ? 'transparent' : 'var(--stage, #070E24)', opacity: videoOpacity }}
         />
-      ) : (
+      ) : transparent ? null : (
         // The studio floor of the design, behind a skeleton shown without its video.
         <>
           <div aria-hidden="true" style={{ position: 'absolute', left: 0, right: 0, bottom: 0, height: '24%', background: 'var(--stage-2, #101B3F)' }} />
           <div aria-hidden="true" style={{ position: 'absolute', left: 0, right: 0, top: '47%', height: 3, background: 'var(--stage-line, #22316A)' }} />
         </>
       )}
+
+      {underlay}
 
       {showSkeleton && (pose || ghost) && (
         <svg
@@ -174,7 +188,7 @@ export function VideoStage(props: VideoStageProps) {
           style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', pointerEvents: 'none' }}
         >
           {ghost && <Skeleton landmarks={ghost} w={w} h={h} ghost />}
-          {pose && <Skeleton landmarks={pose} w={w} h={h} />}
+          {pose && <Skeleton landmarks={pose} w={w} h={h} ghost={tone === 'ghost'} />}
         </svg>
       )}
 
