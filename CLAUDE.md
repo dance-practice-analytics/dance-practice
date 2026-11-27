@@ -89,6 +89,7 @@ Done:
 - Mentor review round (2026-11-26), logged task by task for Dr. Trajkova in `../docs/mt2/build_mentor_report.py` (→ `MT-2-HCI-DancePractice-Mentor-Report.docx`; add each finished task to `TASKS`):
   - Task 13 (SDD comments): SDD 5.5 maps metrics to themes and has a theme definitions table; theme `arm_reach` is shown as "Distal expansion (arm reach)" (key unchanged); prompts `practice-notes-v3` / `mika-v3`.
   - Task 14 (parallel feet): `src/metrics/feet.ts`, relevé metric `feet_angle_deg` (mt2-metrics-1.3.0, hold, relevé only) and phrase theme `parallel_feet` (mt2-phrase-0.4.0, both feet down); signed (+ toes apart), capped at low confidence (`depth_limited`). Migration `20261126000000_parallel_feet` applied with `npx supabase db query --remote --yes -f <file>` (HTTPS, works on this network, unlike `db push`). Older rows show "Added after this clip was processed" and are left out of AI payloads. Deployed to Vercel.
+  - Task 15 (overlay with transparency): Compare "Side by side | Overlay"; A's layer is B's `underlay` (video opacity slider, both skeletons always drawn) with optional "Line up the bodies" (`pages/compare/overlay.ts`). Deployed. When checking screens with the test account, hide `<video>` before screenshots: it holds backed-up videos that may be study footage.
 
 Build order (prototype demo first):
 1. Supabase client (`@supabase/supabase-js`), email auth, replace the mock API in `src/api/client.ts` behind the same types.
