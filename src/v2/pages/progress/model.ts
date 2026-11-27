@@ -38,25 +38,48 @@ import type { SessionSummary } from '../../../data/repo'
 // ---------- chart geometry (the design's viewBox) ----------
 
 export const CHART = { width: 300, height: 120, left: 34, right: 300, top: 10, bottom: 100, gapY: 55 } as const
+/** The enlarged chart (Expand): same marks, more room for ticks and attempt numbers. */
+export const CHART_LARGE = { width: 640, height: 280, left: 56, right: 640, top: 14, bottom: 240, gapY: 127 } as const
+export type ChartDims = { width: number; height: number; left: number; right: number; top: number; bottom: number; gapY: number }
+
+/**
+ * Mentor review, change 5. `y`: 'zero' starts the scale at 0 (below only for signed values);
+ * 'fit' narrows it to the values so small changes are visible. `x`: one column per session
+ * (attempts grouped) or one slot per attempt in order, sessions marked by separators.
+ */
+export interface ChartOptions {
+  y?: 'zero' | 'fit'
+  x?: 'sessions' | 'attempts'
+}
 
 export interface ChartDot {
   attemptId: string
   x: number
   y: number
-  /** Low confidence: hollow, dashed, not part of the median. */
+  /** Low camera visibility (low confidence): hollow, dashed, not part of the median. */
   low: boolean
+  value: number
+  /** The attempt's label ('Attempt 2'), for the tooltip. */
+  label: string
+  /** 1-based position among the attempts on the chart (attempts axis). */
+  order: number
 }
 
 export interface ChartGapMark {
   attemptId: string
   x: number
   y: number
+  label: string
+  order: number
 }
 
 export interface ChartColumn {
   sessionId: string
   /** Centre of the session's column. */
   cx: number
+  /** Left and right edge of the session's column (its share of the x axis). */
+  x1: number
+  x2: number
   /** Some attempts of the session have no measurements yet. */
   partial: boolean
   /** The median tick, or null when the session has no counted value. */
@@ -72,6 +95,49 @@ export interface ChartGeometry {
   gaps: ChartGapMark[]
   /** One SVG path per run of neighbouring sessions that have a median; a session without one breaks the line. */
   medianPaths: string[]
+  /** Gridline values from min to max (decimals allowed) with their y, and the step between them. */
+  ticks: { v: number; y: number }[]
+  step: number | null
+  /** x of the lines between sessions (attempts axis only). */
+  separators: number[]
+  x: 'sessions' | 'attempts'
+}
+
+/** Smallest of 1, 2, 2.5, 5 × 10^k that is ≥ v: a round gridline step. */
+export function niceStep(v: number): number {
+  if (!(v > 0)) return 1
+  const pow = 10 ** Math.floor(Math.log10(v))
+  for (const m of [1, 2, 2.5, 5, 10]) if (m * pow >= v - pow * 1e-9) return Number((m * pow).toPrecision(12))
+  return 10 * pow
+}
+
+/** Decimals a tick label needs so every tick of this step reads differently (2.5 → 1, 0.25 → 2). */
+export function stepDecimals(step: number): number {
+  for (let d = 0; d <= 6; d++) if (Math.abs(Math.round(step * 10 ** d) - step * 10 ** d) < 1e-6) return d
+  return 6
+}
+
+/** The y range of a chart: from 0 (design default), or fitted to the values with round ends. */
+export function yRange(values: readonly number[], mode: 'zero' | 'fit', ticks = 4): { min: number; max: number; step: number } | null {
+  if (!values.length) return null
+  const hi = Math.max(...values)
+  const lo = Math.min(...values)
+  if (mode === 'zero') {
+    const max = niceCeil(Math.max(hi, 0))
+    const min = lo < 0 ? -niceCeil(-lo) : 0
+    return { min, max, step: niceStep((max - min) / ticks) }
+  }
+  if (hi === lo) {
+    // One value (or all equal): a small window around it.
+    const step = niceStep(Math.abs(hi) * 0.05 || 0.1)
+    const c = Math.round(hi / step) * step
+    return { min: Number((c - 2 * step).toPrecision(12)), max: Number((c + 2 * step).toPrecision(12)), step }
+  }
+  const step = niceStep((hi - lo) / ticks)
+  const min = Number((Math.floor(lo / step + 1e-9) * step).toPrecision(12))
+  let max = Number((Math.ceil(hi / step - 1e-9) * step).toPrecision(12))
+  if (max <= min) max = min + step
+  return { min, max, step }
 }
 
 /** Smallest of 1, 2, 2.5, 5, 10 × 10^k that is ≥ v, so the top label is a round number. */
@@ -95,20 +161,29 @@ export function isPartial(session: ProgressSession): boolean {
   return session.points.some((p) => isPending(p.gap))
 }
 
-export function chartGeometry(sessions: readonly ProgressSession[]): ChartGeometry {
+export function chartGeometry(sessions: readonly ProgressSession[], options: ChartOptions = {}, dims: ChartDims = CHART): ChartGeometry {
+  const xMode = options.x ?? 'sessions'
   const values = sessions.flatMap((s) => s.points).flatMap((p) => (p.value === null ? [] : [p.value]))
-  const hasValues = values.length > 0
-  // The scale starts at 0 like the design; it only goes below for a signed value.
-  const max = hasValues ? niceCeil(Math.max(...values, 0)) : null
-  const lowest = hasValues ? Math.min(...values) : 0
-  const min = hasValues ? (lowest < 0 ? -niceCeil(-lowest) : 0) : null
-  const y = (v: number) => r1(CHART.bottom - ((v - min!) / (max! - min!)) * (CHART.bottom - CHART.top))
+  // Default: the scale starts at 0 like the design; it only goes below for a signed value.
+  const range = yRange(values, options.y ?? 'zero')
+  const min = range?.min ?? null
+  const max = range?.max ?? null
+  const y = (v: number) => r1(dims.bottom - ((v - min!) / (max! - min!)) * (dims.bottom - dims.top))
+  const ticks: ChartGeometry['ticks'] = []
+  if (range) {
+    const count = Math.round((range.max - range.min) / range.step)
+    for (let k = 0; k <= count; k++) {
+      const v = Number((range.min + k * range.step).toPrecision(12))
+      ticks.push({ v, y: y(v) })
+    }
+  }
 
-  const n = sessions.length
-  const w = n ? (CHART.right - CHART.left) / n : 0
+  const span = dims.right - dims.left
+  const total = sessions.reduce((n, s) => n + s.points.length, 0)
   const columns: ChartColumn[] = []
   const dots: ChartDot[] = []
   const gaps: ChartGapMark[] = []
+  const separators: number[] = []
   const medianPaths: string[] = []
   let run: string[] = []
   const endRun = () => {
@@ -116,27 +191,37 @@ export function chartGeometry(sessions: readonly ProgressSession[]): ChartGeomet
     run = []
   }
 
+  let order = 0
+  let slot = 0
   sessions.forEach((s, i) => {
-    const cx = r1(CHART.left + (i + 0.5) * w)
-    // Attempts spread around the centre (12 apart in the design), squeezed to fit the column.
-    const half = Math.max(0, Math.min(24, w / 2 - 8))
     const count = s.points.length
-    const step = count > 1 ? Math.min(12, (2 * half) / (count - 1)) : 0
+    // Sessions axis: equal columns. Attempts axis: one equal slot per attempt, so a session's width follows its attempt count.
+    const slotW = total ? span / total : 0
+    const x1 = xMode === 'attempts' ? dims.left + slot * slotW : dims.left + (i * span) / sessions.length
+    const x2 = xMode === 'attempts' ? dims.left + (slot + Math.max(count, 0)) * slotW : dims.left + ((i + 1) * span) / sessions.length
+    const w = x2 - x1
+    const cx = r1((x1 + x2) / 2)
+    if (xMode === 'attempts' && i > 0) separators.push(r1(x1))
+    // Sessions axis: attempts spread around the centre (12 apart in the design), squeezed to fit the column.
+    const half = Math.max(0, Math.min(24 * (dims.width / CHART.width), w / 2 - 8))
+    const step = count > 1 ? Math.min(12 * (dims.width / CHART.width), (2 * half) / (count - 1)) : 0
     s.points.forEach((p, j) => {
-      const x = r1(cx + (j - (count - 1) / 2) * step)
-      if (p.value === null) gaps.push({ attemptId: p.attemptId, x, y: CHART.gapY })
-      else dots.push({ attemptId: p.attemptId, x, y: y(p.value), low: p.lowConfidence })
+      order++
+      const x = xMode === 'attempts' ? r1(x1 + (j + 0.5) * slotW) : r1(cx + (j - (count - 1) / 2) * step)
+      if (p.value === null) gaps.push({ attemptId: p.attemptId, x, y: dims.gapY, label: p.label ?? `Attempt ${order}`, order })
+      else dots.push({ attemptId: p.attemptId, x, y: y(p.value), low: p.lowConfidence, value: p.value, label: p.label ?? `Attempt ${order}`, order })
     })
+    slot += count
     let tick: ChartColumn['tick'] = null
     if (s.median !== null) {
-      const reach = Math.max(6, Math.min(32, w / 2 - 2))
+      const reach = xMode === 'attempts' ? Math.max(4, w / 2 - Math.min(6, w / 6)) : Math.max(6, Math.min(32 * (dims.width / CHART.width), w / 2 - 2))
       tick = { x1: r1(cx - reach), x2: r1(cx + reach), y: y(s.median) }
       run.push(`${cx} ${tick.y}`)
     } else endRun()
-    columns.push({ sessionId: s.sessionId, cx, partial: isPartial(s), tick })
+    columns.push({ sessionId: s.sessionId, cx, x1: r1(x1), x2: r1(x2), partial: isPartial(s), tick })
   })
   endRun()
-  return { min, max, columns, dots, gaps, medianPaths }
+  return { min, max, columns, dots, gaps, medianPaths, ticks, step: range?.step ?? null, separators, x: xMode }
 }
 
 // ---------- captions ----------
@@ -222,7 +307,7 @@ export function panelAria(series: ProgressSeries, phaseLabel: string | null, nam
   const low = series.points.filter((p) => p.lowConfidence).length
   const missing = series.points.filter((p) => p.value === null).length
   const extra = [
-    low ? `${low} low-confidence ${low === 1 ? 'value' : 'values'} not counted in the medians` : null,
+    low ? `${low} ${low === 1 ? 'value' : 'values'} with low camera visibility not counted in the medians` : null,
     missing ? `${missing} ${missing === 1 ? 'attempt' : 'attempts'} without a value` : null,
   ].filter(Boolean)
   return [
@@ -282,6 +367,25 @@ export interface MetricPanel {
   minLabel: string | null
   summary: string
   aria: string
+  /** What the chart redraws from with other options (fit, attempts axis, enlarged). */
+  data: readonly ProgressSession[]
+  axis: ChartAxis
+}
+
+/** How stored values read on the axis: × scale, then the unit ('%' for a ratio shown as a percent). */
+export interface ChartAxis {
+  scale: number
+  unit: string
+  /** A value as on the rest of the screen, for tooltips. */
+  valueText(v: number): string
+}
+
+/** A gridline label: as many decimals as the step needs ('2.5', '0.25'); the unit only where asked. */
+export function tickLabel(axis: Pick<ChartAxis, 'scale' | 'unit'>, v: number, step: number, withUnit = false): string {
+  const d = stepDecimals(Number((step * axis.scale).toPrecision(12)))
+  // Rounded to the step's decimals, trailing zeros dropped: 0, 2.5, 5, 7.5, 10.
+  const text = String(Number((v * axis.scale).toFixed(d)) || 0)
+  return withUnit ? `${text}${axis.unit}` : text
 }
 
 export interface SessionColumn {
@@ -372,6 +476,8 @@ export function buildProgress(
       minLabel: geometry.min === null ? null : geometry.min === 0 ? '0' : axisLabel(key, geometry.min),
       summary: panelSummary(series, names, now),
       aria: panelAria(series, phaseLabel, names, now),
+      data: series.sessions,
+      axis: { scale: METRICS[key].scale, unit: METRICS[key].unitShort, valueText: (v) => formatMetricWithUnit(key, v) },
     }
   })
 
@@ -428,7 +534,7 @@ export interface TableValue {
   attemptId: string
   /** '6.8°' or '—'. */
   text: string
-  /** 'low confidence, not counted' or the reason for a gap; null for a counted value. */
+  /** 'Low camera visibility, not counted' or the reason for a gap; null for a counted value. */
   note: string | null
 }
 
@@ -452,7 +558,7 @@ export function tableRows(panel: MetricPanel, names: SessionNames, now: Date = n
     values: s.points.map((p) => ({
       attemptId: p.attemptId,
       text: formatMetricWithUnit(panel.key, p.value),
-      note: p.gap ? gapSentence(p.gap).replace(/\.$/, '') : p.lowConfidence ? 'Low confidence, not counted' : null,
+      note: p.gap ? gapSentence(p.gap).replace(/\.$/, '') : p.lowConfidence ? 'Low camera visibility, not counted' : null,
     })),
     counted: s.countedValues,
     medianText: s.medianText,

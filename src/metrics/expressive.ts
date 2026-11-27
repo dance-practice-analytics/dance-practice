@@ -292,6 +292,16 @@ export interface HeadTrunk {
   curveImage: Series
 }
 
+/** One frame's neck angle (the `neck` series of headTrunk): ears-mid − shoulders-mid against the trunk line, deg. */
+export function neckAngleDeg(w: Landmark[] | null): number | null {
+  if (!seen(w, [LM.leftEar, LM.rightEar, LM.leftShoulder, LM.rightShoulder, LM.leftHip, LM.rightHip])) return null
+  const sm = mid(w[LM.leftShoulder], w[LM.rightShoulder])
+  const t = unit(sub(sm, mid(w[LM.leftHip], w[LM.rightHip])))
+  const h = unit(sub(mid(w[LM.leftEar], w[LM.rightEar]), sm))
+  if (!t || !h) return null
+  return Math.acos(Math.max(-1, Math.min(1, dot(t, h)))) * DEG
+}
+
 export function headTrunk(series: PoseSeries): HeadTrunk {
   const need = [LM.leftEar, LM.rightEar, LM.leftShoulder, LM.rightShoulder, LM.leftHip, LM.rightHip]
   const neck: Series = []

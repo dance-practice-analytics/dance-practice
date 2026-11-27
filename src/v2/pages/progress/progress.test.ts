@@ -3,7 +3,7 @@ import { renderToStaticMarkup } from 'react-dom/server'
 import { describe, expect, it } from 'vitest'
 import { attempt, session } from '../notes/fixtures'
 import { ProgressChart } from './ProgressChart'
-import { buildProgress, CHART, chartGeometry, dateBounds, defaultMovement, niceCeil, sessionNames, tableRows } from './model'
+import { buildProgress, CHART, chartGeometry, dateBounds, defaultMovement, niceCeil, sessionNames, stepDecimals, tableRows, tickLabel, yRange } from './model'
 
 const NOW = new Date('2026-11-15T12:00:00')
 
@@ -94,7 +94,7 @@ describe('buildProgress', () => {
     expect(panel.phaseLabel).toBe('Hold')
     expect(panel.aria).toContain('Torso lean, Hold.')
     expect(panel.aria).toContain('Session 1 (Oct 28): 6.8°')
-    expect(panel.aria).toContain('1 low-confidence value not counted in the medians')
+    expect(panel.aria).toContain('1 value with low camera visibility not counted in the medians')
     expect(panel.aria).toContain('2 attempts without a value')
   })
 
@@ -198,7 +198,44 @@ describe('chartGeometry', () => {
   })
 
   it('handles no sessions', () => {
-    expect(chartGeometry([])).toEqual({ min: null, max: null, columns: [], dots: [], gaps: [], medianPaths: [] })
+    expect(chartGeometry([])).toEqual({ min: null, max: null, columns: [], dots: [], gaps: [], medianPaths: [], ticks: [], step: null, separators: [], x: 'sessions' })
+  })
+
+  it('draws gridlines with decimal steps from 0 by default', () => {
+    expect(g.ticks.map((t) => t.v)).toEqual([0, 2.5, 5, 7.5, 10])
+    expect(g.ticks.map((t) => tickLabel(panel.axis, t.v, g.step!))).toEqual(['0', '2.5', '5', '7.5', '10'])
+  })
+
+  it('fits the y axis to the values on request, without changing values or medians', () => {
+    const fit = chartGeometry(panel.data, { y: 'fit' })
+    // Values 4.2 … 7.1: a 1° step from 4 to 8.
+    expect([fit.min, fit.max, fit.step]).toEqual([4, 8, 1])
+    expect(fit.dots.map((d) => d.value)).toEqual(g.dots.map((d) => d.value))
+    expect(fit.dots.find((d) => d.attemptId === 'a1')!.y).toBeLessThan(g.dots.find((d) => d.attemptId === 'a1')!.y)
+    expect(yRange([0.512, 0.53, 0.58], 'fit')).toEqual({ min: 0.5, max: 0.58, step: 0.02 })
+    // All equal: a small window around the value (step ≈ 5% of it).
+    expect(yRange([3, 3], 'fit')).toEqual({ min: 2.6, max: 3.4, step: 0.2 })
+  })
+
+  it('puts every attempt on its own slot on the attempts axis, sessions separated', () => {
+    const att = chartGeometry(panel.data, { x: 'attempts' })
+    const all = [...att.dots, ...att.gaps].sort((a, b) => a.order - b.order)
+    expect(all.map((d) => d.order)).toEqual([1, 2, 3, 4, 5, 6, 7, 8, 9, 10])
+    // Equal spacing, in order, left to right.
+    const xs = all.map((d) => d.x)
+    for (let i = 1; i < xs.length; i++) expect(xs[i] - xs[i - 1]).toBeCloseTo((CHART.right - CHART.left) / 10, 0)
+    expect(att.separators).toHaveLength(2)
+    // A session's column is as wide as its attempts: 3, 4 and 3 of 10.
+    expect(att.columns.map((c) => Math.round(((c.x2 - c.x1) / (CHART.right - CHART.left)) * 10))).toEqual([3, 4, 3])
+  })
+})
+
+describe('tickLabel', () => {
+  it('uses the step’s decimals, the display scale, and the unit only when asked', () => {
+    expect(tickLabel({ scale: 1, unit: '°' }, 7.5, 2.5, true)).toBe('7.5°')
+    expect(tickLabel({ scale: 100, unit: '%' }, 0.125, 0.025)).toBe('12.5')
+    expect(tickLabel({ scale: 1, unit: '' }, 0.55, 0.05)).toBe('0.55')
+    expect(stepDecimals(0.25)).toBe(2)
   })
 })
 
@@ -208,7 +245,7 @@ describe('tableRows', () => {
     expect(rows.map((r) => r.name)).toEqual(['Session 1', 'Session 2', 'Session 4'])
     expect(rows.map((r) => r.dateLabel)).toEqual(['Oct 28', 'Nov 4', 'Nov 11'])
     expect(rows[1].values.map((v) => v.text)).toEqual(['6.0°', '4.2°', '—', '5.6°'])
-    expect(rows[1].values[1].note).toBe('Low confidence, not counted')
+    expect(rows[1].values[1].note).toBe('Low camera visibility, not counted')
     expect(rows[1].values[2].note).toBe('The landmarks this needs weren’t tracked during the phase')
     expect(rows[1]).toMatchObject({ counted: 2, medianText: '5.8°' })
     expect(rows[2].values[2]).toMatchObject({ text: '—', note: 'No measurements yet' })

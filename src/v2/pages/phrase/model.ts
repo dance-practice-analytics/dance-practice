@@ -54,7 +54,7 @@ export const THEMES: Record<ThemeKey, ThemeInfo> = {
     about:
       'In each plié (both feet on the floor, knees bent), the angle seen from above between where the knee points and where the foot points. 0° means the knee is over the line of the foot; a positive value means the knee is inside that line (towards the other leg), a negative value outside. Median of both legs over every plié frame.',
     bestViews: ['front', 'diagonal'],
-    viewNote: 'Best seen from the front or the diagonal. It depends on depth, which one camera can’t measure reliably, so it is always low confidence: read it as rough.',
+    viewNote: 'Best seen from the front or the diagonal. It depends on depth, which one camera can’t see reliably, so it is always marked low camera visibility: read it as rough.',
     more: 'more towards the inside of the foot line',
     less: 'more towards the outside of the foot line',
     sign: (v) => (Math.abs(v) < 0.05 ? 'knee over the foot line' : v > 0 ? 'knee inside the foot line' : 'knee outside the foot line'),
@@ -121,7 +121,7 @@ export const THEMES: Record<ThemeKey, ThemeInfo> = {
     about:
       'The largest circle an arm or a leg drew around its shoulder or hip, as the angle swept (360° is a full circle). Closure says how far the end of that circle was from its start, in limb lengths (0 = back where it started).',
     bestViews: ['diagonal', 'front'],
-    viewNote: 'Best seen from the diagonal or the front. It depends on depth, which one camera can’t measure reliably, so it is always low confidence: read it as rough.',
+    viewNote: 'Best seen from the diagonal or the front. It depends on depth, which one camera can’t see reliably, so it is always marked low camera visibility: read it as rough.',
     more: 'more',
     less: 'less',
   },
@@ -134,7 +134,7 @@ export const THEMES: Record<ThemeKey, ThemeInfo> = {
     about:
       'While both feet are on the floor, the angle seen from above between where the two feet point. 0° means parallel; a positive value means the toes point apart, a negative value that they point towards each other. Median over every frame with both feet down.',
     bestViews: ['diagonal', 'side'],
-    viewNote: 'Best seen from the diagonal. It depends on depth, which one camera can’t measure reliably, so it is always low confidence: read it as rough.',
+    viewNote: 'Best seen from the diagonal. It depends on depth, which one camera can’t see reliably, so it is always marked low camera visibility: read it as rough.',
     more: 'more apart at the toes',
     less: 'more towards each other at the toes',
     sign: (v) => (Math.abs(v) < 0.05 ? 'feet parallel' : v > 0 ? 'toes apart' : 'toes towards each other'),
@@ -306,7 +306,7 @@ export function themeDifference(key: ThemeKey, a: ThemeReading, b: ThemeReading,
     default:
       sentence = `${names.b}’s range is ${size} ${word} than ${names.a}’s.`
   }
-  const caveat = a.confidence === 'low' || b.confidence === 'low' ? ' One of the two values has low confidence.' : ''
+  const caveat = a.confidence === 'low' || b.confidence === 'low' ? ' One of the two values has low camera visibility.' : ''
   return { key, a, b, delta, sentence: sentence + caveat }
 }
 

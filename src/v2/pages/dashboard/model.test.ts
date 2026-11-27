@@ -94,8 +94,8 @@ describe('metricTiles', () => {
       attempt('l2', s, 2, {}, metrics('l2', { trunk_inclination_deg: 9 }, { trunk_inclination_deg: 'low' })),
     ]
     const tile = metricTiles(pickFocus([s], a)!, NOW).tiles[0]
-    expect([tile.value, tile.low, tile.confidenceLabel]).toEqual(['5.0', true, 'Mixed view'])
-    expect(tile.note).toBe('1 attempt on Nov 4 had low confidence and is not in the median.')
+    expect([tile.value, tile.low, tile.confidenceLabel]).toEqual(['5.0', true, 'Low camera visibility'])
+    expect(tile.note).toBe('1 attempt on Nov 4 had low camera visibility and is not in the median.')
     expect(tile.delta).toBe('Record another session to see change.')
     expect(tile.single).toBe(true)
     expect(tile.about).toBe('How far your torso tips away from straight up, from the hips to the shoulders.')
@@ -164,11 +164,11 @@ describe('researcher view', () => {
     expect(items.map((i) => [i.code, i.status, i.action])).toEqual([
       ['S02', 'Failed', 'Retry'],
       ['S01', 'Not seen', 'Review'],
-      ['S02', 'Hard to see', 'Review'],
+      ['S02', 'Low camera visibility', 'Review'],
     ])
     expect(items[0].reason).toBe('Clip shorter than 2 s.')
     expect(items[1].reason).toBe('The landmarks this needs weren’t tracked during the phase.')
-    expect(items[2].reason).toBe('Low tracking confidence: Torso lean.')
+    expect(items[2].reason).toBe('Low camera visibility: Torso lean.')
   })
 
   it('orders subjects by code and reports counts, not measurements', () => {

@@ -10,6 +10,8 @@ import { COMPACT_TEXT } from '../phrase/model'
 import type { ThemeKey } from '../phrase/model'
 import { ProgressChart, ProgressLegend } from './ProgressChart'
 import type { PhraseProgressView } from './phraseModel'
+import { ExpandChart } from './ChartTools'
+import type { ChartOptions } from './model'
 
 export interface PhraseProgressProps {
   view: PhraseProgressView
@@ -17,9 +19,12 @@ export interface PhraseProgressProps {
   setCameraView(v: CameraView): void
   /** The date filter of the page (same control as for the other movements). */
   dateControl: ReactNode
+  options: ChartOptions
+  onOptions(o: ChartOptions): void
+  narrow: boolean
 }
 
-export function PhraseProgress({ view, focus, setCameraView, dateControl }: PhraseProgressProps) {
+export function PhraseProgress({ view, focus, setCameraView, dateControl, options, onOptions, narrow }: PhraseProgressProps) {
   if (view.movementSessions === 0) {
     return (
       <EmptyState
@@ -85,9 +90,12 @@ export function PhraseProgress({ view, focus, setCameraView, dateControl }: Phra
                     <span className="t-small" style={{ fontWeight: 600 }}>
                       {panel.info.label}
                     </span>
-                    {focus.includes(panel.key) ? <span className="tag">My focus</span> : <span className="tag">{panel.info.unit}</span>}
+                    <span style={{ display: 'inline-flex', gap: 6, alignItems: 'center' }}>
+                      {focus.includes(panel.key) ? <span className="tag">My focus</span> : <span className="tag">{panel.info.unit}</span>}
+                      <ExpandChart panel={{ ...panel, title: panel.info.label }} sessions={view.sessions} options={options} onOptions={onOptions} narrow={narrow} />
+                    </span>
                   </figcaption>
-                  <ProgressChart panel={panel} sessions={view.sessions} />
+                  <ProgressChart panel={panel} sessions={view.sessions} options={options} />
                   <p className="t-small muted">{panel.summary}</p>
                 </figure>
               ))}
@@ -99,7 +107,7 @@ export function PhraseProgress({ view, focus, setCameraView, dateControl }: Phra
               })}
           </div>
           <p className="t-caption">
-            Phrase themes are only charted against other phrase attempts. The median uses values with medium or high confidence; a cross is an attempt
+            Phrase themes are only charted against other phrase attempts. The median leaves out values with low camera visibility; a cross is an attempt
             without a value, never counted as 0.
           </p>
         </>

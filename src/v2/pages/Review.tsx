@@ -46,7 +46,9 @@ import './review/review.css'
 import { SyncedStage } from './review/SyncedStage'
 import { buildTrace, countBands, niceMax, seriesEnd, traceMax, trackingBands, trunkAt, visibilityAt } from './review/timeline'
 import { BandLayer, PhaseRibbon, ScrubTrack, TimeAxis, TraceLayer, TraceTrack, TrackingReadout, TrunkReadout } from './review/Tracks'
-import { Switch, Transport } from './review/Transport'
+import { ShowSwitch, showsSkeleton, showsVideo, Switch, Transport, type StageShow } from './review/Transport'
+import { GuideToggles } from './review/GuideToggles'
+import type { GuideKey } from './review/guides'
 import { countRender, useClockValue, useTransportKeys } from './review/useClock'
 import type { PhraseResult } from '../../metrics/phrase'
 import { saveFocus, useFocusThemes } from '../focus'
@@ -144,7 +146,8 @@ function Workspace({ attempt, series, attempts }: WorkspaceProps) {
   const simple = useViewMode() === 'simple'
   const clip = useAttemptVideo(attempt)
   const [videoFailed, setVideoFailed] = useState(false)
-  const [skeletonOn, setSkeletonOn] = useState(true)
+  const [show, setShow] = useState<StageShow>('both')
+  const [guides, setGuides] = useState<GuideKey[]>([])
   const [loopOn, setLoopOn] = useState(false)
 
   const usable = series !== null && series.frames.length > 0
@@ -455,7 +458,9 @@ function Workspace({ attempt, series, attempts }: WorkspaceProps) {
       src={src}
       role="lead"
       phases={phases}
-      showSkeleton={skeletonOn}
+      showSkeleton={showsSkeleton(show) || !src}
+      showVideo={showsVideo(show)}
+      guides={guides}
       privacy={clip?.remote ? 'Backed up · only you can see it' : undefined}
       ariaLabel={`Tracked pose skeleton of ${attemptName(attempt).toLowerCase()}${src ? ', drawn over the video' : ', shown without the video'}`}
       onVideoError={() => setVideoFailed(true)}
@@ -500,7 +505,7 @@ function Workspace({ attempt, series, attempts }: WorkspaceProps) {
     </Alert>
   )
 
-  const transport = (
+  const transportBar = (
     <Transport clock={clock} narrow={narrow}>
       <Switch
         label={narrow ? 'Loop' : 'Loop phase'}
@@ -510,8 +515,14 @@ function Workspace({ attempt, series, attempts }: WorkspaceProps) {
         title={phases.length === 0 ? 'No phases were found in this clip' : 'Repeat the phase under the playhead'}
         onChange={setLoopOn}
       />
-      <Switch label="Skeleton" checked={skeletonOn} onChange={setSkeletonOn} />
+      <ShowSwitch value={show} onChange={setShow} hasVideo={src !== null} dense={narrow} />
     </Transport>
+  )
+  const transport = (
+    <>
+      {transportBar}
+      <GuideToggles value={guides} onChange={setGuides} />
+    </>
   )
 
   const timelines = (
@@ -615,14 +626,14 @@ function Timelines({ clock, series, phases, duration, narrow, noPhaseReason, det
       : [
           `${tracked} of ${count.totalFrames} frames tracked`,
           count.gapFrames > 0 ? `${count.gapFrames} without tracking` : null,
-          count.lowFrames > 0 ? `${count.lowFrames} with low confidence` : null,
+          count.lowFrames > 0 ? `${count.lowFrames} with low camera visibility` : null,
         ]
           .filter(Boolean)
           .join(' · ')
   const bandWords = bands.length
     ? bands
         .slice(0, 6)
-        .map((b) => `${b.kind === 'gap' ? 'no tracking' : 'low confidence'} from ${formatTimecode(b.start)} to ${formatTimecode(b.end)}`)
+        .map((b) => `${b.kind === 'gap' ? 'no tracking' : 'low camera visibility'} from ${formatTimecode(b.start)} to ${formatTimecode(b.end)}`)
         .join('; ') + (bands.length > 6 ? `; and ${bands.length - 6} more stretches` : '')
     : 'tracked throughout'
 
@@ -673,7 +684,7 @@ function Timelines({ clock, series, phases, duration, narrow, noPhaseReason, det
           {count.lowFrames > 0 && (
             <>
               <span className="v2-rev-key" aria-hidden="true" />
-              low confidence (mean joint visibility under 0.6){' '}
+              low camera visibility (mean joint visibility under 0.6){' '}
             </>
           )}
           {(count.gapFrames > 0 || count.lowFrames > 0) && '— shown as they are, never filled in.'}

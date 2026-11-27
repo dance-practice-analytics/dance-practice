@@ -12,13 +12,15 @@ export interface ModalProps {
   sheet?: boolean
   /** While true, Escape and the scrim don't close it. */
   busy?: boolean
+  /** A plain dialog (e.g. an enlarged chart) instead of a confirmation, up to this width in px. */
+  wide?: number
   onClose(): void
   children: ReactNode
 }
 
 const FOCUSABLE = 'a[href],button:not([disabled]),input:not([disabled]),select:not([disabled]),textarea:not([disabled])'
 
-export function Modal({ labelledBy, describedBy, sheet, busy, onClose, children }: ModalProps) {
+export function Modal({ labelledBy, describedBy, sheet, busy, wide, onClose, children }: ModalProps) {
   const box = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
@@ -59,7 +61,8 @@ export function Modal({ labelledBy, describedBy, sheet, busy, onClose, children 
       <div
         ref={box}
         className="dialog v2-set-dialog"
-        role="alertdialog"
+        role={wide ? 'dialog' : 'alertdialog'}
+        style={wide && !sheet ? { maxWidth: wide } : undefined}
         aria-modal="true"
         aria-labelledby={labelledBy}
         aria-describedby={describedBy}

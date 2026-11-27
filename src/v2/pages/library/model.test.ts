@@ -63,7 +63,7 @@ describe('buildLibrary', () => {
     expect(s01.summary).toBe('3 clips · 2 sessions')
     expect(s01.sessions.map((b) => b.title)).toEqual(['Relevé balance · Session 2', 'Relevé balance · Session 1'])
     expect(s01.sessions[0].meta).toBe('Nov 4 · side view · 2 attempts')
-    expect(s01.status).toEqual({ status: 'done', text: '3 done · 1 low confidence · 1 no tracking' })
+    expect(s01.status).toEqual({ status: 'done', text: '3 done · 1 low camera visibility · 1 no tracking' })
     expect(m.groups[1].status).toEqual({ status: 'failed', text: '1 failed' })
     expect(m.groups[2].code).toBeNull()
     expect(m.groups[2].status).toEqual({ status: 'queued', text: '1 queued' })

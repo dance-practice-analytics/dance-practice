@@ -204,7 +204,7 @@ export function TraceTrack({ clock, duration, ariaLabel, height = 52, children, 
 
 const BAND_TITLES: Record<Band['kind'], string> = {
   gap: 'No tracking',
-  low: 'Low confidence',
+  low: 'Low camera visibility',
   trimmed: 'Not processed (outside the trim)',
 }
 
@@ -303,7 +303,7 @@ export function TrunkReadout({ clock, series, toLocal }: { clock: Clock; series:
   }
   return (
     <span className="t-small num" style={r.low ? READ_WEAK : READ_STRONG}>
-      {formatNumber(r.v, 1)}°{r.low ? ' · low confidence' : ''}
+      {formatNumber(r.v, 1)}°{r.low ? ' · low camera visibility' : ''}
     </span>
   )
 }
@@ -322,7 +322,7 @@ export function TrackingReadout({ clock, series }: { clock: Clock; series: PoseS
   return (
     <span className="t-small num" style={r.low ? READ_WEAK : READ_STRONG}>
       {formatNumber(r.v, 2)}
-      {r.low ? ' · low confidence' : ''}
+      {r.low ? ' · low camera visibility' : ''}
     </span>
   )
 }

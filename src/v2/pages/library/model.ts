@@ -10,6 +10,7 @@ import type { ProgressPoint, ProgressSeries } from '../../../insights'
 import type { AttemptView } from '../../data'
 import { phraseOf, readTheme, THEME_KEYS } from '../phrase/model'
 import {
+  CONFIDENCE_LABELS,
   METRICS,
   MOVEMENT_LABELS,
   NULL_REASON_TEXT,
@@ -43,7 +44,7 @@ export function viewText(view: CameraView | null): string {
 // ---------- one attempt ----------
 
 /**
- * What a tile says. 'low' = processed, some value has low confidence; 'none' =
+ * What a tile says. 'low' = processed, some value has low camera visibility; 'none' =
  * processed, but no metric has a value. Both are shown hatched, never hidden.
  */
 export type TileKind = 'done' | 'low' | 'none' | 'processing' | 'queued' | 'failed'
@@ -68,7 +69,7 @@ export function tileKind(attempt: AttemptView, live?: LiveStatus): TileKind {
 
 export const TILE_LABEL: Record<TileKind, string> = {
   done: 'Done',
-  low: 'Hard to see',
+  low: CONFIDENCE_LABELS.low,
   none: 'Not seen',
   processing: 'Processing',
   queued: 'Queued',
@@ -216,7 +217,7 @@ export function groupStatus(tiles: readonly Tile[]): GroupStatus {
   }
   if (n.queued > 0) return { status: 'queued', text: `${n.queued} queued` }
   const done = n.done + n.low + n.none
-  const extra = [n.low ? `${n.low} low confidence` : '', n.none ? `${n.none} no tracking` : ''].filter(Boolean)
+  const extra = [n.low ? `${n.low} low camera visibility` : '', n.none ? `${n.none} no tracking` : ''].filter(Boolean)
   return { status: 'done', text: [`${done} done`, ...extra].join(' · ') }
 }
 
@@ -350,7 +351,7 @@ export function mobileRowStatus(block: SessionBlock): GroupStatus {
   if (n.processing > 0 || n.queued > 0) {
     return { status: n.processing > 0 ? 'processing' : 'queued', text: `${finished} of ${block.tiles.length} processed · ${view}` }
   }
-  const extra = [n.low ? `${n.low} low confidence` : '', n.none ? `${n.none} no tracking` : ''].filter(Boolean)
+  const extra = [n.low ? `${n.low} low camera visibility` : '', n.none ? `${n.none} no tracking` : ''].filter(Boolean)
   return { status: 'done', text: [plural(block.tiles.length, 'attempt'), ...(extra.length ? extra : [view])].join(' · ') }
 }
 
@@ -484,7 +485,7 @@ export function noValueReason(points: readonly ProgressPoint[]): string | null {
   }
   let best: string | null = null
   for (const [text, n] of tally) if (best === null || n > tally.get(best)!) best = text
-  if (best === null && points.some((p) => p.lowConfidence)) return 'Only low-confidence values, which are not part of the median.'
+  if (best === null && points.some((p) => p.lowConfidence)) return 'Only values with low camera visibility, which are not part of the median.'
   return best
 }
 
@@ -526,7 +527,7 @@ export function buildTrend(focus: Focus, metric: MetricKey, limit = 6, now: Date
   const notes: string[] = []
   for (const p of points) if (p.partial) notes.push(`Session ${p.number} has ${p.processed} of ${plural(p.total, 'attempt')} processed.`)
   const low = points.reduce((n, p) => n + p.lowConfidence, 0)
-  if (low > 0) notes.push(`${plural(low, 'low-confidence value')} not in the medians.`)
+  if (low > 0) notes.push(`${plural(low, 'value')} with low camera visibility not in the medians.`)
   const otherView = series.excluded.filter((e) => e.reason === 'different_camera_view' || e.reason === 'unknown_camera_view')
   if (otherView.length) notes.push(`${plural(otherView.length, 'session')} ${exclusionText(otherView[0].reason).replace(/^Not shown/, 'not shown')}.`)
 

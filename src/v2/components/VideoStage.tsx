@@ -102,8 +102,12 @@ export interface VideoStageProps {
   transparent?: boolean
   /** Opacity of the video only (the skeleton stays fully drawn). Default 1. */
   videoOpacity?: number
+  /** False hides the picture but keeps the video playing (it may be keeping time); the studio floor shows instead. */
+  showVideo?: boolean
   /** Drawn over the video and under this stage's skeleton (A's layer in Compare's overlay). */
   underlay?: ReactNode
+  /** Drawn over the skeleton, under the pills (the angle guides). */
+  overlay?: ReactNode
   /** Text for the missing-tracking pill. */
   noTrackingLabel?: string
   /** Accessible description of the overlay. */
@@ -132,7 +136,9 @@ export function VideoStage(props: VideoStageProps) {
     tone = 'main',
     transparent = false,
     videoOpacity = 1,
+    showVideo = true,
     underlay,
+    overlay,
     noTrackingLabel = 'No tracking',
     ariaLabel,
     placeholder,
@@ -160,7 +166,7 @@ export function VideoStage(props: VideoStageProps) {
         ...style,
       }}
     >
-      {src ? (
+      {src && (
         <video
           {...videoProps}
           ref={videoRef}
@@ -168,9 +174,21 @@ export function VideoStage(props: VideoStageProps) {
           muted
           playsInline
           preload="auto"
-          style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'contain', background: transparent ? 'transparent' : 'var(--stage, #070E24)', opacity: videoOpacity }}
+          aria-hidden={showVideo ? undefined : true}
+          style={{
+            position: 'absolute',
+            inset: 0,
+            width: '100%',
+            height: '100%',
+            objectFit: 'contain',
+            background: transparent ? 'transparent' : 'var(--stage, #070E24)',
+            opacity: videoOpacity,
+            // Hidden, not removed: a hidden lead video still keeps the clock's time.
+            visibility: showVideo ? undefined : 'hidden',
+          }}
         />
-      ) : transparent ? null : (
+      )}
+      {(!src || !showVideo) && !transparent && (
         // The studio floor of the design, behind a skeleton shown without its video.
         <>
           <div aria-hidden="true" style={{ position: 'absolute', left: 0, right: 0, bottom: 0, height: '24%', background: 'var(--stage-2, #101B3F)' }} />
@@ -191,6 +209,8 @@ export function VideoStage(props: VideoStageProps) {
           {pose && <Skeleton landmarks={pose} w={w} h={h} ghost={tone === 'ghost'} />}
         </svg>
       )}
+
+      {overlay}
 
       {!src && !pose && !ghost && placeholder && (
         <div style={{ position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 16, textAlign: 'center' }}>

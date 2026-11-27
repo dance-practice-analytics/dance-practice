@@ -98,7 +98,7 @@ describe('neutral differences', () => {
     expect(d.delta).toBeNull()
     expect(d.sentence).toBe('Not compared: no value in B.')
     const low = compareThemes(result({ neck_range: 40 }, { level: 'low' }), result({ neck_range: 46 }))
-    expect(low.find((r) => r.key === 'neck_range')!.sentence).toMatch(/low confidence/)
+    expect(low.find((r) => r.key === 'neck_range')!.sentence).toMatch(/low camera visibility/)
   })
 })
 

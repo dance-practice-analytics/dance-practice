@@ -12,7 +12,8 @@ import { compactGapReason, isCompactGap, METRICS, MOVEMENT_LABELS, VIEW_LABELS, 
 import { href } from '../router'
 import { useIsNarrow } from '../useIsNarrow'
 import { ProgressChart, ProgressLegend } from './progress/ProgressChart'
-import { buildProgress, DATE_RANGES, defaultMovement, tableRows, type DateRange, type MetricPanel, type ProgressView } from './progress/model'
+import { ChartOptionsControl, ExpandChart } from './progress/ChartTools'
+import { buildProgress, DATE_RANGES, defaultMovement, tableRows, type ChartOptions, type DateRange, type MetricPanel, type ProgressView } from './progress/model'
 import './progress/progress.css'
 import { useFocusThemes } from '../focus'
 import { PhraseProgress } from './progress/PhraseProgress'
@@ -30,6 +31,8 @@ export function Progress() {
   const [from, setFrom] = useState('')
   const [to, setTo] = useState('')
   const [tableMetric, setTableMetric] = useState<MetricKey | null>(null)
+  // Axis options for every chart on the page (display only).
+  const [chartOptions, setChartOptions] = useState<ChartOptions>({ y: 'zero', x: 'sessions' })
 
   const data = library.data
   const movement = pickedMovement ?? defaultMovement(data?.sessions ?? [])
@@ -88,7 +91,15 @@ export function Progress() {
           view={phraseView}
           focus={focus.themes}
           setCameraView={setCameraView}
-          dateControl={<DateControl range={range} setRange={setRange} from={from} to={to} setFrom={setFrom} setTo={setTo} />}
+          dateControl={
+            <>
+              <DateControl range={range} setRange={setRange} from={from} to={to} setFrom={setFrom} setTo={setTo} />
+              <ChartOptionsControl value={chartOptions} onChange={setChartOptions} />
+            </>
+          }
+          options={chartOptions}
+          onOptions={setChartOptions}
+          narrow={narrow}
         />
       ) : view && data ? (
         <ProgressBody
@@ -102,6 +113,9 @@ export function Progress() {
           setCameraView={setCameraView}
           tableMetric={tableMetric && view.panels.some((p) => p.key === tableMetric) ? tableMetric : (view.panels[0]?.key ?? null)}
           setTableMetric={setTableMetric}
+          options={chartOptions}
+          onOptions={setChartOptions}
+          narrow={narrow}
           reviewHref={(sessionId) => {
             const latest = latestProcessed(data.attempts.filter((a) => a.session_id === sessionId))
             return latest ? href({ name: 'review', attemptId: latest.id }) : href({ name: 'library', sessionId })
@@ -124,10 +138,13 @@ interface BodyProps {
   tableMetric: MetricKey | null
   setTableMetric(k: MetricKey): void
   reviewHref(sessionId: string): string
+  options: ChartOptions
+  onOptions(o: ChartOptions): void
+  narrow: boolean
 }
 
 function ProgressBody(props: BodyProps) {
-  const { view, range, setRange, from, to, setFrom, setTo, setCameraView, tableMetric, setTableMetric, reviewHref } = props
+  const { view, range, setRange, from, to, setFrom, setTo, setCameraView, tableMetric, setTableMetric, reviewHref, options, onOptions, narrow } = props
   const movementName = MOVEMENT_LABELS[view.movement]
   const filtered = range !== 'all'
   const clearDates = () => setRange('all')
@@ -207,6 +224,7 @@ function ProgressBody(props: BodyProps) {
             </label>
           </>
         )}
+        <ChartOptionsControl value={options} onChange={onOptions} />
       </div>
 
       {view.sessions.length === 0 ? (
@@ -255,9 +273,18 @@ function ProgressBody(props: BodyProps) {
                   <span className="t-small" style={{ fontWeight: 600 }}>
                     {panel.series.info.label}
                   </span>
-                  {panel.phaseLabel && <span className="tag">{panel.phaseLabel}</span>}
+                  <span style={{ display: 'inline-flex', gap: 6, alignItems: 'center' }}>
+                    {panel.phaseLabel && <span className="tag">{panel.phaseLabel}</span>}
+                    <ExpandChart
+                      panel={{ ...panel, key: panel.key, title: panel.series.info.label }}
+                      sessions={view.sessions}
+                      options={options}
+                      onOptions={onOptions}
+                      narrow={narrow}
+                    />
+                  </span>
                 </figcaption>
-                <ProgressChart panel={panel} sessions={view.sessions} />
+                <ProgressChart panel={panel} sessions={view.sessions} options={options} />
                 <p className="t-small muted">{panel.summary}</p>
               </figure>
             ))}
@@ -347,7 +374,7 @@ function ProgressBody(props: BodyProps) {
                 </table>
               </div>
               <p className="t-caption" style={{ padding: '10px 16px 14px' }}>
-                The median uses values with medium or high confidence. A dash is an attempt without a value; it is never counted as 0.
+                The median leaves out values with low camera visibility. A dash is an attempt without a value; it is never counted as 0.
               </p>
             </section>
           )}

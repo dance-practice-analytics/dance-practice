@@ -80,7 +80,7 @@ export const STATUS_LABELS: Record<AttemptStatus | 'cancelled', string> = {
 export const CONFIDENCE_LABELS: Record<ConfidenceLevel | 'none', string> = {
   high: 'Clear view',
   medium: 'Partly hidden',
-  low: 'Hard to see',
+  low: 'Low camera visibility',
   none: 'Not seen',
 }
 
@@ -126,7 +126,7 @@ export function isCompactGap(reason: string | null | undefined): boolean {
 export const METRIC_NOTE_TEXT: Record<MetricNote, string> = {
   left_right_swap_corrected: 'A left/right swap in the tracking was corrected.',
   tracking_lost_in_turn: 'Tracking was lost for part of the turn; rotation in that gap isn’t counted.',
-  depth_limited: 'Where the feet point depends on depth, which one camera can’t measure reliably, so this is always low confidence: read it as rough.',
+  depth_limited: 'Where the feet point depends on depth, which one camera can’t see reliably, so it is always marked low camera visibility: read it as rough.',
 }
 
 /** Remarks about the clip as a whole (`confidence[metric].clip_notes`), in neutral words. */

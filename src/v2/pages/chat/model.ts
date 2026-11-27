@@ -21,7 +21,7 @@ export interface SharedRow {
   /** '4.2° · attempt 2: 6.3°', '5 attempts · median 5.6°' or the reason for a gap. */
   value: string
   confidence: Confidence
-  /** Low confidence or no value: shown subdued. */
+  /** Low camera visibility or no value: shown subdued. */
   subdued: boolean
 }
 
@@ -65,7 +65,7 @@ function phraseChatContext(attempt: AttemptView, all: readonly AttemptView[], sc
         const b = readTheme(before, k, view)
         parts.push(`attempt ${prev.number}: ${b.value === null ? '—' : unit(b, b.text)}`)
       }
-      if (r.confidence === 'low') parts.push('flagged low')
+      if (r.confidence === 'low') parts.push('low camera visibility')
       return {
         key: k,
         name: focus.includes(k) ? `${r.info.label} · focus` : r.info.label,
@@ -93,7 +93,7 @@ function phraseChatContext(attempt: AttemptView, all: readonly AttemptView[], sc
     const m = median(usable.map((c) => c.value as number))
     const first = usable[0]
     parts.push(m === null || !first ? 'no values' : `median ${unit(first, formatNumber(m, first.info.decimals))}`)
-    if (low) parts.push(`${low} flagged low`)
+    if (low) parts.push(`${low} with low camera visibility`)
     return {
       key: k,
       name: focus.includes(k) ? `${THEMES[k].label} · focus` : THEMES[k].label,
@@ -106,7 +106,7 @@ function phraseChatContext(attempt: AttemptView, all: readonly AttemptView[], sc
   return {
     rows,
     valueCount: rows.filter((r) => r.confidence !== 'none').length,
-    note: `Theme values for ${session.length === 1 ? 'the one analyzed attempt' : `all ${session.length} analyzed attempts`} in this session, with their confidence.`,
+    note: `Theme values for ${session.length === 1 ? 'the one analyzed attempt' : `all ${session.length} analyzed attempts`} in this session, with how well the camera saw them.`,
     phrase: extras,
   }
 }
@@ -136,7 +136,7 @@ export function chatContext(attempt: AttemptView, all: readonly AttemptView[], s
       const earlier = before[i]
       const parts = [r.value === null ? 'Not measured' : formatMetricWithUnit(r.key, r.value)]
       if (prev && earlier) parts.push(`attempt ${prev.number}: ${formatMetricWithUnit(r.key, earlier.value)}`)
-      if (r.confidence === 'low') parts.push('flagged low')
+      if (r.confidence === 'low') parts.push('low camera visibility')
       return {
         key: r.key,
         name: name(r),
@@ -169,14 +169,14 @@ export function chatContext(attempt: AttemptView, all: readonly AttemptView[], s
     )
     const parts = [`${column.length} ${column.length === 1 ? 'attempt' : 'attempts'}`]
     parts.push(values.length ? `median ${formatMetricWithUnit(r.key, median(values))}` : 'no values')
-    if (low) parts.push(`${low} flagged low`)
+    if (low) parts.push(`${low} with low camera visibility`)
     if (missing && values.length) parts.push(`${missing} not measured`)
     return { key: r.key, name: name(r), label: r.def.label, value: parts.join(' · '), confidence: weakest, subdued: weakest === 'none' || weakest === 'low' }
   })
   return {
     rows,
     valueCount: rows.filter((r) => r.confidence !== 'none').length,
-    note: `Values for ${session.length === 1 ? 'the one analyzed attempt' : `all ${session.length} analyzed attempts`} in this session, with their confidence.`,
+    note: `Values for ${session.length === 1 ? 'the one analyzed attempt' : `all ${session.length} analyzed attempts`} in this session, with how well the camera saw them.`,
   }
 }
 
@@ -196,7 +196,7 @@ function phraseQuestions(attempt: AttemptView, all: readonly AttemptView[], focu
     const r = readTheme(mine, k)
     return r.value !== null && r.confidence === 'low'
   })
-  if (uncertain) out.push(`Why is ${THEMES[uncertain].label.toLowerCase()} uncertain?`)
+  if (uncertain) out.push(`Why does ${THEMES[uncertain].label.toLowerCase()} have low camera visibility?`)
   return out
 }
 
@@ -211,7 +211,7 @@ export function suggestedQuestions(attempt: AttemptView, all: readonly AttemptVi
   const out: string[] = []
   if (prev) out.push(`What changed since attempt ${prev.number}?`)
   out.push('Which phase varied most?', 'What could I practise next?')
-  if (low.length) out.push(`Why is ${low[0].def.label.toLowerCase()} low confidence?`)
+  if (low.length) out.push(`Why does ${low[0].def.label.toLowerCase()} have low camera visibility?`)
   else if (missing.length) out.push(`Why is ${missing[0].def.label.toLowerCase()} not measured?`)
   return out
 }

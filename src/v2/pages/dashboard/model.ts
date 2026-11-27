@@ -9,7 +9,7 @@ import type { FeedbackNote } from '../../../feedback/client'
 import { dashboardSummary, localDay } from '../../../insights'
 import type { DashboardSummary } from '../../../insights'
 import type { AttemptView } from '../../data'
-import { METRICS, MOVEMENT_LABELS, formatDate, formatDateTime, formatMetric, metricsFor, readMetrics, type MetricKey } from '../../format'
+import { CONFIDENCE_LABELS, METRICS, MOVEMENT_LABELS, formatDate, formatDateTime, formatMetric, metricsFor, readMetrics, type MetricKey } from '../../format'
 import type { PipelineItem } from '../../pipeline'
 import {
   ONE_SESSION_HINT,
@@ -68,7 +68,7 @@ export function statusLine(tiles: readonly Tile[]): string {
   return [
     done ? `${done} done` : '',
     n.none ? `${n.none} with no tracking` : '',
-    n.low ? `${n.low} low confidence` : '',
+    n.low ? `${n.low} low camera visibility` : '',
     n.processing ? `${n.processing} processing` : '',
     n.queued ? `${n.queued} queued` : '',
     n.failed ? `${n.failed} failed` : '',
@@ -120,7 +120,7 @@ export interface MetricTile {
   /** Low-confidence values exist in the session the value comes from (dashed card). */
   low: boolean
   confidence: TileConfidence
-  /** 'High' | 'Medium' | 'Mixed' | 'No tracking' */
+  /** CONFIDENCE_LABELS: 'Clear view' | 'Partly hidden' | 'Low camera visibility' | 'Not seen' */
   confidenceLabel: string
   /** Neutral change sentence, or what is still needed; null when there is no value. */
   delta: string | null
@@ -157,7 +157,7 @@ export function metricTiles(focus: Focus, now: Date = new Date()): MetricTiles {
     const note = none
       ? (trend.reason ?? 'No measurements yet.')
       : lowCount > 0
-        ? `${plural(lowCount, 'attempt')} on ${formatDate(source!.date, now)} had low confidence and ${lowCount === 1 ? 'is' : 'are'} not in the median.`
+        ? `${plural(lowCount, 'attempt')} on ${formatDate(source!.date, now)} had low camera visibility and ${lowCount === 1 ? 'is' : 'are'} not in the median.`
         : trend.reason
           ? `Latest session has no value. ${trend.reason}`
           : null
@@ -169,7 +169,7 @@ export function metricTiles(focus: Focus, now: Date = new Date()): MetricTiles {
       none,
       low: !none && lowCount > 0,
       confidence,
-      confidenceLabel: { high: 'Clear view', medium: 'Partly hidden', low: 'Mixed view', none: 'Not seen' }[confidence],
+      confidenceLabel: CONFIDENCE_LABELS[confidence],
       delta: none ? null : single ? ONE_SESSION_HINT : prettyDates(trend.series.change.text, now),
       note,
       single,
@@ -351,7 +351,7 @@ export function attentionReason(attempt: AttemptView, kind: TileKind): string {
   const readings = readMetrics(attempt.metrics, attempt.session.movement_type)
   if (kind === 'none') return readings.find((r) => r.reason)?.reason ?? 'No metric has a value for this clip.'
   const low = readings.filter((r) => r.confidence === 'low').map((r) => r.def.label)
-  return `Low tracking confidence: ${low.join(', ')}.`
+  return `Low camera visibility: ${low.join(', ')}.`
 }
 
 /** Failed clips first, then finished clips with no tracking or low confidence; newest first inside each. */

@@ -23,7 +23,7 @@ describe('chatContext', () => {
       ['Torso lean · Hold', '4.2° · attempt 1: 6.3°', 'high'],
       ['Hips over your foot · Hold', '6% · attempt 1: 10%', 'medium'],
       ['Time on relevé · Hold', '3.4 s · attempt 1: 2.6 s', 'high'],
-      ['Knee over toes · Hold', '8.7° · attempt 1: 8.1° · flagged low', 'low'],
+      ['Knee over toes · Hold', '8.7° · attempt 1: 8.1° · low camera visibility', 'low'],
     ])
     expect(c.rows[3].subdued).toBe(true)
     expect(c.valueCount).toBe(4)
@@ -43,9 +43,9 @@ describe('chatContext', () => {
       ['3 attempts · median 5.3° · 1 not measured', 'high'],
       ['3 attempts · median 8% · 1 not measured', 'medium'],
       ['3 attempts · median 3.0 s · 1 not measured', 'high'],
-      ['3 attempts · median 8.4° · 1 flagged low · 1 not measured', 'low'],
+      ['3 attempts · median 8.4° · 1 with low camera visibility · 1 not measured', 'low'],
     ])
-    expect(c.note).toBe('Values for all 3 analyzed attempts in this session, with their confidence.')
+    expect(c.note).toBe('Values for all 3 analyzed attempts in this session, with how well the camera saw them.')
   })
 })
 
@@ -64,7 +64,7 @@ describe('suggestedQuestions', () => {
       'What changed since attempt 1?',
       'Which phase varied most?',
       'What could I practise next?',
-      'Why is knee over toes low confidence?',
+      'Why does knee over toes have low camera visibility?',
     ])
     expect(suggestedQuestions(a1, all)).toEqual(['Which phase varied most?', 'What could I practise next?'])
     expect(suggestedQuestions(gaps, all)[3]).toBe('Why is torso lean not measured?')

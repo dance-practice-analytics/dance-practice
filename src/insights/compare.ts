@@ -100,7 +100,7 @@ export function differenceSentence(metric: MetricKey, difference: number, labels
   return text === null ? NO_DIFFERENCE_TEXT : `${labels.b} is ${text}`
 }
 
-/** 'Not compared: tracking was low in B'. About the recording, never the dancer. */
+/** 'Not compared: camera visibility was low in B'. About the recording, never the dancer. */
 export function notComparedSentence(reason: NotCompared, labels: PairLabels = DEFAULT_LABELS): string {
   const one = reason.side === 'a' ? labels.a : labels.b
   const both = reason.side === 'both'
@@ -114,7 +114,7 @@ export function notComparedSentence(reason: NotCompared, labels: PairLabels = DE
     case 'no_value':
       return both ? `Not compared: no value in ${labels.a} or ${labels.b}` : `Not compared: no value in ${one}`
     case 'low_confidence':
-      return both ? `Not compared: tracking was low in ${labels.a} and ${labels.b}` : `Not compared: tracking was low in ${one}`
+      return both ? `Not compared: camera visibility was low in ${labels.a} and ${labels.b}` : `Not compared: camera visibility was low in ${one}`
   }
 }
 

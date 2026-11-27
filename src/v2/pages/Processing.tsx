@@ -595,7 +595,7 @@ function PreviewCard({ attemptId, attempt, show, narrow, running, onShow }: Prev
             </dd>
             <dt className="muted">Phases found</dt>
             <dd style={{ margin: 0 }}>{phaseNames === null ? '…' : phaseNames.length > 0 ? phaseNames.join(', ') : 'none'}</dd>
-            <dt className="muted">Low-confidence frames</dt>
+            <dt className="muted">Frames with low camera visibility</dt>
             <dd style={{ margin: 0 }} className="num">
               {facts.lowConfidence}
               {facts.weakest ? ` · ${facts.weakest}` : ''}

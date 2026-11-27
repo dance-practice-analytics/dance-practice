@@ -120,6 +120,42 @@ export function Transport({ clock, narrow, children }: TransportProps) {
   )
 }
 
+/** What the stage shows: the video with the skeleton over it (default), the video alone, or the skeleton alone. */
+export type StageShow = 'both' | 'video' | 'skeleton'
+
+export const showsVideo = (s: StageShow) => s !== 'skeleton'
+export const showsSkeleton = (s: StageShow) => s !== 'video'
+
+const SHOW_LABELS: Record<StageShow, string> = { both: 'Both', video: 'Video', skeleton: 'Skeleton' }
+
+/**
+ * Both · Video · Skeleton. Hiding the video keeps it playing underneath (it still keeps time);
+ * 'Video' is disabled when the clip isn't on this device, since there would be nothing to show.
+ */
+export function ShowSwitch({ value, onChange, hasVideo, dense }: { value: StageShow; onChange(next: StageShow): void; hasVideo: boolean; dense?: boolean }) {
+  return (
+    <div className="seg" role="group" aria-label="Show on the stage">
+      {(['both', 'video', 'skeleton'] as const).map((s) => {
+        const off = s === 'video' && !hasVideo
+        return (
+          <button
+            key={s}
+            type="button"
+            className={value === s ? 'on' : undefined}
+            aria-pressed={value === s}
+            disabled={off}
+            title={off ? 'The video isn’t on this device' : s === 'both' ? 'Video with the skeleton over it' : `${SHOW_LABELS[s]} only`}
+            style={{ ...(dense ? { padding: '0 9px', height: 40 } : null), ...(off ? { opacity: 0.5, cursor: 'not-allowed' } : null) }}
+            onClick={() => onChange(s)}
+          >
+            {SHOW_LABELS[s]}
+          </button>
+        )
+      })}
+    </div>
+  )
+}
+
 /** `.switch` with its label, as in the design's "Loop phase". */
 export function Switch({ label, ariaLabel, checked, onChange, disabled, title }: { label: string; ariaLabel?: string; checked: boolean; onChange(next: boolean): void; disabled?: boolean; title?: string }) {
   return (

@@ -42,9 +42,11 @@ import type { CameraView } from '../../data/schema'
 import { isSampleAttempt } from '../sampleMarkers'
 import './review/review.css'
 import { SyncedStage } from './review/SyncedStage'
+import { GuideToggles } from './review/GuideToggles'
+import type { GuideKey } from './review/guides'
 import { buildTrace, niceMax, seriesEnd, traceMax, trackingBands, trunkAt } from './review/timeline'
 import { BandLayer, PhaseRibbon, ScrubTrack, TimeAxis, TraceLayer, TraceTrack, TrunkReadout } from './review/Tracks'
-import { PlayButton, SpeedControl, StepButton } from './review/Transport'
+import { PlayButton, ShowSwitch, showsSkeleton, showsVideo, SpeedControl, StepButton, type StageShow } from './review/Transport'
 import { countRender, useClockValue, useTransportKeys } from './review/useClock'
 
 const NO_PHASES: readonly PhaseSpan[] = []
@@ -310,6 +312,8 @@ function Workspace({ a, b, seriesA, seriesB, attempts, pickers, eyebrow, backHre
   const [asked, setAsked] = useState<AlignMode>('phases')
   const [mode, setMode] = useState<StageMode>('overlay')
   const [layout, setLayout] = useState<Layout>('side')
+  const [show, setShow] = useState<StageShow>('both')
+  const [guides, setGuides] = useState<GuideKey[]>([])
   // Overlay: how opaque A's video is over B's, and whether A's picture is moved onto B's body.
   const [blend, setBlend] = useState(0.5)
   const [lineUp, setLineUp] = useState(false)
@@ -394,6 +398,9 @@ function Workspace({ a, b, seriesA, seriesB, attempts, pickers, eyebrow, backHre
   // covers B's picture point for point and lining up lands where it should.
   const ratioB = sB && sB.width > 0 && sB.height > 0 ? sB.width / sB.height : 16 / 9
   const overlayStyle = { maxWidth: `calc(${maxStage} * ${ratioB.toFixed(4)})`, marginInline: 'auto' }
+  // Both · Video · Skeleton, for every stage and layer at once. A stage without its video always shows its skeleton.
+  const videoOn = showsVideo(show)
+  const skeletonOn = (src: string | null) => showsSkeleton(show) || src === null
   // "Choose the file again" sits on each stage; when A's stage is hidden (phone, B or
   // Overlay mode) B's stage asks for A's file too.
   const missingA = !clipA ? [{ attempt: a, name: 'A' }] : []
@@ -406,6 +413,9 @@ function Workspace({ a, b, seriesA, seriesB, attempts, pickers, eyebrow, backHre
       src={srcA}
       role="lead"
       phases={phasesA}
+      showSkeleton={skeletonOn(srcA)}
+      showVideo={videoOn}
+      guides={guides}
       label={`A · ${attemptName(a)}`}
       view={view(a)}
       privacy={clipA?.remote ? 'Backed up · only you can see it' : undefined}
@@ -438,6 +448,8 @@ function Workspace({ a, b, seriesA, seriesB, attempts, pickers, eyebrow, backHre
         tone="ghost"
         transparent
         videoOpacity={blend}
+        showSkeleton={skeletonOn(srcA)}
+        showVideo={videoOn}
         ariaLabel={`Tracked pose skeleton of A, ${attemptName(a).toLowerCase()}, dashed${srcA ? `, with its video at ${Math.round(blend * 100)}% over B’s` : ''}${lined ? ', moved onto B’s body' : ''}`}
         onVideoError={() => setFailed((f) => ({ ...f, a: true }))}
         style={{ height: '100%', aspectRatio: 'auto', borderRadius: 0 }}
@@ -455,6 +467,9 @@ function Workspace({ a, b, seriesA, seriesB, attempts, pickers, eyebrow, backHre
       slopeAt={map.slopeAt}
       ghost={ghostOnB && sA ? { series: sA } : null}
       underlay={layerA}
+      showSkeleton={skeletonOn(srcB)}
+      showVideo={videoOn}
+      guides={guides}
       phases={phasesB}
       label={
         overlayOn
@@ -558,15 +573,23 @@ function Workspace({ a, b, seriesA, seriesB, attempts, pickers, eyebrow, backHre
         }
         narrow={narrow}
       />
-      {!narrow && (
-        <div className="seg" role="group" aria-label="Video layout" style={{ alignSelf: 'flex-start' }}>
-          {(['side', 'overlay'] as const).map((l) => (
-            <button key={l} type="button" className={layout === l ? 'on' : undefined} aria-pressed={layout === l} onClick={() => setLayout(l)}>
-              {l === 'side' ? 'Side by side' : 'Overlay'}
-            </button>
-          ))}
-        </div>
-      )}
+      <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap', alignItems: 'center' }}>
+        {!narrow && (
+          <div className="seg" role="group" aria-label="Video layout">
+            {(['side', 'overlay'] as const).map((l) => (
+              <button key={l} type="button" className={layout === l ? 'on' : undefined} aria-pressed={layout === l} onClick={() => setLayout(l)}>
+                {l === 'side' ? 'Side by side' : 'Overlay'}
+              </button>
+            ))}
+          </div>
+        )}
+        <ShowSwitch value={show} onChange={setShow} hasVideo={srcA !== null || srcB !== null} dense={narrow} />
+      </div>
+      <GuideToggles
+        value={guides}
+        onChange={setGuides}
+        note={guides.length > 0 && overlayOn ? 'In Overlay the angles are drawn for B; switch to side by side to see them on both.' : undefined}
+      />
       {narrow || overlayOn ? (
         <>
           {stageA}
@@ -583,6 +606,7 @@ function Workspace({ a, b, seriesA, seriesB, attempts, pickers, eyebrow, backHre
           blend={blend}
           onBlend={setBlend}
           hasVideoA={srcA !== null}
+          videoHidden={!videoOn}
           lineUp={lineUp}
           onLineUp={setLineUp}
           unavailable={typeof match === 'string' ? MATCH_UNAVAILABLE_TEXT[match] : null}
@@ -645,6 +669,8 @@ interface OverlayControlsProps {
   blend: number
   onBlend(v: number): void
   hasVideoA: boolean
+  /** "Skeleton" is picked: the videos are hidden, so there is nothing to make see-through. */
+  videoHidden: boolean
   lineUp: boolean
   onLineUp(v: boolean): void
   /** Why the bodies can't be lined up, or null when they can. */
@@ -653,7 +679,7 @@ interface OverlayControlsProps {
 }
 
 /** The transparency of A's video over B's, and the optional line-up. Both skeletons stay drawn. */
-function OverlayControls({ blend, onBlend, hasVideoA, lineUp, onLineUp, unavailable, narrow }: OverlayControlsProps) {
+function OverlayControls({ blend, onBlend, hasVideoA, videoHidden, lineUp, onLineUp, unavailable, narrow }: OverlayControlsProps) {
   const pct = Math.round(blend * 100)
   return (
     <section className="card v2-cmp-overlay" aria-label="Overlay settings" style={{ padding: narrow ? 12 : '12px 16px', display: 'flex', flexDirection: 'column', gap: 10 }}>
@@ -671,7 +697,7 @@ function OverlayControls({ blend, onBlend, hasVideoA, lineUp, onLineUp, unavaila
           max={100}
           step={5}
           value={pct}
-          disabled={!hasVideoA}
+          disabled={!hasVideoA || videoHidden}
           aria-valuetext={blendText(blend)}
           onChange={(e) => onBlend(Number(e.target.value) / 100)}
           style={{ flex: 1, minWidth: 0, accentColor: 'var(--series-b)' }}
@@ -688,9 +714,11 @@ function OverlayControls({ blend, onBlend, hasVideoA, lineUp, onLineUp, unavaila
         Line up the bodies
       </label>
       <p className="t-caption">
-        {hasVideoA
-          ? 'A’s video sits on top of B’s at the same aligned moment; slide to make it more or less see-through. '
-          : 'A’s video isn’t on this device, so only its skeleton is drawn over B. '}
+        {!hasVideoA
+          ? 'A’s video isn’t on this device, so only its skeleton is drawn over B. '
+          : videoHidden
+            ? 'Videos are hidden (Skeleton is picked above), so only the skeletons are stacked. '
+            : 'A’s video sits on top of B’s at the same aligned moment; slide to make it more or less see-through. '}
         A’s skeleton is dashed, B’s is solid.{' '}
         {unavailable ??
           'Lining up moves and scales A’s whole picture once, so its hips and torso sit on B’s; A’s own movement is unchanged.'}
@@ -829,7 +857,7 @@ function Timelines({ clock, a, b, sA, sB, durA, phasesA, phasesB, map, asked, na
         {gaps ? (
           <>
             <span className="v2-rev-key" aria-hidden="true" />
-            Hatched: frames with no or low-confidence tracking (A in the top half, B in the bottom half), shown as they are.
+            Hatched: frames with no tracking or low camera visibility (A in the top half, B in the bottom half), shown as they are.
           </>
         ) : (
           'Both clips are tracked in every frame.'

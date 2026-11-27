@@ -322,7 +322,7 @@ themes (`left_right_labels_uncertain`) and mark events `side_uncertain`.
   name without one defaults to the last movement imported, else `phrase` (listed first).
 - Phone: `PhraseTimeline compact` has 44 px events (at least 24 px wide), a 56 px label
   column and three axis labels; theme cards are one per row under 420 px. Library tiles
-  read a phrase's themes for "Done / Hard to see / Not seen" (`tileKind`); the Library
+  read a phrase's themes for "Done / Low camera visibility / Not seen" (`tileKind`); the Library
   trend card is relevé / pirouette only.
 - Compare on a phone (relevé, pirouette) adds a phase list under the ribbons (A and B
   lengths, tap to seek), since short phases are only slivers on the shared time axis.
@@ -335,6 +335,24 @@ themes (`left_right_labels_uncertain`) and mark events `side_uncertain`.
   length over frames with the trunk seen ≥ 0.6, scale capped 0.5–2), disabled with a reason
   when either clip has no such frame or the clips have different shapes. The overlay
   stage is width-limited to B's exact aspect ratio, so the layer maps point for point.
+- **Both · Video · Skeleton** (`ShowSwitch` in `review/Transport.tsx`, Review transport and
+  Compare toolbar; default Both). Hiding the video sets `showVideo={false}`: the `<video>` stays
+  mounted and playing (it may be the clock's lead) with `visibility: hidden`, and the studio
+  floor shows. A stage without its video always draws its skeleton.
+- **Angles on the video** (`review/guides.ts`, `GuideOverlay.tsx`, `GuideToggles.tsx`; Review and
+  Compare, all off by default): torso lean, head (neck angle), knees over toes (bent knee only),
+  arm reach, parallel feet. Each value is the frame's own value from the measurement's formula
+  on world landmarks (`trunkAt`, `neckAngleDeg`, `signedKneeDev`, clip-median arm length,
+  `feetAngleDeg`), drawn on the picture landmarks through `SyncedStage guides`; knees and feet
+  are dashed and captioned as rough (depth). Compare's overlay draws them for B only.
+- **Progress chart options** (`progress/ChartTools.tsx`): "Y axis: From 0 | Fit to values" and
+  "X axis: Sessions | Attempts" for every chart (`chartGeometry(data, options, dims)`; gridlines
+  from `yRange`, labels from `tickLabel` with the step's decimals), and Expand: a large chart
+  (`CHART_LARGE`, attempt numbers, a from/to session range) in `settings/Modal` (`wide`). Dots have
+  tooltips. Display only: values, medians and change text don't change.
+- Wording: the dancer-facing confidence level is "camera visibility" (`CONFIDENCE_LABELS`: Clear
+  view / Partly hidden / Low camera visibility / Not seen); researcher screens and exports keep
+  "confidence".
 
 ## Shared components (`components/`, import from `'../components'`)
 

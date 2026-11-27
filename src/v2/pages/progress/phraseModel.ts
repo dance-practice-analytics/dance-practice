@@ -1,6 +1,6 @@
 // Progress of phrase attempts (movement 'phrase'): one small chart per theme across the
 // dancer's own sessions, one camera view at a time. Same marks as the relevé charts
-// (chartGeometry): dots, hollow low-confidence values, crosses for gaps, session medians.
+// (chartGeometry): dots, hollow values with low camera visibility, crosses for gaps, session medians.
 // Phrase values are never put on a chart with relevé or pirouette values. Nothing grades.
 
 import type { SessionSummary } from '../../../data/repo'
@@ -9,7 +9,7 @@ import { exclusionText, sessionDay, type ExclusionCode, type ProgressPoint, type
 import type { AttemptView } from '../../data'
 import { formatDate, formatNumber, NO_VALUE, VIEW_LABELS } from '../../format'
 import { phraseOf, readTheme, THEME_KEYS, THEMES, type ThemeInfo, type ThemeKey } from '../phrase/model'
-import { chartGeometry, dateBounds, sessionNames, type ChartGeometry, type DateRange, type ExcludedLine, type SessionColumn, type SessionNames } from './model'
+import { chartGeometry, dateBounds, sessionNames, type ChartAxis, type ChartGeometry, type DateRange, type ExcludedLine, type SessionColumn, type SessionNames } from './model'
 
 export interface PhrasePanel {
   key: ThemeKey
@@ -22,6 +22,8 @@ export interface PhrasePanel {
   aria: string
   /** Every attempt shown has no value for the same "nothing of this kind" reason. */
   empty: boolean
+  data: readonly ProgressSession[]
+  axis: ChartAxis
 }
 
 export interface PhraseProgressView {
@@ -156,6 +158,8 @@ export function buildPhraseProgress(
       summary,
       aria: `${info.label}, ${info.unit}. ${progress.map((p) => `${nameOf(p.sessionId, p.date)}: ${p.median === null ? 'no value' : p.medianText}`).join(', ')}. ${summary}`,
       empty,
+      data: progress,
+      axis: { scale: 1, unit: info.unitShort.trim() === 'arm lengths' ? '' : info.unitShort, valueText: (v) => valueText(info, v) },
     }
   })
 

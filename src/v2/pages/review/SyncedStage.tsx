@@ -11,7 +11,9 @@
 // - No video on this device: the skeleton alone, at the clock's time.
 // Only this component re-renders with the playhead.
 
-import { useEffect, useRef, useState, type CSSProperties, type ReactNode } from 'react'
+import { useEffect, useMemo, useRef, useState, type CSSProperties, type ReactNode } from 'react'
+import { GuideOverlay } from './GuideOverlay'
+import { armLengths, type GuideKey } from './guides'
 import { flushSync } from 'react-dom'
 import type { PhaseSpan } from '../../../metrics/types'
 import type { PoseSeries } from '../../../pose/types'
@@ -56,7 +58,10 @@ export interface SyncedStageProps {
   tone?: 'main' | 'ghost'
   transparent?: boolean
   videoOpacity?: number
+  showVideo?: boolean
   underlay?: ReactNode
+  /** Angle guides to draw for this stage's own pose (guides.ts). */
+  guides?: readonly GuideKey[]
   /** Extra content on the stage, above the skeleton (the "Choose the file again" card). */
   children?: ReactNode
 }
@@ -64,7 +69,8 @@ export interface SyncedStageProps {
 type FrameMeta = { mediaTime: number }
 
 export function SyncedStage(props: SyncedStageProps) {
-  const { clock, series, src, role, ghost, phases, showSkeleton = true, label, view, privacy, ariaLabel, placeholder, onVideoError, style, chrome, tone, transparent, videoOpacity, underlay, children } = props
+  const { clock, series, src, role, ghost, phases, showSkeleton = true, label, view, privacy, ariaLabel, placeholder, onVideoError, style, chrome, tone, transparent, videoOpacity, showVideo, underlay, guides, children } = props
+  const arm = useMemo(() => armLengths(guides?.length ? series : null), [series, guides?.length])
   const toLocal = props.toLocal ?? identity
   const toClock = props.toClock ?? identity
   const slopeAt = props.slopeAt ?? one
@@ -203,7 +209,11 @@ export function SyncedStage(props: SyncedStageProps) {
       tone={tone}
       transparent={transparent}
       videoOpacity={videoOpacity}
+      showVideo={showVideo}
       underlay={underlay}
+      overlay={
+        series && guides && guides.length > 0 ? <GuideOverlay frame={frame} keys={guides} arm={arm} width={series.width || 1280} height={series.height || 720} /> : undefined
+      }
     >
       {children}
     </VideoStage>

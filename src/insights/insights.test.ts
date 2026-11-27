@@ -163,7 +163,7 @@ describe('compareAttempts', () => {
       input('b', { trunk_inclination_deg: 4, balance_duration_s: 2 }, { levels: { trunk_inclination_deg: 'low' } }),
     )
     const r = row(c, 'trunk_inclination_deg')
-    expect(r).toMatchObject({ comparable: false, reason: { code: 'low_confidence', side: 'b' }, difference: null, sentence: 'Not compared: tracking was low in B' })
+    expect(r).toMatchObject({ comparable: false, reason: { code: 'low_confidence', side: 'b' }, difference: null, sentence: 'Not compared: camera visibility was low in B' })
     expect(r.b).toMatchObject({ value: 4, confidence: 'low' })
     expect(row(c, 'balance_duration_s').comparable).toBe(true)
   })
